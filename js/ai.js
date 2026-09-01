@@ -273,6 +273,43 @@ function scoreMageAttack(board, attacker, target, killed) {
   return bonus;
 }
 
+function scoreBomberDeathRisk(board, attacker, target, team) {
+  if ((target.deathExplosion ?? 0) <= 0) return 0;
+  if (target.hp > attacker.atk) return 0;
+
+  let bonus = 0;
+  const size = board.length;
+  const dmg = target.deathExplosion;
+  const dirs = [
+    [0, 1], [0, -1], [1, 0], [-1, 0],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+
+  for (const [dr, dc] of dirs) {
+    const r = target.row + dr;
+    const c = target.col + dc;
+    if (r < 0 || r >= size || c < 0 || c >= size) continue;
+    const u = board[r][c];
+    if (!u) continue;
+
+    if (u.team === team) {
+      if (u.hp <= dmg) bonus -= 40 + u.atk * 8;
+      else bonus -= 15;
+    } else if (u.hp <= dmg) {
+      bonus += 25 + u.atk * 6;
+    } else {
+      bonus += 10;
+    }
+  }
+
+  if (chebyshev(attacker.row, attacker.col, target.row, target.col) === 1) {
+    if (attacker.hp <= dmg) bonus -= 60;
+    else bonus -= dmg * 8;
+  }
+
+  return bonus;
+}
+
 function scoreClassAttack(board, action, killed, team) {
   const attacker = board.flat().find((u) => u?.id === action.unitId);
   const target = board.flat().find((u) => u?.id === action.targetId);
@@ -287,6 +324,8 @@ function scoreClassAttack(board, action, killed, team) {
   if (attacker.classId === 'assassin' && killed.length > 0) {
     bonus += killed.length * 12;
   }
+
+  bonus += scoreBomberDeathRisk(board, attacker, target, team);
 
   return bonus;
 }
@@ -395,6 +434,26 @@ function scoreDeployUnit(board, row, col, unit, team) {
     }
   }
 
+  if (unit.classId === 'bomber') {
+    const size = board.length;
+    let adjacentEnemies = 0;
+    let adjacentFriends = 0;
+    for (const [dr, dc] of [
+      [0, 1], [0, -1], [1, 0], [-1, 0],
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ]) {
+      const r = row + dr;
+      const c = col + dc;
+      if (r < 0 || r >= size || c < 0 || c >= size) continue;
+      const u = board[r][c];
+      if (!u) continue;
+      if (u.team === team) adjacentFriends++;
+      else adjacentEnemies++;
+    }
+    bonus += adjacentEnemies * 12;
+    bonus -= adjacentFriends * 8;
+  }
+
   return bonus;
 }
 
@@ -477,7 +536,7 @@ function simulateActionForTeam(state, action, team) {
     const target = board.flat().find((u) => u?.id === action.targetId);
     if (!target) return null;
     const result = applyAttack(board, unit, target);
-    killed = result.killed;
+    killed = [...result.killed, ...result.explosionKilled];
     return { board: result.board, blueReserve, redReserve, killed };
   }
 

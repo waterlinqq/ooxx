@@ -1,4 +1,5 @@
 const FX_DURATION = 620;
+const EXPLOSION_DURATION = 480;
 
 function getCell(boardEl, row, col) {
   return boardEl.querySelector(`[data-row="${row}"][data-col="${col}"]`);
@@ -93,6 +94,7 @@ export function playAttackAnimation(boardEl, fxLayer, fx) {
     }
 
     const hitTimer = fx.type === 'melee' ? 180 : 280;
+    const explosions = fx.explosions ?? [];
 
     setTimeout(() => {
       for (const target of fx.targets) {
@@ -115,7 +117,39 @@ export function playAttackAnimation(boardEl, fxLayer, fx) {
       });
       projectiles.forEach((p) => p.remove());
       fxLayer.querySelectorAll('.damage-number').forEach((el) => el.remove());
-      resolve();
+
+      if (explosions.length === 0) {
+        resolve();
+        return;
+      }
+
+      for (const exp of explosions) {
+        getCell(boardEl, exp.from.row, exp.from.col)?.classList.add('explosion-flash');
+      }
+
+      setTimeout(() => {
+        for (const exp of explosions) {
+          for (const target of exp.targets) {
+            const cell = getCell(boardEl, target.row, target.col);
+            cell?.classList.add('hit-flash', 'shake');
+            if (target.killed) cell?.classList.add('unit-dying');
+
+            const center = getCellCenter(boardEl, target.row, target.col);
+            if (center) {
+              spawnDamageNumber(fxLayer, center, exp.damage, target.killed);
+            }
+          }
+        }
+      }, 160);
+
+      setTimeout(() => {
+        boardEl.querySelectorAll('.explosion-flash').forEach((el) => el.classList.remove('explosion-flash'));
+        boardEl.querySelectorAll('.hit-flash, .shake, .unit-dying').forEach((el) => {
+          el.classList.remove('hit-flash', 'shake', 'unit-dying');
+        });
+        fxLayer.querySelectorAll('.damage-number').forEach((el) => el.remove());
+        resolve();
+      }, EXPLOSION_DURATION);
     }, FX_DURATION);
   });
 }

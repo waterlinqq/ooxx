@@ -50,6 +50,17 @@ export const CLASSES = {
     type: 'melee',
     desc: '低血低攻，可跳躍至棋盤任意空格',
   },
+  bomber: {
+    id: 'bomber',
+    name: '炸彈兵',
+    icon: '💣',
+    hp: 3,
+    atk: 2,
+    range: 1,
+    type: 'melee',
+    deathExplosion: 2,
+    desc: '近戰，被擊殺時自爆反擊相鄰敵人',
+  },
 };
 
 export const TEAM = {
@@ -82,6 +93,7 @@ export function createUnit(classId, teamId) {
     range: cls.range,
     moveRange: cls.moveRange ?? 1,
     jumpMove: cls.jumpMove ?? false,
+    deathExplosion: cls.deathExplosion ?? 0,
     type: cls.type,
     row: -1,
     col: -1,

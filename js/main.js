@@ -191,6 +191,7 @@ function renderModePicker(state) {
 }
 
 function formatClassTrait(cls) {
+  if (cls.deathExplosion) return `近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
   if (cls.jumpMove) return '可跳躍至任意空格';
   if (cls.type === 'mage') return '任意角度穿透攻擊';
   if (cls.type === 'ranged') return `遠程 · 射程 ${cls.range}`;

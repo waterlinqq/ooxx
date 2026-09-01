@@ -34,6 +34,11 @@ function boardSize(board) {
   return board.length;
 }
 
+const MAGE_DIRS = [
+  [0, 1], [0, -1], [1, 0], [-1, 0],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
 export function chebyshev(r1, c1, r2, c2) {
   return Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
 }
@@ -59,6 +64,16 @@ export function getAdjacentCells(row, col, size = 3) {
     [row, col - 1],
     [row, col + 1],
   ].filter(([r, c]) => isInBounds(r, c, size));
+}
+
+export function getAdjacentCells8(row, col, size = 3) {
+  const cells = [];
+  for (const [dr, dc] of MAGE_DIRS) {
+    const r = row + dr;
+    const c = col + dc;
+    if (isInBounds(r, c, size)) cells.push([r, c]);
+  }
+  return cells;
 }
 
 export function getValidMoves(board, unit) {
@@ -98,11 +113,6 @@ export function getValidMoves(board, unit) {
 
   return moves;
 }
-
-const MAGE_DIRS = [
-  [0, 1], [0, -1], [1, 0], [-1, 0],
-  [1, 1], [1, -1], [-1, 1], [-1, -1],
-];
 
 export function isOnMageLine(fromRow, fromCol, toRow, toCol) {
   const dr = toRow - fromRow;
@@ -235,6 +245,48 @@ export function applyDeploy(board, unit, row, col) {
   return { board: next, unit: deployed };
 }
 
+export function resolveDeathExplosions(board, killedUnits) {
+  const bombers = killedUnits.filter((u) => (u.deathExplosion ?? 0) > 0);
+  if (bombers.length === 0) {
+    return { board, explosionHits: [], explosionKilled: [], explosions: [] };
+  }
+
+  const next = cloneBoard(board);
+  const explosionHits = [];
+  const explosionKilled = [];
+  const explosions = [];
+
+  for (const bomber of bombers) {
+    const size = boardSize(next);
+    const damage = bomber.deathExplosion;
+    const targets = [];
+
+    for (const [r, c] of getAdjacentCells8(bomber.row, bomber.col, size)) {
+      const cell = next[r][c];
+      if (!cell || cell.team === bomber.team) continue;
+
+      cell.hp -= damage;
+      explosionHits.push(cell);
+      const killed = cell.hp <= 0;
+      if (killed) {
+        explosionKilled.push({ ...cell, hp: cell.hp });
+        next[r][c] = null;
+      }
+      targets.push({ row: r, col: c, killed });
+    }
+
+    if (targets.length > 0) {
+      explosions.push({
+        from: { row: bomber.row, col: bomber.col },
+        damage,
+        targets,
+      });
+    }
+  }
+
+  return { board: next, explosionHits, explosionKilled, explosions };
+}
+
 export function applyAttack(board, attacker, target) {
   const next = cloneBoard(board);
   const hits = attacker.type === 'mage'
@@ -247,12 +299,20 @@ export function applyAttack(board, attacker, target) {
     if (!cell) continue;
     cell.hp -= attacker.atk;
     if (cell.hp <= 0) {
-      killed.push(cell);
+      killed.push({ ...cell, hp: cell.hp });
       next[hit.row][hit.col] = null;
     }
   }
 
-  return { board: next, hits, killed };
+  const explosion = resolveDeathExplosions(next, killed);
+
+  return {
+    board: explosion.board,
+    hits,
+    killed,
+    explosionKilled: explosion.explosionKilled,
+    explosions: explosion.explosions,
+  };
 }
 
 export function countTeamOnBoard(board, team) {

@@ -172,7 +172,7 @@ export class Game {
   }
 
   autoPickRedRoster() {
-    const picks = ['swordsman', 'archer', 'shield', 'mage', 'assassin', 'swordsman', 'archer', 'assassin'];
+    const picks = ['swordsman', 'archer', 'shield', 'mage', 'assassin', 'bomber', 'swordsman', 'archer'];
     this.redRoster = picks.slice(0, this.blueRoster.length);
   }
 
@@ -350,16 +350,18 @@ export class Game {
 
   async resolveAttack(unit, target, label) {
     const result = applyAttack(this.board, unit, target);
+    const directKilledIds = new Set(result.killed.map((k) => k.id));
     const fx = {
       from: { row: unit.row, col: unit.col },
       targets: result.hits.map((h) => ({
         row: h.row,
         col: h.col,
-        killed: result.killed.some((k) => k.id === h.id),
+        killed: directKilledIds.has(h.id),
       })),
       team: unit.team,
       type: unit.type,
       damage: unit.atk,
+      explosions: result.explosions ?? [],
     };
 
     this.animating = true;
@@ -369,7 +371,14 @@ export class Game {
 
     this.board = result.board;
     this.animating = false;
-    this.endAction(`${label}（命中 ${result.hits.length} 個目標）`, unit.id);
+
+    let detail = `${label}（命中 ${result.hits.length} 個目標`;
+    if (result.explosions?.length > 0) {
+      const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);
+      detail += `，自爆波及 ${blastHits} 人`;
+    }
+    detail += '）';
+    this.endAction(detail, unit.id);
   }
 
   tryAttackTarget(unitId, row, col) {
