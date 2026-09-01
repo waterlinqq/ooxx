@@ -1,4 +1,4 @@
-import { CLASSES, TEAM, BOARD_MODES, getBoardMode, getRosterLimit, createUnit, createEmptyBoard } from './units.js';
+import { CLASSES, TEAM, BOARD_MODES, FIXED_ROSTER, getBoardMode, createUnit, createEmptyBoard } from './units.js';
 import {
   getValidMoves,
   getValidAttackTargets,
@@ -21,15 +21,14 @@ export class Game {
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.board = createEmptyBoard(this.getModeConfig().size);
-    this.blueRoster = [];
-    this.redRoster = [];
+    this.applyFixedRosters();
     this.blueReserve = [];
     this.redReserve = [];
     this.blueScore = 0;
     this.redScore = 0;
     this.round = 1;
     this.lastRoundWinner = null;
-    this.message = '請選擇棋盤模式並編組藍隊';
+    this.message = '請選擇棋盤模式，然後開始系列賽';
     this.lastWinLine = null;
     this.animating = false;
     this.actionsRemaining = ACTIONS_PER_TURN;
@@ -54,7 +53,12 @@ export class Game {
   }
 
   getRosterLimit() {
-    return getRosterLimit(this.boardMode);
+    return FIXED_ROSTER.length;
+  }
+
+  applyFixedRosters() {
+    this.blueRoster = [...FIXED_ROSTER];
+    this.redRoster = [...FIXED_ROSTER];
   }
 
   getWinCountLabel() {
@@ -65,11 +69,9 @@ export class Game {
     if (this.phase !== 'roster') return;
     if (!BOARD_MODES[modeId]) return;
     this.boardMode = modeId;
-    this.blueRoster = [];
-    this.redRoster = [];
     this.board = createEmptyBoard(this.getModeConfig().size);
     const mode = this.getModeConfig();
-    this.message = `已選 ${mode.label} 模式 — 請編組藍隊（最多 ${mode.rosterTotal} 人）`;
+    this.message = `已選 ${mode.label} 模式 — 按開始系列賽`;
     this.notify();
   }
   getState() {
@@ -77,7 +79,7 @@ export class Game {
     return {
       boardMode: this.boardMode,
       boardSize: mode.size,
-      rosterLimit: mode.rosterTotal,
+      rosterLimit: FIXED_ROSTER.length,
       winCount: mode.size,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
@@ -131,49 +133,10 @@ export class Game {
     return false;
   }
 
-  addRosterUnit(classId, team = 'blue') {
-    if (this.phase !== 'roster') return;
-    const roster = team === 'blue' ? this.blueRoster : this.redRoster;
-    const rosterLimit = this.getRosterLimit();
-    if (roster.length >= rosterLimit) return;
-    roster.push(classId);
-
-    if (team === 'blue') {
-      this.message = `藍隊已選 ${this.blueRoster.length} / ${this.getRosterLimit()} 人`;
-    }
-    this.notify();
-  }
-
-  removeRosterUnit(classId, team = 'blue') {
-    if (this.phase !== 'roster') return;
-    const roster = team === 'blue' ? this.blueRoster : this.redRoster;
-    const idx = roster.lastIndexOf(classId);
-    if (idx < 0) return;
-    roster.splice(idx, 1);
-
-    if (team === 'blue') {
-      this.message = `藍隊已選 ${this.blueRoster.length} / ${this.getRosterLimit()} 人`;
-    }
-    this.notify();
-  }
-
-  removeRosterUnitAt(index, team = 'blue') {
-    if (this.phase !== 'roster') return;
-    const roster = team === 'blue' ? this.blueRoster : this.redRoster;
-    if (index < 0 || index >= roster.length) return;
-    roster.splice(index, 1);
-    this.notify();
-  }
-
   confirmBlueRoster() {
-    if (this.blueRoster.length === 0) return;
-    this.autoPickRedRoster();
+    if (this.phase !== 'roster') return;
+    this.applyFixedRosters();
     this.startRound();
-  }
-
-  autoPickRedRoster() {
-    const picks = ['swordsman', 'archer', 'shield', 'mage', 'assassin', 'bomber', 'swordsman', 'archer'];
-    this.redRoster = picks.slice(0, this.blueRoster.length);
   }
 
   getRoundFirstPlayer() {
@@ -515,15 +478,14 @@ export class Game {
 
   restartSeries() {
     this.phase = 'roster';
-    this.blueRoster = [];
-    this.redRoster = [];
+    this.applyFixedRosters();
     this.blueScore = 0;
     this.redScore = 0;
     this.round = 1;
     this.lastRoundWinner = null;
     this.boardMode = '3x3';
     this.board = createEmptyBoard(this.getModeConfig().size);
-    this.message = '請選擇棋盤模式並重新編組藍隊';
+    this.message = '請選擇棋盤模式，然後開始系列賽';
     this.notify();
   }
 }

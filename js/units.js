@@ -73,6 +73,11 @@ export const BOARD_MODES = {
   '4x4': { id: '4x4', label: '十六宮格', size: 4, rosterTotal: 12 },
 };
 
+export const FIXED_ROSTER = [
+  'swordsman', 'archer', 'shield', 'mage',
+  'assassin', 'bomber', 'swordsman', 'archer',
+];
+
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
 }

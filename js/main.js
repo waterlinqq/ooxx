@@ -16,8 +16,6 @@ const battleBodyEl = document.getElementById('battleBody');
 const sidebarEl = document.getElementById('sidebar');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailEl = document.getElementById('classDetail');
-const rosterLineupEl = document.getElementById('rosterLineup');
-const classGridEl = document.getElementById('classGrid');
 const actionPanelEl = document.getElementById('actionPanel');
 const reservePanelEl = document.getElementById('reservePanel');
 const enemyPanelEl = document.getElementById('enemyPanel');
@@ -233,49 +231,10 @@ function renderClassPicker() {
   renderClassDetail(selectedClassId);
 }
 
-function renderRosterLineup(state) {
-  rosterLineupEl.innerHTML = '';
-  const atMax = state.blueRoster.length >= state.rosterLimit;
-
-  if (state.blueRoster.length === 0) {
-    rosterLineupEl.innerHTML = '<div class="roster-lineup-empty">至大廳點選角色加入編組</div>';
-  } else {
-    state.blueRoster.forEach((classId, index) => {
-      const cls = CLASSES[classId];
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'roster-chip';
-      chip.title = `${cls.name}（點擊移除）`;
-      chip.textContent = cls.icon;
-      chip.addEventListener('click', () => game.removeRosterUnitAt(index));
-      rosterLineupEl.appendChild(chip);
-    });
-  }
-
-  rosterLineupEl.classList.toggle('full', atMax);
-}
-
-function renderClassGrid(state) {
-  classGridEl.innerHTML = '';
-  const atMax = state.blueRoster.length >= state.rosterLimit;
-  const counts = Object.fromEntries(Object.keys(CLASSES).map((id) => [id, 0]));
-  for (const id of state.blueRoster) counts[id] += 1;
-
-  for (const cls of Object.values(CLASSES)) {
-    const count = counts[cls.id];
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'class-card' + (count > 0 ? ' selected' : '');
-    card.disabled = atMax;
-    card.innerHTML = `
-      <span class="class-icon">${cls.icon}</span>
-      <span class="class-name">${cls.name}</span>
-    `;
-    card.addEventListener('click', () => game.addRosterUnit(cls.id));
-    classGridEl.appendChild(card);
-  }
-
-  confirmRosterBtn.disabled = state.blueRoster.length === 0;
+function renderLobbyPanels(state) {
+  const inRoster = state.phase === 'roster';
+  modePanelEl.classList.toggle('hidden', !inRoster);
+  confirmRosterBtn.classList.toggle('hidden', !inRoster);
 }
 
 function renderReserve(state) {
@@ -361,14 +320,6 @@ function renderBattlePanels(state) {
   restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
 }
 
-function renderLobbyPanels(state) {
-  const inRoster = state.phase === 'roster';
-  modePanelEl.classList.toggle('hidden', !inRoster);
-  rosterLineupEl.classList.toggle('hidden', !inRoster);
-  classGridEl.classList.toggle('hidden', !inRoster);
-  confirmRosterBtn.classList.toggle('hidden', !inRoster);
-}
-
 function render(state) {
   blueScoreEl.textContent = `${TEAM.blue.name} ${state.blueScore} 勝`;
   redScoreEl.textContent = `${TEAM.red.name} ${state.redScore} 勝`;
@@ -403,10 +354,6 @@ function render(state) {
 
   renderModePicker(state);
   renderClassPicker();
-  renderRosterLineup(state);
-  if (state.phase === 'roster') {
-    renderClassGrid(state);
-  }
   renderReserve(state);
   renderEnemyStatus(state);
 }
