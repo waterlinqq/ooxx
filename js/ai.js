@@ -1,4 +1,4 @@
-import { cloneBoard } from './units.js';
+import { cloneBoard, FIXED_ROSTER } from './units.js';
 import {
   getValidMoves,
   getValidAttackTargets,
@@ -14,7 +14,10 @@ import {
   countTeamOnBoard,
 } from './rules.js';
 
-const MAX_MINIMAX_CANDIDATES = 24;
+const ACTIONS_PER_TURN = 2;
+const MAX_MINIMAX_CANDIDATES = 32;
+const COMBO_FIRST = 12;
+const COMBO_SECOND = 8;
 const ELIMINATION_PRESSURE_THRESHOLD = 4;
 
 function getWinLinesForBoard(board) {
@@ -60,7 +63,7 @@ function scoreLinePotential(board, team, reserveCount) {
     if (mine === 0 && theirs === 1 && empty === winLength - 1) score -= 18;
   }
 
-  score += reserveCount * 3;
+  score += reserveCount * 2;
   return score;
 }
 
@@ -138,10 +141,66 @@ function getCriticalSeverity(board, enemyTeam) {
   return total;
 }
 
+function inferEnemyComposition(state, enemyTeam = 'blue') {
+  const rosterTotals = {};
+  for (const classId of FIXED_ROSTER) {
+    rosterTotals[classId] = (rosterTotals[classId] ?? 0) + 1;
+  }
+
+  const alive = {};
+  for (const classId of Object.keys(rosterTotals)) {
+    alive[classId] = 0;
+  }
+
+  for (const row of state.board) {
+    for (const unit of row) {
+      if (unit?.team === enemyTeam) {
+        alive[unit.classId] = (alive[unit.classId] ?? 0) + 1;
+      }
+    }
+  }
+
+  for (const unit of getReserve(state, enemyTeam)) {
+    alive[unit.classId] = (alive[unit.classId] ?? 0) + 1;
+  }
+
+  const threat = {};
+  for (const [classId, total] of Object.entries(rosterTotals)) {
+    const count = alive[classId] ?? 0;
+    threat[classId] = {
+      total,
+      alive: count,
+      scarce: count === 1,
+    };
+  }
+
+  return threat;
+}
+
+function threatPriorityBonus(classId, composition) {
+  const info = composition[classId];
+  if (!info) return 0;
+
+  let bonus = 0;
+  if (info.scarce) {
+    if (classId === 'mage' || classId === 'archer') bonus += 55;
+    else if (classId === 'assassin') bonus += 35;
+    else if (classId === 'bomber') bonus += 25;
+  }
+
+  if (classId === 'mage' || classId === 'archer') bonus += info.alive * 6;
+  if (classId === 'shield' && info.alive > 0) bonus += 10;
+
+  return bonus;
+}
+
 function scoreKills(killed) {
   let bonus = 0;
   for (const unit of killed) {
     bonus += 35 + unit.maxHp * 4 + unit.atk * 10;
+    if ((unit.deathExplosion ?? 0) > 0) {
+      bonus += 12;
+    }
   }
   return bonus;
 }
@@ -205,6 +264,79 @@ function scoreArcherPosition(board, row, col, team, range) {
   }
 
   bonus -= countMeleeThreats(board, row, col, team) * 16;
+  return bonus;
+}
+
+/** 炸彈兵：貼敵換子、避開友軍 */
+function scoreBomberPosition(board, row, col, team, unit) {
+  const size = board.length;
+  let bonus = 0;
+  let adjacentEnemies = 0;
+  let adjacentFriends = 0;
+  const enemy = enemyOf(team);
+  const critical = findCriticalCells(board, enemy);
+
+  for (const [dr, dc] of [
+    [0, 1], [0, -1], [1, 0], [-1, 0],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ]) {
+    const r = row + dr;
+    const c = col + dc;
+    if (r < 0 || r >= size || c < 0 || c >= size) continue;
+    const u = board[r][c];
+    if (!u) continue;
+    if (u.team === team) adjacentFriends++;
+    else adjacentEnemies++;
+  }
+
+  bonus += adjacentEnemies * 14;
+  bonus -= adjacentFriends * 10;
+
+  const crit = critical.get(cellKey(row, col)) ?? 0;
+  if (crit >= 50 && adjacentEnemies > 0) bonus += 22;
+
+  if (unit && unit.hp <= 2 && adjacentEnemies >= 2 && adjacentFriends === 0) {
+    bonus += 18;
+  }
+
+  return bonus;
+}
+
+/** 盾牌手／劍士：擋線與延伸 */
+function scoreMeleeLinePosition(board, row, col, team, unit) {
+  let bonus = 0;
+  const { blockEnemy, extendOwn } = getLineRoleAtCell(board, row, col, team);
+
+  if (blockEnemy > 0) {
+    if (unit?.classId === 'shield') bonus += 38;
+    else bonus += 22;
+  }
+  if (extendOwn > 0) {
+    if (unit?.classId === 'shield') bonus += 26;
+    else bonus += 16;
+  }
+
+  bonus += scoreCellForLines(board, row, col, team) * 0.4;
+  return bonus;
+}
+
+/** 魔法師移動：估算落點穿透擊殺價值 */
+function scoreMageMovePosition(board, unit, row, col, team) {
+  const phantom = { ...unit, row, col };
+  let bonus = scoreMeleeLinePosition(board, row, col, team, unit) * 0.5;
+
+  for (const target of getValidAttackTargets(board, phantom)) {
+    const hits = getEnemiesOnLine(board, phantom, target.row, target.col);
+    for (const hit of hits) {
+      if (hit.hp <= phantom.atk) {
+        bonus += 28 + hit.maxHp * 3 + hit.atk * 7;
+      } else {
+        bonus += phantom.atk * 3;
+      }
+    }
+    if (hits.length >= 2) bonus += 20;
+  }
+
   return bonus;
 }
 
@@ -280,6 +412,7 @@ function scoreBomberDeathRisk(board, attacker, target, team) {
   let bonus = 0;
   const size = board.length;
   const dmg = target.deathExplosion;
+  const dist = chebyshev(attacker.row, attacker.col, target.row, target.col);
   const dirs = [
     [0, 1], [0, -1], [1, 0], [-1, 0],
     [1, 1], [1, -1], [-1, 1], [-1, -1],
@@ -302,20 +435,31 @@ function scoreBomberDeathRisk(board, attacker, target, team) {
     }
   }
 
-  if (chebyshev(attacker.row, attacker.col, target.row, target.col) === 1) {
+  if (dist === 1) {
     if (attacker.hp <= dmg) bonus -= 60;
     else bonus -= dmg * 8;
+  } else if (dist > 1 && (attacker.type === 'ranged' || attacker.type === 'mage')) {
+    bonus += 48 + target.maxHp * 5;
   }
 
   return bonus;
 }
 
-function scoreClassAttack(board, action, killed, team) {
+function scoreClassAttack(board, action, killed, team, composition = null) {
   const attacker = board.flat().find((u) => u?.id === action.unitId);
   const target = board.flat().find((u) => u?.id === action.targetId);
   if (!attacker || !target) return 0;
 
   let bonus = scoreAttackExecution(board, action, killed);
+
+  if (composition) {
+    bonus += threatPriorityBonus(target.classId, composition);
+    if (target.classId === 'shield' && chebyshev(attacker.row, attacker.col, target.row, target.col) === 1) {
+      if (attacker.type === 'melee' && (composition.mage?.alive || composition.archer?.alive)) {
+        bonus -= 18;
+      }
+    }
+  }
 
   if (attacker.type === 'mage') {
     bonus += scoreMageAttack(board, attacker, target, killed);
@@ -457,14 +601,17 @@ function scoreDeployUnit(board, row, col, unit, team) {
   return bonus;
 }
 
-function evaluateBoard(board, team, reserve, enemyReserve) {
+function evaluateBoard(board, team, reserve, enemyReserve, composition = null) {
   let score = scoreLinePotential(board, team, reserve.length);
   const enemy = enemyOf(team);
 
   for (const row of board) {
     for (const unit of row) {
       if (!unit) continue;
-      const value = unit.hp + unit.atk * 2;
+      let value = unit.hp + unit.atk * 2;
+      if (unit.team !== team && composition) {
+        value += threatPriorityBonus(unit.classId, composition) * 0.15;
+      }
       score += unit.team === team ? value : -value;
     }
   }
@@ -478,7 +625,8 @@ function evaluateBoard(board, team, reserve, enemyReserve) {
 }
 
 function evaluateStateForRed(state) {
-  return evaluateBoard(state.board, 'red', state.redReserve, state.blueReserve);
+  const composition = inferEnemyComposition(state, 'blue');
+  return evaluateBoard(state.board, 'red', state.redReserve, state.blueReserve, composition);
 }
 
 function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set()) {
@@ -543,12 +691,30 @@ function simulateActionForTeam(state, action, team) {
   return null;
 }
 
-function toGameState(next) {
+function toGameState(next, actedUnitIds = new Set()) {
   return {
     board: next.board,
     blueReserve: next.blueReserve,
     redReserve: next.redReserve,
+    actedUnitIds: new Set(actedUnitIds),
   };
+}
+
+function getSimulatedOutcome(state, action, team) {
+  const acted = new Set(getActedUnitIds(state));
+  const next = simulateActionForTeam(state, action, team);
+  if (!next) return null;
+
+  acted.add(action.unitId);
+  const enemy = enemyOf(team);
+  const myReserve = getReserve({ ...state, ...next }, team);
+  const enemyReserve = getReserve({ ...state, ...next }, enemy);
+
+  const nextState = toGameState(next, acted);
+  const won = isWinningState(next.board, team, enemyReserve);
+  const lost = isWinningState(next.board, enemy, myReserve);
+
+  return { nextState, killed: next.killed, won, lost };
 }
 
 function isWinningState(board, team, enemyReserve) {
@@ -561,14 +727,12 @@ function getActedUnitIds(state) {
 
 function findWinningActions(state, team) {
   const reserve = getReserve(state, team);
-  const enemyReserve = getReserve(state, enemyOf(team));
-  const acted = team === 'red' ? getActedUnitIds(state) : new Set();
+  const acted = getActedUnitIds(state);
   const actions = getAllActionsForTeam(state.board, reserve, team, acted);
 
   return actions.filter((action) => {
-    const next = simulateActionForTeam(state, action, team);
-    if (!next) return false;
-    return isWinningState(next.board, team, enemyReserve);
+    const outcome = getSimulatedOutcome(state, action, team);
+    return outcome?.won === true;
   });
 }
 
@@ -605,6 +769,9 @@ function scorePositioning(board, state, action, team) {
     if (unit.classId === 'archer') {
       return scoreArcherPosition(board, action.row, action.col, team, unit.range);
     }
+    if (unit.classId === 'bomber') {
+      return scoreBomberPosition(board, action.row, action.col, team, unit);
+    }
     return 0;
   }
 
@@ -619,6 +786,15 @@ function scorePositioning(board, state, action, team) {
   if (unit.classId === 'archer') {
     return scoreArcherPosition(board, action.row, action.col, team, unit.range);
   }
+  if (unit.classId === 'bomber') {
+    return scoreBomberPosition(board, action.row, action.col, team, unit);
+  }
+  if (unit.classId === 'shield' || unit.classId === 'swordsman') {
+    return scoreMeleeLinePosition(board, action.row, action.col, team, unit);
+  }
+  if (unit.classId === 'mage') {
+    return scoreMageMovePosition(board, unit, action.row, action.col, team);
+  }
   return 0;
 }
 
@@ -631,7 +807,7 @@ function scoreAction(state, action, team = 'red') {
   let score = evaluateBoard(next.board, team, reserve, enemyReserve);
 
   if (action.type === 'attack') {
-    score += scoreClassAttack(state.board, action, next.killed, team);
+    score += scoreClassAttack(state.board, action, next.killed, team, inferEnemyComposition(state, enemyOf(team)));
     score += scoreEliminationPressure(next.board, team, enemyReserve, next.killed);
     if (isWinningState(next.board, team, enemyReserve)) score += 5000;
   }
@@ -653,49 +829,118 @@ function scoreAction(state, action, team = 'red') {
   return score;
 }
 
-function getBestOpponentResponse(state, team) {
-  const winActions = findWinningActions(state, team);
-  if (winActions.length > 0) {
-    const best = pickBestAction(state, winActions, team);
-    const next = simulateActionForTeam(state, best, team);
-    return next ? toGameState(next) : state;
-  }
+function simulateOpponentTurn(state, team = 'blue', maxSteps = ACTIONS_PER_TURN) {
+  let current = {
+    board: state.board,
+    blueReserve: state.blueReserve,
+    redReserve: state.redReserve,
+    actedUnitIds: new Set(),
+  };
 
-  const reserve = getReserve(state, team);
-  const actions = getAllActionsForTeam(state.board, reserve, team);
-  if (actions.length === 0) return state;
+  for (let step = 0; step < maxSteps; step++) {
+    const reserve = getReserve(current, team);
+    const acted = getActedUnitIds(current);
+    const actions = getAllActionsForTeam(current.board, reserve, team, acted);
+    if (actions.length === 0) break;
 
-  let bestState = state;
-  let bestScore = team === 'blue' ? Infinity : -Infinity;
-
-  for (const action of actions) {
-    const next = simulateActionForTeam(state, action, team);
-    if (!next) continue;
-    const afterState = toGameState(next);
-    const redScore = evaluateStateForRed(afterState);
-
-    if (team === 'blue') {
-      if (redScore < bestScore) {
-        bestScore = redScore;
-        bestState = afterState;
+    const winActions = findWinningActions(current, team);
+    let action;
+    if (winActions.length > 0) {
+      action = pickBestAction(current, winActions, team);
+    } else {
+      action = actions[0];
+      let bestScore = team === 'blue' ? Infinity : -Infinity;
+      for (const candidate of actions) {
+        const s = scoreAction(current, candidate, team);
+        if (team === 'blue') {
+          if (s < bestScore) {
+            bestScore = s;
+            action = candidate;
+          }
+        } else if (s > bestScore) {
+          bestScore = s;
+          action = candidate;
+        }
       }
     }
+
+    const outcome = getSimulatedOutcome(current, action, team);
+    if (!outcome) break;
+    current = outcome.nextState;
+    if (outcome.won) break;
   }
 
-  return bestState;
+  return current;
+}
+
+function simulateRedRemainderThenOpponent(state) {
+  let current = state;
+  const remaining = ACTIONS_PER_TURN - getActedUnitIds(state).size;
+
+  for (let i = 0; i < remaining; i++) {
+    const acted = getActedUnitIds(current);
+    const actions = getAllActionsForTeam(current.board, current.redReserve, 'red', acted);
+    if (actions.length === 0) break;
+
+    const winActions = findWinningActions(current, 'red');
+    const action = winActions.length > 0
+      ? pickBestAction(current, winActions, 'red')
+      : pickBestAction(current, actions, 'red');
+
+    const outcome = getSimulatedOutcome(current, action, 'red');
+    if (!outcome) break;
+    current = outcome.nextState;
+    if (outcome.won) break;
+  }
+
+  return simulateOpponentTurn(
+    {
+      board: current.board,
+      blueReserve: current.blueReserve,
+      redReserve: current.redReserve,
+      actedUnitIds: new Set(),
+    },
+    'blue',
+    ACTIONS_PER_TURN,
+  );
+}
+
+function scoreTurnMinimax(state, redActions) {
+  let current = state;
+
+  for (const action of redActions) {
+    const outcome = getSimulatedOutcome(current, action, 'red');
+    if (!outcome) return -Infinity;
+    if (outcome.won) return 10000;
+    if (outcome.lost) return -10000;
+    current = outcome.nextState;
+  }
+
+  const afterBlue = simulateOpponentTurn(
+    {
+      board: current.board,
+      blueReserve: current.blueReserve,
+      redReserve: current.redReserve,
+      actedUnitIds: new Set(),
+    },
+    'blue',
+    ACTIONS_PER_TURN,
+  );
+
+  if (isWinningState(afterBlue.board, 'blue', afterBlue.redReserve)) return -8000;
+  if (isWinningState(afterBlue.board, 'red', afterBlue.blueReserve)) return 8000;
+
+  return evaluateStateForRed(afterBlue);
 }
 
 function scoreActionMinimax(state, action, team = 'red') {
-  const next = simulateActionForTeam(state, action, team);
-  if (!next) return -Infinity;
+  const outcome = getSimulatedOutcome(state, action, team);
+  if (!outcome) return -Infinity;
 
-  const afterRed = toGameState(next);
-  const enemyReserve = afterRed.blueReserve;
+  if (outcome.won) return 10000;
+  if (outcome.lost) return -10000;
 
-  if (isWinningState(afterRed.board, 'red', afterRed.blueReserve)) return 10000;
-  if (isWinningState(afterRed.board, 'blue', enemyReserve)) return -10000;
-
-  const afterBlue = getBestOpponentResponse(afterRed, 'blue');
+  const afterBlue = simulateRedRemainderThenOpponent(outcome.nextState);
 
   if (isWinningState(afterBlue.board, 'blue', afterBlue.redReserve)) return -8000;
   if (isWinningState(afterBlue.board, 'red', afterBlue.blueReserve)) return 8000;
@@ -703,8 +948,14 @@ function scoreActionMinimax(state, action, team = 'red') {
   let score = evaluateStateForRed(afterBlue);
 
   if (action.type === 'attack') {
-    score += scoreClassAttack(state.board, action, next.killed, team) * 0.15;
-    score += scoreEliminationPressure(next.board, 'red', afterRed.blueReserve, next.killed) * 0.2;
+    const composition = inferEnemyComposition(state, enemyOf(team));
+    score += scoreClassAttack(state.board, action, outcome.killed, team, composition) * 0.22;
+    score += scoreEliminationPressure(
+      outcome.nextState.board,
+      'red',
+      outcome.nextState.blueReserve,
+      outcome.killed,
+    ) * 0.25;
   }
 
   return score;
@@ -723,6 +974,64 @@ function pickBestAction(state, actions, team = 'red') {
   }
 
   return best;
+}
+
+
+function topScoringActions(state, actions, team, limit) {
+  if (actions.length <= limit) return actions;
+  return actions
+    .map((action) => ({ action, score: scoreAction(state, action, team) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ action }) => action);
+}
+
+function pickBestComboFirstAction(state, actions) {
+  const firstCandidates = topScoringActions(state, actions, 'red', COMBO_FIRST);
+  let bestAction = firstCandidates[0];
+  let bestScore = -Infinity;
+
+  for (const step1 of firstCandidates) {
+    const outcome1 = getSimulatedOutcome(state, step1, 'red');
+    if (!outcome1) continue;
+
+    if (outcome1.won) {
+      const winScore = 10000 + scoreAction(state, step1, 'red') * 0.01;
+      if (winScore > bestScore) {
+        bestScore = winScore;
+        bestAction = step1;
+      }
+      continue;
+    }
+
+    const actedAfter1 = getActedUnitIds(outcome1.nextState);
+    const secondActions = getAllActionsForTeam(
+      outcome1.nextState.board,
+      outcome1.nextState.redReserve,
+      'red',
+      actedAfter1,
+    );
+
+    if (secondActions.length === 0) {
+      const score = scoreTurnMinimax(state, [step1]);
+      if (score > bestScore) {
+        bestScore = score;
+        bestAction = step1;
+      }
+      continue;
+    }
+
+    const secondCandidates = topScoringActions(outcome1.nextState, secondActions, 'red', COMBO_SECOND);
+    for (const step2 of secondCandidates) {
+      const score = scoreTurnMinimax(state, [step1, step2]);
+      if (score > bestScore) {
+        bestScore = score;
+        bestAction = step1;
+      }
+    }
+  }
+
+  return bestAction;
 }
 
 function pickBestActionMinimax(state, actions, team = 'red', criticalCells = null) {
@@ -773,9 +1082,18 @@ export function chooseAiAction(state) {
   const blueWinActions = findWinningActions(safeState, 'blue');
   if (blueWinActions.length > 0) {
     const blocks = actions.filter((action) => {
-      const next = simulateActionForTeam(safeState, action, 'red');
-      if (!next) return false;
-      return findWinningActions(toGameState(next), 'blue').length === 0;
+      const outcome = getSimulatedOutcome(safeState, action, 'red');
+      if (!outcome) return false;
+      const blueWins = findWinningActions(
+        {
+          board: outcome.nextState.board,
+          blueReserve: outcome.nextState.blueReserve,
+          redReserve: outcome.nextState.redReserve,
+          actedUnitIds: new Set(),
+        },
+        'blue',
+      );
+      return blueWins.length === 0;
     });
 
     if (blocks.length > 0) {
@@ -790,6 +1108,10 @@ export function chooseAiAction(state) {
     if (mitigating.length > 0) {
       return pickBestActionMinimax(safeState, mitigating, 'red', criticalCells);
     }
+  }
+
+  if (acted.size === 0) {
+    return pickBestComboFirstAction(safeState, actions);
   }
 
   return pickBestActionMinimax(safeState, actions, 'red');
