@@ -43,7 +43,7 @@ export const CLASSES = {
     id: 'assassin',
     name: '刺客',
     icon: '🗡️',
-    hp: 2,
+    hp: 3,
     atk: 1,
     range: 1,
     jumpMove: true,
