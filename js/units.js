@@ -4,7 +4,7 @@ export const CLASSES = {
     name: '弓箭手',
     icon: '🏹',
     hp: 3,
-    atk: 1,
+    atk: 3,
     range: 3,
     type: 'ranged',
     desc: '遠程攻擊，生命值低',
