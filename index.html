@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OOXX 戰棋 — 三戰兩勝</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>OOXX 戰棋</h1>
+      <p>回合制 · 三戰兩勝 · 連三子或全滅獲勝 · 藍隊 vs AI 紅隊</p>
+    </header>
+
+    <div class="layout">
+      <section class="board-wrap">
+        <div class="score-bar">
+          <div class="score-team blue" id="blueScore">藍隊 0 勝</div>
+          <div class="round-badge" id="roundBadge">編隊階段</div>
+          <div class="score-team red" id="redScore">紅隊 0 勝</div>
+        </div>
+        <div class="board" id="board"></div>
+        <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="panel">
+          <h2>戰況</h2>
+          <div class="message" id="message"></div>
+        </div>
+
+        <div class="panel" id="rosterPanel">
+          <h2>藍隊編組 <span id="rosterCount">0 / 8</span></h2>
+          <div class="class-grid" id="classGrid"></div>
+          <div style="margin-top: 12px">
+            <button class="btn primary" id="confirmRoster" style="width: 100%">開始系列賽</button>
+          </div>
+        </div>
+
+        <div class="panel hidden" id="actionPanel">
+          <h2>操作提示</h2>
+          <div class="action-hint">
+            拖曳棋盤上的藍隊單位 → 移動或攻擊<br />
+            點選後備單位 → 再點空格部署
+          </div>
+        </div>
+
+        <div class="panel hidden" id="reservePanel">
+          <h2>藍隊後備 <span id="blueReserveCount"></span></h2>
+          <div class="reserve-list" id="reserveList"></div>
+        </div>
+
+        <div class="panel hidden" id="enemyPanel">
+          <h2>紅隊剩餘 <span id="enemyTotalCount"></span></h2>
+          <div class="enemy-summary" id="enemySummary"></div>
+          <div class="enemy-list" id="enemyList"></div>
+        </div>
+
+        <div class="panel hidden" id="endPanel">
+          <button class="btn success hidden" id="nextRound" style="width: 100%">下一局</button>
+          <button class="btn primary hidden" id="restart" style="width: 100%; margin-top: 8px">重新開始</button>
+        </div>
+
+        <div class="panel">
+          <h2>規則摘要</h2>
+          <div class="legend">
+            <strong>勝利：</strong>同隊三子連線，或全滅對手<br />
+            <strong>回合：</strong>拖曳移動/攻擊，或點後備再點格部署<br />
+            <strong>🏹 弓箭手：</strong>HP 3 / ATK 2 / 射程 3<br />
+            <strong>🛡️ 盾牌手：</strong>HP 8 / ATK 1 / 近戰<br />
+            <strong>⚔️ 劍士：</strong>HP 5 / ATK 3 / 近戰<br />
+            <strong>🔮 魔法師：</strong>HP 4 / ATK 2 / 直線穿透<br />
+            <strong>🗡️ 刺客：</strong>HP 2 / ATK 1 / 最多移動 2 格（可轉彎）
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
