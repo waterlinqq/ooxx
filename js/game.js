@@ -157,6 +157,14 @@ export class Game {
     this.notify();
   }
 
+  removeRosterUnitAt(index, team = 'blue') {
+    if (this.phase !== 'roster') return;
+    const roster = team === 'blue' ? this.blueRoster : this.redRoster;
+    if (index < 0 || index >= roster.length) return;
+    roster.splice(index, 1);
+    this.notify();
+  }
+
   confirmBlueRoster() {
     if (this.blueRoster.length === 0) return;
     this.autoPickRedRoster();

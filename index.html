@@ -10,77 +10,64 @@
   <div class="app">
     <header>
       <h1>OOXX 戰棋</h1>
-      <p>回合制 · 三戰兩勝 · 連三子或全滅獲勝 · 藍隊 vs AI 紅隊</p>
     </header>
 
-    <div class="layout">
+    <div class="layout" id="layout">
       <section class="board-wrap">
         <div class="score-bar">
           <div class="score-team blue" id="blueScore">藍隊 0 勝</div>
           <div class="round-badge" id="roundBadge">編隊階段</div>
           <div class="score-team red" id="redScore">紅隊 0 勝</div>
         </div>
-        <div class="board" id="board"></div>
-        <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+        <div class="board-area">
+          <div class="board-container">
+            <div class="board" id="board"></div>
+            <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+          </div>
+        </div>
       </section>
 
-      <aside class="sidebar">
-        <div class="panel">
-          <h2>戰況</h2>
-          <div class="message" id="message"></div>
-        </div>
+      <aside class="sidebar" id="sidebar">
+        <nav class="tab-bar" id="tabBar">
+          <button type="button" class="tab-btn active" data-tab="roster">角色</button>
+          <button type="button" class="tab-btn" data-tab="lobby">大廳</button>
+        </nav>
 
-        <div class="panel" id="modePanel">
-          <h2>棋盤模式</h2>
-          <div class="mode-buttons" id="modeButtons"></div>
-          <p class="mode-hint">3×3：三子連線 · 最多 8 人｜4×4：四子連線 · 最多 12 人</p>
-        </div>
+        <div class="tab-body" id="prepBody">
+          <div class="tab-panel active" id="rosterTab" data-tab="roster">
+            <div class="class-picker" id="classPicker"></div>
+            <div class="class-detail" id="classDetail"></div>
+          </div>
 
-        <div class="panel" id="rosterPanel">
-          <h2>藍隊編組 <span id="rosterCount">0 / 8</span></h2>
-          <div class="class-grid" id="classGrid"></div>
-          <div style="margin-top: 12px">
+          <div class="tab-panel" id="lobbyTab" data-tab="lobby">
+            <div class="panel flat" id="modePanel">
+              <div class="mode-buttons" id="modeButtons"></div>
+            </div>
+            <div class="roster-lineup" id="rosterLineup"></div>
+            <div class="class-grid" id="classGrid"></div>
             <button class="btn primary" id="confirmRoster" style="width: 100%">開始系列賽</button>
           </div>
         </div>
 
-        <div class="panel hidden" id="actionPanel">
-          <h2>操作提示</h2>
-          <div class="action-hint">
-            每回合可執行 2 次行動（部署 / 移動 / 攻擊）<br />
-            同一單位每回合只能行動一次<br />
-            拖曳棋盤單位 → 移動或攻擊<br />
-            點選後備 → 再點空格部署
+        <div class="battle-body hidden" id="battleBody">
+          <div class="panel flat hidden" id="actionPanel">
+            <div class="action-hint">拖曳移動／攻擊 · 點後備再點空格部署</div>
+            <button class="btn hidden" id="endTurn" style="width: 100%; margin-top: 10px">結束回合</button>
           </div>
-          <button class="btn hidden" id="endTurn" style="width: 100%; margin-top: 12px">結束回合</button>
-        </div>
 
-        <div class="panel hidden" id="reservePanel">
-          <h2>藍隊後備 <span id="blueReserveCount"></span></h2>
-          <div class="reserve-list" id="reserveList"></div>
-        </div>
+          <div class="panel flat hidden" id="reservePanel">
+            <h2>藍隊後備</h2>
+            <div class="reserve-list" id="reserveList"></div>
+          </div>
 
-        <div class="panel hidden" id="enemyPanel">
-          <h2>紅隊剩餘 <span id="enemyTotalCount"></span></h2>
-          <div class="enemy-summary" id="enemySummary"></div>
-          <div class="enemy-list" id="enemyList"></div>
-        </div>
+          <div class="panel flat hidden" id="enemyPanel">
+            <h2>紅隊</h2>
+            <div class="enemy-list" id="enemyList"></div>
+          </div>
 
-        <div class="panel hidden" id="endPanel">
-          <button class="btn success hidden" id="nextRound" style="width: 100%">下一局</button>
-          <button class="btn primary hidden" id="restart" style="width: 100%; margin-top: 8px">重新開始</button>
-        </div>
-
-        <div class="panel">
-          <h2>規則摘要</h2>
-          <div class="legend">
-            <strong>勝利：</strong>同隊連成整行（3×3 三子、4×4 四子），或全滅對手<br />
-            <strong>回合：</strong>每回合 2 次行動，同一單位只能行動一次<br />
-            <strong>🏹 弓箭手：</strong>HP 3 / ATK 3 / 射程 3<br />
-            <strong>🛡️ 盾牌手：</strong>HP 8 / ATK 1 / 近戰<br />
-            <strong>⚔️ 劍士：</strong>HP 5 / ATK 3 / 近戰<br />
-            <strong>🔮 魔法師：</strong>HP 4 / ATK 2 / 任意角度穿透<br />
-            <strong>🗡️ 刺客：</strong>HP 3 / ATK 1 / 可跳躍至任意空格
+          <div class="panel flat hidden" id="endPanel">
+            <button class="btn success hidden" id="nextRound" style="width: 100%">下一局</button>
+            <button class="btn primary hidden" id="restart" style="width: 100%; margin-top: 8px">重新開始</button>
           </div>
         </div>
       </aside>

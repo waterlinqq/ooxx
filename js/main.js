@@ -6,21 +6,23 @@ const game = new Game();
 const boardEl = document.getElementById('board');
 const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
-const messageEl = document.getElementById('message');
+const layoutEl = document.getElementById('layout');
 const blueScoreEl = document.getElementById('blueScore');
 const redScoreEl = document.getElementById('redScore');
 const roundBadgeEl = document.getElementById('roundBadge');
-const rosterPanelEl = document.getElementById('rosterPanel');
+const tabBarEl = document.getElementById('tabBar');
+const prepBodyEl = document.getElementById('prepBody');
+const battleBodyEl = document.getElementById('battleBody');
+const sidebarEl = document.getElementById('sidebar');
+const classPickerEl = document.getElementById('classPicker');
+const classDetailEl = document.getElementById('classDetail');
+const rosterLineupEl = document.getElementById('rosterLineup');
+const classGridEl = document.getElementById('classGrid');
 const actionPanelEl = document.getElementById('actionPanel');
 const reservePanelEl = document.getElementById('reservePanel');
 const enemyPanelEl = document.getElementById('enemyPanel');
 const endPanelEl = document.getElementById('endPanel');
-const classGridEl = document.getElementById('classGrid');
-const rosterCountEl = document.getElementById('rosterCount');
 const reserveListEl = document.getElementById('reserveList');
-const blueReserveCountEl = document.getElementById('blueReserveCount');
-const enemyTotalCountEl = document.getElementById('enemyTotalCount');
-const enemySummaryEl = document.getElementById('enemySummary');
 const enemyListEl = document.getElementById('enemyList');
 const modePanelEl = document.getElementById('modePanel');
 const modeButtonsEl = document.getElementById('modeButtons');
@@ -31,6 +33,8 @@ const endTurnBtn = document.getElementById('endTurn');
 
 const DRAG_THRESHOLD = 8;
 let drag = null;
+let activeTab = 'roster';
+let selectedClassId = 'swordsman';
 
 game.playAttackFx = (fx) => playAttackAnimation(boardEl, fxLayerEl, fx);
 
@@ -186,53 +190,96 @@ function renderModePicker(state) {
   }
 }
 
+function formatClassTrait(cls) {
+  if (cls.jumpMove) return '可跳躍至任意空格';
+  if (cls.type === 'mage') return '任意角度穿透攻擊';
+  if (cls.type === 'ranged') return `遠程 · 射程 ${cls.range}`;
+  return '近戰';
+}
+
+function renderClassDetail(classId) {
+  const cls = CLASSES[classId];
+  if (!cls) return;
+
+  classDetailEl.innerHTML = `
+    <div class="detail-icon">${cls.icon}</div>
+    <h2 class="detail-name">${cls.name}</h2>
+    <p class="detail-desc">${cls.desc}</p>
+    <dl class="detail-stats">
+      <div><dt>HP</dt><dd>${cls.hp}</dd></div>
+      <div><dt>ATK</dt><dd>${cls.atk}</dd></div>
+      <div><dt>特性</dt><dd>${formatClassTrait(cls)}</dd></div>
+    </dl>
+  `;
+}
+
+function renderClassPicker() {
+  classPickerEl.innerHTML = '';
+
+  for (const cls of Object.values(CLASSES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'class-pick-btn' + (cls.id === selectedClassId ? ' active' : '');
+    btn.textContent = cls.icon;
+    btn.title = cls.name;
+    btn.addEventListener('click', () => {
+      selectedClassId = cls.id;
+      render(game.getState());
+    });
+    classPickerEl.appendChild(btn);
+  }
+
+  renderClassDetail(selectedClassId);
+}
+
+function renderRosterLineup(state) {
+  rosterLineupEl.innerHTML = '';
+  const atMax = state.blueRoster.length >= state.rosterLimit;
+
+  if (state.blueRoster.length === 0) {
+    rosterLineupEl.innerHTML = '<div class="roster-lineup-empty">至大廳點選角色加入編組</div>';
+  } else {
+    state.blueRoster.forEach((classId, index) => {
+      const cls = CLASSES[classId];
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'roster-chip';
+      chip.title = `${cls.name}（點擊移除）`;
+      chip.textContent = cls.icon;
+      chip.addEventListener('click', () => game.removeRosterUnitAt(index));
+      rosterLineupEl.appendChild(chip);
+    });
+  }
+
+  rosterLineupEl.classList.toggle('full', atMax);
+}
+
 function renderClassGrid(state) {
   classGridEl.innerHTML = '';
   const atMax = state.blueRoster.length >= state.rosterLimit;
+  const counts = Object.fromEntries(Object.keys(CLASSES).map((id) => [id, 0]));
+  for (const id of state.blueRoster) counts[id] += 1;
 
   for (const cls of Object.values(CLASSES)) {
-    const count = state.blueRoster.filter((id) => id === cls.id).length;
-    const card = document.createElement('div');
+    const count = counts[cls.id];
+    const card = document.createElement('button');
+    card.type = 'button';
     card.className = 'class-card' + (count > 0 ? ' selected' : '');
+    card.disabled = atMax;
     card.innerHTML = `
-      <div class="top"><span>${cls.icon}</span><span>${cls.name}</span></div>
-      <div class="stats">HP ${cls.hp} · ATK ${cls.atk}<br />${cls.desc}</div>
-      <div class="roster-controls">
-        <button type="button" class="btn small" data-minus="${cls.id}" ${count === 0 ? 'disabled' : ''}>−</button>
-        <span class="count">${count}</span>
-        <button type="button" class="btn small" data-plus="${cls.id}" ${atMax ? 'disabled' : ''}>+</button>
-      </div>
+      <span class="class-icon">${cls.icon}</span>
+      <span class="class-name">${cls.name}</span>
     `;
-    card.querySelector(`[data-plus="${cls.id}"]`).addEventListener('click', (e) => {
-      e.stopPropagation();
-      game.addRosterUnit(cls.id);
-    });
-    card.querySelector(`[data-minus="${cls.id}"]`).addEventListener('click', (e) => {
-      e.stopPropagation();
-      game.removeRosterUnit(cls.id);
-    });
+    card.addEventListener('click', () => game.addRosterUnit(cls.id));
     classGridEl.appendChild(card);
   }
-  rosterCountEl.textContent = `${state.blueRoster.length} / ${state.rosterLimit}`;
-  confirmRosterBtn.disabled = state.blueRoster.length === 0;
-}
 
-function renderUnitStatusItem(unit, location) {
-  const cls = CLASSES[unit.classId];
-  const item = document.createElement('div');
-  item.className = 'enemy-item';
-  const locationLabel = location === 'board' ? '棋盤' : '後備';
-  item.innerHTML = `
-    <span class="enemy-item-main">${cls.icon} ${cls.name}</span>
-    <span class="enemy-item-meta">${locationLabel} · HP ${unit.hp}/${unit.maxHp}</span>
-  `;
-  return item;
+  confirmRosterBtn.disabled = state.blueRoster.length === 0;
 }
 
 function renderReserve(state) {
   reserveListEl.innerHTML = '';
   const canPick = state.phase === 'battle' && state.currentPlayer === 'blue' && !state.animating;
-  blueReserveCountEl.textContent = `(${state.blueReserve.length})`;
 
   if (state.blueReserve.length === 0) {
     reserveListEl.innerHTML = '<div class="empty-hint">後備已空</div>';
@@ -246,7 +293,7 @@ function renderReserve(state) {
     item.className = 'reserve-item';
     if (state.selectedReserveId === unit.id) item.classList.add('selected');
     if (!canPick) item.classList.add('disabled');
-    item.innerHTML = `<span>${cls.icon} ${cls.name}</span><span>HP ${cls.hp}</span>`;
+    item.innerHTML = `<span>${cls.icon} ${cls.name}</span>`;
     item.addEventListener('click', () => {
       if (canPick) game.selectReserve(unit.id);
     });
@@ -259,29 +306,69 @@ function renderEnemyStatus(state) {
 
   const boardUnits = state.board.flat().filter((u) => u?.team === 'red');
   const reserveUnits = state.redReserve;
-  const total = boardUnits.length + reserveUnits.length;
+  const units = [...boardUnits, ...reserveUnits];
 
-  enemyTotalCountEl.textContent = `(${total})`;
-  enemySummaryEl.innerHTML = `
-    <span>棋盤 <strong>${boardUnits.length}</strong></span>
-    <span>後備 <strong>${reserveUnits.length}</strong></span>
-  `;
-
-  if (total === 0) {
+  if (units.length === 0) {
     enemyListEl.innerHTML = '<div class="empty-hint">已全滅</div>';
     return;
   }
 
-  for (const unit of boardUnits) {
-    enemyListEl.appendChild(renderUnitStatusItem(unit, 'board'));
-  }
-  for (const unit of reserveUnits) {
-    enemyListEl.appendChild(renderUnitStatusItem(unit, 'reserve'));
+  for (const unit of units) {
+    const cls = CLASSES[unit.classId];
+    const item = document.createElement('div');
+    item.className = 'enemy-item';
+    item.innerHTML = `<span class="enemy-item-main">${cls.icon} ${cls.name}</span>`;
+    enemyListEl.appendChild(item);
   }
 }
 
+function syncSidebarMode(state) {
+  const inBattleFlow = state.phase !== 'roster';
+
+  sidebarEl.classList.toggle('in-battle', inBattleFlow);
+  tabBarEl.classList.toggle('hidden', inBattleFlow);
+  prepBodyEl.classList.toggle('hidden', inBattleFlow);
+  battleBodyEl.classList.toggle('hidden', !inBattleFlow);
+
+  if (!inBattleFlow) {
+    for (const btn of tabBarEl.querySelectorAll('.tab-btn')) {
+      btn.classList.toggle('active', btn.dataset.tab === activeTab);
+    }
+    for (const panel of prepBodyEl.querySelectorAll('.tab-panel')) {
+      panel.classList.toggle('active', panel.dataset.tab === activeTab);
+    }
+  }
+}
+
+function renderBattlePanels(state) {
+  const inBattle = state.phase === 'battle';
+  const showEnd = state.phase === 'roundEnd' || state.phase === 'seriesEnd';
+
+  actionPanelEl.classList.toggle('hidden', !inBattle || state.currentPlayer !== 'blue');
+  const canEndTurn =
+    inBattle &&
+    state.currentPlayer === 'blue' &&
+    !state.animating &&
+    state.actionsRemaining > 0;
+  endTurnBtn.classList.toggle('hidden', !canEndTurn);
+
+  reservePanelEl.classList.toggle('hidden', !inBattle);
+  enemyPanelEl.classList.toggle('hidden', !inBattle);
+  endPanelEl.classList.toggle('hidden', !showEnd);
+
+  nextRoundBtn.classList.toggle('hidden', state.phase !== 'roundEnd');
+  restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
+}
+
+function renderLobbyPanels(state) {
+  const inRoster = state.phase === 'roster';
+  modePanelEl.classList.toggle('hidden', !inRoster);
+  rosterLineupEl.classList.toggle('hidden', !inRoster);
+  classGridEl.classList.toggle('hidden', !inRoster);
+  confirmRosterBtn.classList.toggle('hidden', !inRoster);
+}
+
 function render(state) {
-  messageEl.textContent = state.message;
   blueScoreEl.textContent = `${TEAM.blue.name} ${state.blueScore} 勝`;
   redScoreEl.textContent = `${TEAM.red.name} ${state.redScore} 勝`;
 
@@ -295,31 +382,40 @@ function render(state) {
   } else if (state.phase === 'seriesEnd') {
     roundBadgeEl.textContent = '系列賽結束';
   } else {
-    roundBadgeEl.textContent = `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合 · ${state.actionsRemaining}/${state.actionsPerTurn}`;
+    roundBadgeEl.textContent = `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合`;
   }
 
-  rosterPanelEl.classList.toggle('hidden', state.phase !== 'roster');
-  modePanelEl.classList.toggle('hidden', state.phase !== 'roster');
-  actionPanelEl.classList.toggle('hidden', state.phase !== 'battle' || state.currentPlayer !== 'blue');
-  const canEndTurn =
-    state.phase === 'battle' &&
-    state.currentPlayer === 'blue' &&
-    !state.animating &&
-    state.actionsRemaining > 0;
-  endTurnBtn.classList.toggle('hidden', !canEndTurn);
-  reservePanelEl.classList.toggle('hidden', state.phase !== 'battle');
-  enemyPanelEl.classList.toggle('hidden', state.phase !== 'battle');
-  endPanelEl.classList.toggle('hidden', state.phase !== 'roundEnd' && state.phase !== 'seriesEnd');
+  syncSidebarMode(state);
+  renderLobbyPanels(state);
+  renderBattlePanels(state);
 
-  nextRoundBtn.classList.toggle('hidden', state.phase !== 'roundEnd');
-  restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
+  const inBattleFlow = state.phase !== 'roster';
+  const showBoard = inBattleFlow;
+  boardWrapEl.classList.toggle('hidden', !showBoard);
+  layoutEl.classList.toggle('no-board', !showBoard);
 
-  renderBoard(state);
+  if (showBoard) {
+    renderBoard(state);
+  } else {
+    boardEl.innerHTML = '';
+  }
+
   renderModePicker(state);
-  renderClassGrid(state);
+  renderClassPicker();
+  renderRosterLineup(state);
+  if (state.phase === 'roster') {
+    renderClassGrid(state);
+  }
   renderReserve(state);
   renderEnemyStatus(state);
 }
+
+tabBarEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  activeTab = btn.dataset.tab;
+  render(game.getState());
+});
 
 confirmRosterBtn.addEventListener('click', () => game.confirmBlueRoster());
 nextRoundBtn.addEventListener('click', () => game.nextRound());

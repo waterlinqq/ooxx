@@ -58,8 +58,8 @@ export const TEAM = {
 };
 
 export const BOARD_MODES = {
-  '3x3': { id: '3x3', label: '3×3', size: 3, rosterTotal: 8 },
-  '4x4': { id: '4x4', label: '4×4', size: 4, rosterTotal: 12 },
+  '3x3': { id: '3x3', label: '九宮格', size: 3, rosterTotal: 8 },
+  '4x4': { id: '4x4', label: '十六宮格', size: 4, rosterTotal: 12 },
 };
 
 export function getBoardMode(modeId) {
