@@ -1,4 +1,15 @@
-import { CLASSES, TEAM, BOARD_MODES, FIXED_ROSTER, getBoardMode, createUnit, createEmptyBoard } from './units.js';
+import {
+  CLASSES,
+  TEAM,
+  BOARD_MODES,
+  FIXED_ROSTER,
+  SLOT_ORDER,
+  getBoardMode,
+  createEmptyBoard,
+  createTeamReserve,
+  parseSlot,
+  formatSlotLabel,
+} from './units.js';
 import {
   getValidMoves,
   getValidAttackTargets,
@@ -11,13 +22,14 @@ import {
 } from './rules.js';
 import { chooseAiAction } from './ai.js';
 
-const ACTIONS_PER_TURN = 2;
-
 export class Game {
   constructor() {
     this.boardMode = '3x3';
     this.phase = 'roster';
     this.currentPlayer = 'blue';
+    this.currentSlot = 'blue-0';
+    this.humanSlot = 'blue-0';
+    this.slotOrder = [...SLOT_ORDER];
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.board = createEmptyBoard(this.getModeConfig().size);
@@ -31,7 +43,7 @@ export class Game {
     this.message = '請選擇棋盤模式，然後開始系列賽';
     this.lastWinLine = null;
     this.animating = false;
-    this.actionsRemaining = ACTIONS_PER_TURN;
+    this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
     this.playAttackFx = null;
     this.listeners = [];
@@ -52,6 +64,14 @@ export class Game {
     return getBoardMode(this.boardMode);
   }
 
+  is2v2() {
+    return this.getModeConfig().matchFormat === '2v2';
+  }
+
+  getActionsPerTurn() {
+    return this.getModeConfig().actionsPerTurn;
+  }
+
   getRosterLimit() {
     return FIXED_ROSTER.length;
   }
@@ -65,24 +85,37 @@ export class Game {
     return this.getModeConfig().size;
   }
 
+  getStartButtonLabel() {
+    return this.getModeConfig().seriesFormat === 'single' ? '開始對戰' : '開始系列賽';
+  }
+
   setBoardMode(modeId) {
     if (this.phase !== 'roster') return;
     if (!BOARD_MODES[modeId]) return;
     this.boardMode = modeId;
     this.board = createEmptyBoard(this.getModeConfig().size);
     const mode = this.getModeConfig();
-    this.message = `已選 ${mode.label} 模式 — 按開始系列賽`;
+    const startHint = mode.seriesFormat === 'single' ? '按開始對戰' : '按開始系列賽';
+    const extra = mode.matchFormat === '2v2' ? ' · 2v2 單局' : '';
+    this.message = `已選 ${mode.label} 模式${extra} — ${startHint}`;
     this.notify();
   }
+
   getState() {
     const mode = this.getModeConfig();
     return {
       boardMode: this.boardMode,
       boardSize: mode.size,
+      seriesFormat: mode.seriesFormat,
+      matchFormat: mode.matchFormat,
       rosterLimit: FIXED_ROSTER.length,
       winCount: mode.size,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
+      currentSlot: this.currentSlot,
+      humanSlot: this.humanSlot,
+      isHumanTurn: this.canHumanAct(),
+      slotLabel: formatSlotLabel(this.currentSlot),
       draggingUnitId: this.draggingUnitId,
       selectedReserveId: this.selectedReserveId,
       board: this.board,
@@ -100,25 +133,79 @@ export class Game {
       validDeploy: this.getHighlightDeploy(),
       animating: this.animating,
       actionsRemaining: this.actionsRemaining,
-      actionsPerTurn: ACTIONS_PER_TURN,
+      actionsPerTurn: this.getActionsPerTurn(),
       actedUnitIds: [...this.actedUnitIds],
+      startButtonLabel: this.getStartButtonLabel(),
     };
   }
 
   resetTurnActions() {
-    this.actionsRemaining = ACTIONS_PER_TURN;
+    this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
   }
 
+  canHumanAct() {
+    if (this.phase !== 'battle' || this.animating) return false;
+    if (this.is2v2()) return this.currentSlot === this.humanSlot;
+    return this.currentPlayer === 'blue';
+  }
+
+  ownsHumanUnit(unit) {
+    if (!unit || unit.team !== 'blue') return false;
+    if (!this.is2v2()) return true;
+    const { seat } = parseSlot(this.humanSlot);
+    return unit.ownerSeat === seat;
+  }
+
+  syncCurrentPlayerFromSlot() {
+    this.currentPlayer = parseSlot(this.currentSlot).team;
+  }
+
   getPlayerTurnMessage() {
-    const team = TEAM[this.currentPlayer];
-    if (this.currentPlayer === 'blue') {
-      return `藍隊回合（剩餘 ${this.actionsRemaining}/${ACTIONS_PER_TURN} 次行動）：拖曳單位移動或攻擊，或點後備再點空格部署`;
+    const mode = this.getModeConfig();
+    if (this.is2v2()) {
+      const label = formatSlotLabel(this.currentSlot);
+      if (this.canHumanAct()) {
+        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，或點後備再點空格部署`;
+      }
+      return `${label} 回合 · AI 思考中`;
     }
-    return `${team.name}回合（剩餘 ${this.actionsRemaining}/${ACTIONS_PER_TURN} 次行動）`;
+
+    const team = TEAM[this.currentPlayer];
+    const actionsPerTurn = mode.actionsPerTurn;
+    if (this.currentPlayer === 'blue') {
+      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，或點後備再點空格部署`;
+    }
+    return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
+  }
+
+  hasValidActionsForSlot(slot = this.currentSlot) {
+    const { team, seat } = parseSlot(slot);
+    const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
+    const slotReserve = this.is2v2() ? reserve.filter((u) => u.ownerSeat === seat) : reserve;
+    const deployCells = getValidDeployCells(this.board);
+    if (deployCells.length > 0 && slotReserve.length > 0) return true;
+
+    for (const row of this.board) {
+      for (const unit of row) {
+        if (!unit || unit.team !== team) continue;
+        if (this.is2v2() && unit.ownerSeat !== seat) continue;
+        if (this.actedUnitIds.has(unit.id)) continue;
+        if (getValidMoves(this.board, unit).length > 0) return true;
+        if (getValidAttackTargets(this.board, unit).length > 0) return true;
+      }
+    }
+    return false;
   }
 
   hasValidActionsForTeam(team = this.currentPlayer) {
+    if (this.is2v2()) {
+      return this.slotOrder.some((slot) => {
+        const parsed = parseSlot(slot);
+        return parsed.team === team && this.hasValidActionsForSlot(slot);
+      });
+    }
+
     const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
     const deployCells = getValidDeployCells(this.board);
     if (deployCells.length > 0 && reserve.length > 0) return true;
@@ -145,35 +232,57 @@ export class Game {
     return this.lastRoundWinner === 'blue' ? 'red' : 'blue';
   }
 
+  getRoundFirstSlot() {
+    if (this.is2v2()) return 'blue-0';
+    const team = this.getRoundFirstPlayer();
+    return `${team}-0`;
+  }
+
   startRound() {
-    this.board = createEmptyBoard(this.getModeConfig().size);
-    this.blueReserve = this.blueRoster.map((id) => createUnit(id, 'blue'));
-    this.redReserve = this.redRoster.map((id) => createUnit(id, 'red'));
-    this.currentPlayer = this.getRoundFirstPlayer();
+    const mode = this.getModeConfig();
+    this.board = createEmptyBoard(mode.size);
+    this.blueReserve = createTeamReserve(this.blueRoster, 'blue', mode.matchFormat);
+    this.redReserve = createTeamReserve(this.redRoster, 'red', mode.matchFormat);
+    this.currentSlot = this.getRoundFirstSlot();
+    this.syncCurrentPlayerFromSlot();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.lastWinLine = null;
     this.phase = 'battle';
     this.resetTurnActions();
 
-    const first = TEAM[this.currentPlayer].name;
-    if (this.currentPlayer === 'blue') {
-      this.message = `第 ${this.round} 局 — ${first}先攻：每回合 ${ACTIONS_PER_TURN} 次行動，同一單位只能行動一次`;
+    if (this.is2v2()) {
+      this.message = `2v2 單局 — ${formatSlotLabel(this.currentSlot)} 先攻：藍1 為你，其餘由 AI 代打`;
     } else {
-      this.message = `第 ${this.round} 局 — ${first}先攻`;
+      const first = TEAM[this.currentPlayer].name;
+      if (this.currentPlayer === 'blue') {
+        this.message = `第 ${this.round} 局 — ${first}先攻：每回合 ${mode.actionsPerTurn} 次行動，同一單位只能行動一次`;
+      } else {
+        this.message = `第 ${this.round} 局 — ${first}先攻`;
+      }
     }
 
     this.notify();
+    this.scheduleAiIfNeeded();
+  }
 
+  scheduleAiIfNeeded() {
+    if (this.phase !== 'battle' || this.animating) return;
+    if (this.is2v2()) {
+      if (this.currentSlot !== this.humanSlot) {
+        setTimeout(() => this.runAiTurn(), 500);
+      }
+      return;
+    }
     if (this.currentPlayer === 'red') {
       setTimeout(() => this.runAiTurn(), 500);
     }
   }
 
   selectReserve(unitId) {
-    if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    if (!this.canHumanAct()) return;
     const unit = this.getCurrentReserve().find((u) => u.id === unitId);
-    if (!unit) return;
+    if (!unit || !this.ownsHumanUnit(unit)) return;
     this.draggingUnitId = null;
     this.selectedReserveId = unitId;
     this.message = `點選空格部署 ${CLASSES[unit.classId].name}`;
@@ -181,10 +290,10 @@ export class Game {
   }
 
   beginDragUnit(unitId) {
-    if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    if (!this.canHumanAct()) return;
     if (this.actedUnitIds.has(unitId)) return;
     const unit = this.board.flat().find((u) => u?.id === unitId);
-    if (!unit || unit.team !== 'blue') return;
+    if (!unit || !this.ownsHumanUnit(unit)) return;
     this.selectedReserveId = null;
     this.draggingUnitId = unitId;
     this.message = '拖曳至綠格移動、紅格攻擊';
@@ -199,7 +308,7 @@ export class Game {
   }
 
   dropOnCell(row, col) {
-    if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    if (!this.canHumanAct()) return;
     if (!this.draggingUnitId) return;
 
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
@@ -239,15 +348,24 @@ export class Game {
   }
 
   endTurnEarly() {
-    if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    if (!this.canHumanAct()) return;
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+    if (this.is2v2()) {
+      this.advanceSlot();
+      return;
+    }
     this.actionsRemaining = 0;
     this.switchPlayer();
   }
 
   getCurrentReserve() {
-    return this.currentPlayer === 'blue' ? this.blueReserve : this.redReserve;
+    const reserve = this.currentPlayer === 'blue' ? this.blueReserve : this.redReserve;
+    if (this.is2v2()) {
+      const { seat } = parseSlot(this.currentSlot);
+      return reserve.filter((u) => u.ownerSeat === seat);
+    }
+    return reserve;
   }
 
   getHighlightMoves() {
@@ -275,7 +393,7 @@ export class Game {
 
   clickCell(row, col) {
     if (this.phase !== 'battle' || this.animating) return;
-    if (this.currentPlayer === 'red') return;
+    if (!this.canHumanAct()) return;
 
     if (this.selectedReserveId) {
       this.tryDeploy(row, col);
@@ -381,6 +499,12 @@ export class Game {
       return;
     }
 
+    if (this.is2v2()) {
+      this.message = actionLabel;
+      this.advanceSlot();
+      return;
+    }
+
     if (this.actionsRemaining > 0) {
       if (!this.hasValidActionsForTeam()) {
         this.message = `${actionLabel} — 無更多可行動，換 ${TEAM[enemy].name}回合`;
@@ -400,40 +524,83 @@ export class Game {
     this.switchPlayer();
   }
 
+  advanceSlot() {
+    const order = this.slotOrder;
+    const startIdx = order.indexOf(this.currentSlot);
+
+    for (let i = 1; i <= order.length; i++) {
+      const nextSlot = order[(startIdx + i) % order.length];
+      this.currentSlot = nextSlot;
+      this.syncCurrentPlayerFromSlot();
+      this.resetTurnActions();
+
+      if (this.hasValidActionsForSlot(nextSlot)) {
+        this.message = this.getPlayerTurnMessage();
+        this.notify();
+        this.scheduleAiIfNeeded();
+        return;
+      }
+    }
+
+    this.message = this.getPlayerTurnMessage();
+    this.notify();
+    this.scheduleAiIfNeeded();
+  }
+
   switchPlayer() {
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
     this.resetTurnActions();
     this.message = this.getPlayerTurnMessage();
     this.notify();
+    this.scheduleAiIfNeeded();
+  }
 
-    if (this.currentPlayer === 'red') {
-      setTimeout(() => this.runAiTurn(), 500);
+  getAiTurnContext() {
+    if (this.is2v2()) {
+      const { team, seat } = parseSlot(this.currentSlot);
+      return { team, ownerSeat: seat, slotLabel: formatSlotLabel(this.currentSlot) };
     }
+    return { team: 'red', ownerSeat: undefined, slotLabel: TEAM.red.name };
   }
 
   runAiTurn() {
-    if (this.phase !== 'battle' || this.currentPlayer !== 'red' || this.animating) return;
+    if (this.phase !== 'battle' || this.animating) return;
 
-    const action = chooseAiAction({
-      board: this.board,
-      redReserve: this.redReserve,
-      blueReserve: this.blueReserve,
-      actedUnitIds: this.actedUnitIds,
-    });
+    if (this.is2v2() && this.currentSlot === this.humanSlot) return;
+    if (!this.is2v2() && this.currentPlayer !== 'red') return;
+
+    const { team, ownerSeat, slotLabel } = this.getAiTurnContext();
+    const action = chooseAiAction(
+      {
+        board: this.board,
+        redReserve: this.redReserve,
+        blueReserve: this.blueReserve,
+        actedUnitIds: this.actedUnitIds,
+      },
+      { team, ownerSeat },
+    );
 
     if (!action) {
-      if (this.actionsRemaining > 0) {
+      if (this.is2v2()) {
+        this.advanceSlot();
+      } else if (this.actionsRemaining > 0) {
         this.switchPlayer();
       }
       return;
     }
 
+    const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
+
     if (action.type === 'deploy') {
-      const unit = this.redReserve.find((u) => u.id === action.unitId);
+      const unit = reserve.find((u) => u.id === action.unitId);
       const result = applyDeploy(this.board, unit, action.row, action.col);
       this.board = result.board;
-      this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      this.endAction(`紅隊部署 ${CLASSES[unit.classId].name}`, unit.id);
+      if (team === 'blue') {
+        this.blueReserve = this.blueReserve.filter((u) => u.id !== unit.id);
+      } else {
+        this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
+      }
+      this.endAction(`${slotLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id);
       return;
     }
 
@@ -441,30 +608,35 @@ export class Game {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const result = applyMove(this.board, unit, action.row, action.col);
       this.board = result.board;
-      this.endAction('紅隊移動', action.unitId);
+      this.endAction(`${slotLabel} 移動`, action.unitId);
       return;
     }
 
     if (action.type === 'attack') {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const target = this.board.flat().find((u) => u?.id === action.targetId);
-      this.resolveAttack(unit, target, '紅隊攻擊');
+      this.resolveAttack(unit, target, `${slotLabel} 攻擊`);
     }
   }
 
   handleRoundWin(winner, detail) {
     if (winner === 'blue') this.blueScore++;
     else this.redScore++;
+
     this.lastRoundWinner = winner;
-
-    const seriesOver = this.blueScore >= 2 || this.redScore >= 2;
+    const mode = this.getModeConfig();
+    const seriesOver = mode.seriesFormat === 'single' || this.blueScore >= 2 || this.redScore >= 2;
     this.phase = seriesOver ? 'seriesEnd' : 'roundEnd';
-    this.message = `${detail} — ${TEAM[winner].name}拿下第 ${this.round} 局！`;
 
-    if (seriesOver) {
-      this.message += ` 系列賽結束：${TEAM[winner].name}三戰兩勝！`;
+    if (mode.seriesFormat === 'single') {
+      this.message = `${detail} — ${TEAM[winner].name}獲勝！`;
     } else {
-      this.message += ` 比分 藍 ${this.blueScore} : ${this.redScore} 紅`;
+      this.message = `${detail} — ${TEAM[winner].name}拿下第 ${this.round} 局！`;
+      if (seriesOver) {
+        this.message += ` 系列賽結束：${TEAM[winner].name}三戰兩勝！`;
+      } else {
+        this.message += ` 比分 藍 ${this.blueScore} : ${this.redScore} 紅`;
+      }
     }
 
     this.notify();
@@ -477,15 +649,17 @@ export class Game {
   }
 
   restartSeries() {
+    const savedMode = this.boardMode;
     this.phase = 'roster';
     this.applyFixedRosters();
     this.blueScore = 0;
     this.redScore = 0;
     this.round = 1;
     this.lastRoundWinner = null;
-    this.boardMode = '3x3';
+    this.boardMode = savedMode;
     this.board = createEmptyBoard(this.getModeConfig().size);
-    this.message = '請選擇棋盤模式，然後開始系列賽';
+    const startHint = this.getModeConfig().seriesFormat === 'single' ? '開始對戰' : '開始系列賽';
+    this.message = `請選擇棋盤模式，然後${startHint}`;
     this.notify();
   }
 }

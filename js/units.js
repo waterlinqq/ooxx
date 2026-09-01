@@ -69,9 +69,36 @@ export const TEAM = {
 };
 
 export const BOARD_MODES = {
-  '3x3': { id: '3x3', label: '九宮格', size: 3, rosterTotal: 8 },
-  '4x4': { id: '4x4', label: '十六宮格', size: 4, rosterTotal: 12 },
+  '3x3': {
+    id: '3x3',
+    label: '九宮格',
+    size: 3,
+    rosterTotal: 8,
+    seriesFormat: 'best_of_3',
+    matchFormat: '1v1',
+    actionsPerTurn: 2,
+  },
+  '4x4': {
+    id: '4x4',
+    label: '十六宮格',
+    size: 4,
+    rosterTotal: 12,
+    seriesFormat: 'best_of_3',
+    matchFormat: '1v1',
+    actionsPerTurn: 2,
+  },
+  '5x5': {
+    id: '5x5',
+    label: '二十五宮格',
+    size: 5,
+    rosterTotal: 8,
+    seriesFormat: 'single',
+    matchFormat: '2v2',
+    actionsPerTurn: 1,
+  },
 };
+
+export const SLOT_ORDER = ['blue-0', 'red-0', 'blue-1', 'red-1'];
 
 export const FIXED_ROSTER = [
   'swordsman', 'archer', 'shield', 'mage',
@@ -86,12 +113,13 @@ export function getRosterLimit(modeId) {
   return getBoardMode(modeId).rosterTotal;
 }
 
-export function createUnit(classId, teamId) {
+export function createUnit(classId, teamId, ownerSeat = null) {
   const cls = CLASSES[classId];
   return {
     id: `${teamId}-${classId}-${Math.random().toString(36).slice(2, 8)}`,
     classId,
     team: teamId,
+    ownerSeat,
     hp: cls.hp,
     maxHp: cls.hp,
     atk: cls.atk,
@@ -103,6 +131,25 @@ export function createUnit(classId, teamId) {
     row: -1,
     col: -1,
   };
+}
+
+export function parseSlot(slot) {
+  const [team, seat] = slot.split('-');
+  return { team, seat: Number(seat) };
+}
+
+export function formatSlotLabel(slot) {
+  const { team, seat } = parseSlot(slot);
+  const teamName = team === 'blue' ? '藍' : '紅';
+  return `${teamName}${seat + 1}`;
+}
+
+export function createTeamReserve(roster, teamId, matchFormat = '1v1') {
+  const half = Math.ceil(roster.length / 2);
+  return roster.map((classId, index) => {
+    const ownerSeat = matchFormat === '2v2' ? (index < half ? 0 : 1) : null;
+    return createUnit(classId, teamId, ownerSeat);
+  });
 }
 
 export function createEmptyBoard(size = 3) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OOXX 戰棋 — 三戰兩勝</title>
+  <title>OOXX 戰棋</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -54,8 +54,13 @@
           </div>
 
           <div class="panel flat hidden" id="reservePanel">
-            <h2>藍隊後備</h2>
+            <h2 id="reservePanelTitle">藍1 後備</h2>
             <div class="reserve-list" id="reserveList"></div>
+          </div>
+
+          <div class="panel flat hidden" id="teammatePanel">
+            <h2>藍2 隊友（AI）</h2>
+            <div class="reserve-list" id="teammateList"></div>
           </div>
 
           <div class="panel flat hidden" id="enemyPanel">

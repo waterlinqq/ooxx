@@ -206,6 +206,47 @@ header h1 {
   padding: 1px 5px;
 }
 
+.board[data-size="5"] {
+  gap: 6px;
+}
+
+.board[data-size="5"] .cell {
+  min-height: 0;
+  border-radius: 8px;
+}
+
+.board[data-size="5"] .unit-icon-wrap {
+  width: 28px;
+  height: 28px;
+}
+
+.board[data-size="5"] .unit-icon {
+  font-size: 1.05rem;
+}
+
+.board[data-size="5"] .unit-name {
+  font-size: 0.55rem;
+}
+
+.board[data-size="5"] .unit-hp {
+  font-size: 0.52rem;
+}
+
+.board[data-size="5"] .team-badge {
+  font-size: 0.5rem;
+  padding: 1px 4px;
+  top: 4px;
+  left: 4px;
+}
+
+.board[data-size="5"] .seat-badge {
+  font-size: 0.48rem;
+  width: 14px;
+  height: 14px;
+  top: 4px;
+  right: 4px;
+}
+
 .fx-layer {
   position: absolute;
   inset: 0;
@@ -283,6 +324,24 @@ header h1 {
 .team-red .team-badge {
   background: rgba(254, 202, 202, 0.95);
   color: #7f1d1d;
+}
+
+.seat-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(251, 191, 36, 0.95);
+  color: #78350f;
+  font-size: 0.58rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .cell:hover {
@@ -794,8 +853,46 @@ header h1 {
   gap: 8px;
 }
 
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 52px;
+  justify-content: center;
+}
+
+.mode-btn-label {
+  font-weight: 700;
+}
+
+.mode-btn-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .mode-btn.active {
   outline: 2px solid var(--accent);
+}
+
+.enemy-section + .enemy-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.enemy-section-title {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.enemy-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .hidden {

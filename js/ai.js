@@ -624,15 +624,22 @@ function evaluateBoard(board, team, reserve, enemyReserve, composition = null) {
   return score;
 }
 
-function evaluateStateForRed(state) {
-  const composition = inferEnemyComposition(state, 'blue');
-  return evaluateBoard(state.board, 'red', state.redReserve, state.blueReserve, composition);
+function evaluateStateForTeam(state, team) {
+  const enemy = enemyOf(team);
+  const composition = inferEnemyComposition(state, enemy);
+  const reserve = getReserve(state, team);
+  const enemyReserve = getReserve(state, enemy);
+  return evaluateBoard(state.board, team, reserve, enemyReserve, composition);
 }
 
-function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set()) {
+function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set(), ownerSeat = undefined) {
   const actions = [];
+  const slotReserve =
+    ownerSeat !== undefined && ownerSeat !== null
+      ? reserve.filter((u) => u.ownerSeat === ownerSeat)
+      : reserve;
 
-  for (const unit of reserve) {
+  for (const unit of slotReserve) {
     if (actedUnitIds.has(unit.id)) continue;
     for (const [r, c] of getValidDeployCells(board)) {
       actions.push({ type: 'deploy', unitId: unit.id, row: r, col: c });
@@ -642,6 +649,7 @@ function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set()) {
   for (const row of board) {
     for (const unit of row) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
+      if (ownerSeat !== undefined && ownerSeat !== null && unit.ownerSeat !== ownerSeat) continue;
 
       for (const [r, c] of getValidMoves(board, unit)) {
         actions.push({ type: 'move', unitId: unit.id, row: r, col: c });
@@ -725,10 +733,10 @@ function getActedUnitIds(state) {
   return state.actedUnitIds ?? new Set();
 }
 
-function findWinningActions(state, team) {
+function findWinningActions(state, team, ownerSeat = undefined) {
   const reserve = getReserve(state, team);
   const acted = getActedUnitIds(state);
-  const actions = getAllActionsForTeam(state.board, reserve, team, acted);
+  const actions = getAllActionsForTeam(state.board, reserve, team, acted, ownerSeat);
 
   return actions.filter((action) => {
     const outcome = getSimulatedOutcome(state, action, team);
@@ -848,20 +856,7 @@ function simulateOpponentTurn(state, team = 'blue', maxSteps = ACTIONS_PER_TURN)
     if (winActions.length > 0) {
       action = pickBestAction(current, winActions, team);
     } else {
-      action = actions[0];
-      let bestScore = team === 'blue' ? Infinity : -Infinity;
-      for (const candidate of actions) {
-        const s = scoreAction(current, candidate, team);
-        if (team === 'blue') {
-          if (s < bestScore) {
-            bestScore = s;
-            action = candidate;
-          }
-        } else if (s > bestScore) {
-          bestScore = s;
-          action = candidate;
-        }
-      }
+      action = pickBestAction(current, actions, team);
     }
 
     const outcome = getSimulatedOutcome(current, action, team);
@@ -873,21 +868,22 @@ function simulateOpponentTurn(state, team = 'blue', maxSteps = ACTIONS_PER_TURN)
   return current;
 }
 
-function simulateRedRemainderThenOpponent(state) {
+function simulateTeamRemainderThenOpponent(state, team) {
   let current = state;
   const remaining = ACTIONS_PER_TURN - getActedUnitIds(state).size;
+  const enemy = enemyOf(team);
 
   for (let i = 0; i < remaining; i++) {
     const acted = getActedUnitIds(current);
-    const actions = getAllActionsForTeam(current.board, current.redReserve, 'red', acted);
+    const actions = getAllActionsForTeam(current.board, getReserve(current, team), team, acted);
     if (actions.length === 0) break;
 
-    const winActions = findWinningActions(current, 'red');
+    const winActions = findWinningActions(current, team);
     const action = winActions.length > 0
-      ? pickBestAction(current, winActions, 'red')
-      : pickBestAction(current, actions, 'red');
+      ? pickBestAction(current, winActions, team)
+      : pickBestAction(current, actions, team);
 
-    const outcome = getSimulatedOutcome(current, action, 'red');
+    const outcome = getSimulatedOutcome(current, action, team);
     if (!outcome) break;
     current = outcome.nextState;
     if (outcome.won) break;
@@ -900,37 +896,38 @@ function simulateRedRemainderThenOpponent(state) {
       redReserve: current.redReserve,
       actedUnitIds: new Set(),
     },
-    'blue',
+    enemy,
     ACTIONS_PER_TURN,
   );
 }
 
-function scoreTurnMinimax(state, redActions) {
+function scoreTurnMinimax(state, teamActions, team) {
   let current = state;
+  const enemy = enemyOf(team);
 
-  for (const action of redActions) {
-    const outcome = getSimulatedOutcome(current, action, 'red');
+  for (const action of teamActions) {
+    const outcome = getSimulatedOutcome(current, action, team);
     if (!outcome) return -Infinity;
     if (outcome.won) return 10000;
     if (outcome.lost) return -10000;
     current = outcome.nextState;
   }
 
-  const afterBlue = simulateOpponentTurn(
+  const afterEnemy = simulateOpponentTurn(
     {
       board: current.board,
       blueReserve: current.blueReserve,
       redReserve: current.redReserve,
       actedUnitIds: new Set(),
     },
-    'blue',
+    enemy,
     ACTIONS_PER_TURN,
   );
 
-  if (isWinningState(afterBlue.board, 'blue', afterBlue.redReserve)) return -8000;
-  if (isWinningState(afterBlue.board, 'red', afterBlue.blueReserve)) return 8000;
+  if (isWinningState(afterEnemy.board, enemy, getReserve(afterEnemy, team))) return -8000;
+  if (isWinningState(afterEnemy.board, team, getReserve(afterEnemy, enemy))) return 8000;
 
-  return evaluateStateForRed(afterBlue);
+  return evaluateStateForTeam(afterEnemy, team);
 }
 
 function scoreActionMinimax(state, action, team = 'red') {
@@ -940,20 +937,21 @@ function scoreActionMinimax(state, action, team = 'red') {
   if (outcome.won) return 10000;
   if (outcome.lost) return -10000;
 
-  const afterBlue = simulateRedRemainderThenOpponent(outcome.nextState);
+  const afterEnemy = simulateTeamRemainderThenOpponent(outcome.nextState, team);
+  const enemy = enemyOf(team);
 
-  if (isWinningState(afterBlue.board, 'blue', afterBlue.redReserve)) return -8000;
-  if (isWinningState(afterBlue.board, 'red', afterBlue.blueReserve)) return 8000;
+  if (isWinningState(afterEnemy.board, enemy, getReserve(afterEnemy, team))) return -8000;
+  if (isWinningState(afterEnemy.board, team, getReserve(afterEnemy, enemy))) return 8000;
 
-  let score = evaluateStateForRed(afterBlue);
+  let score = evaluateStateForTeam(afterEnemy, team);
 
   if (action.type === 'attack') {
-    const composition = inferEnemyComposition(state, enemyOf(team));
+    const composition = inferEnemyComposition(state, enemy);
     score += scoreClassAttack(state.board, action, outcome.killed, team, composition) * 0.22;
     score += scoreEliminationPressure(
       outcome.nextState.board,
-      'red',
-      outcome.nextState.blueReserve,
+      team,
+      getReserve(outcome.nextState, enemy),
       outcome.killed,
     ) * 0.25;
   }
@@ -986,17 +984,17 @@ function topScoringActions(state, actions, team, limit) {
     .map(({ action }) => action);
 }
 
-function pickBestComboFirstAction(state, actions) {
-  const firstCandidates = topScoringActions(state, actions, 'red', COMBO_FIRST);
+function pickBestComboFirstAction(state, actions, team = 'red') {
+  const firstCandidates = topScoringActions(state, actions, team, COMBO_FIRST);
   let bestAction = firstCandidates[0];
   let bestScore = -Infinity;
 
   for (const step1 of firstCandidates) {
-    const outcome1 = getSimulatedOutcome(state, step1, 'red');
+    const outcome1 = getSimulatedOutcome(state, step1, team);
     if (!outcome1) continue;
 
     if (outcome1.won) {
-      const winScore = 10000 + scoreAction(state, step1, 'red') * 0.01;
+      const winScore = 10000 + scoreAction(state, step1, team) * 0.01;
       if (winScore > bestScore) {
         bestScore = winScore;
         bestAction = step1;
@@ -1007,13 +1005,13 @@ function pickBestComboFirstAction(state, actions) {
     const actedAfter1 = getActedUnitIds(outcome1.nextState);
     const secondActions = getAllActionsForTeam(
       outcome1.nextState.board,
-      outcome1.nextState.redReserve,
-      'red',
+      getReserve(outcome1.nextState, team),
+      team,
       actedAfter1,
     );
 
     if (secondActions.length === 0) {
-      const score = scoreTurnMinimax(state, [step1]);
+      const score = scoreTurnMinimax(state, [step1], team);
       if (score > bestScore) {
         bestScore = score;
         bestAction = step1;
@@ -1021,9 +1019,9 @@ function pickBestComboFirstAction(state, actions) {
       continue;
     }
 
-    const secondCandidates = topScoringActions(outcome1.nextState, secondActions, 'red', COMBO_SECOND);
+    const secondCandidates = topScoringActions(outcome1.nextState, secondActions, team, COMBO_SECOND);
     for (const step2 of secondCandidates) {
-      const score = scoreTurnMinimax(state, [step1, step2]);
+      const score = scoreTurnMinimax(state, [step1, step2], team);
       if (score > bestScore) {
         bestScore = score;
         bestAction = step1;
@@ -1062,7 +1060,13 @@ function pickBestActionMinimax(state, actions, team = 'red', criticalCells = nul
   return best;
 }
 
-export function chooseAiAction(state) {
+export function chooseAiAction(state, teamOrOptions = 'red') {
+  const options =
+    typeof teamOrOptions === 'string'
+      ? { team: teamOrOptions, ownerSeat: undefined }
+      : teamOrOptions;
+  const { team, ownerSeat } = options;
+
   const safeState = {
     board: state.board,
     blueReserve: state.blueReserve ?? [],
@@ -1070,49 +1074,56 @@ export function chooseAiAction(state) {
     actedUnitIds: state.actedUnitIds ?? new Set(),
   };
 
+  const enemy = enemyOf(team);
   const acted = getActedUnitIds(safeState);
-  const actions = getAllActionsForTeam(safeState.board, safeState.redReserve, 'red', acted);
+  const actions = getAllActionsForTeam(
+    safeState.board,
+    getReserve(safeState, team),
+    team,
+    acted,
+    ownerSeat,
+  );
   if (actions.length === 0) return null;
 
-  const winActions = findWinningActions(safeState, 'red');
+  const winActions = findWinningActions(safeState, team, ownerSeat);
   if (winActions.length > 0) {
-    return pickBestAction(safeState, winActions, 'red');
+    return pickBestAction(safeState, winActions, team);
   }
 
-  const blueWinActions = findWinningActions(safeState, 'blue');
-  if (blueWinActions.length > 0) {
+  const enemyWinActions = findWinningActions(safeState, enemy);
+  if (enemyWinActions.length > 0) {
     const blocks = actions.filter((action) => {
-      const outcome = getSimulatedOutcome(safeState, action, 'red');
+      const outcome = getSimulatedOutcome(safeState, action, team);
       if (!outcome) return false;
-      const blueWins = findWinningActions(
+      const enemyWins = findWinningActions(
         {
           board: outcome.nextState.board,
           blueReserve: outcome.nextState.blueReserve,
           redReserve: outcome.nextState.redReserve,
           actedUnitIds: new Set(),
         },
-        'blue',
+        enemy,
       );
-      return blueWins.length === 0;
+      return enemyWins.length === 0;
     });
 
     if (blocks.length > 0) {
-      return pickBestActionMinimax(safeState, blocks, 'red');
+      return pickBestActionMinimax(safeState, blocks, team);
     }
   }
 
-  const criticalCells = findCriticalCells(safeState.board, 'blue');
+  const criticalCells = findCriticalCells(safeState.board, enemy);
   if (criticalCells.size > 0) {
-    const mitigating = filterThreatResponses(safeState, actions, 'red', criticalCells);
+    const mitigating = filterThreatResponses(safeState, actions, team, criticalCells);
 
     if (mitigating.length > 0) {
-      return pickBestActionMinimax(safeState, mitigating, 'red', criticalCells);
+      return pickBestActionMinimax(safeState, mitigating, team, criticalCells);
     }
   }
 
   if (acted.size === 0) {
-    return pickBestComboFirstAction(safeState, actions);
+    return pickBestComboFirstAction(safeState, actions, team);
   }
 
-  return pickBestActionMinimax(safeState, actions, 'red');
+  return pickBestActionMinimax(safeState, actions, team);
 }

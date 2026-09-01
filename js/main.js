@@ -18,6 +18,9 @@ const classPickerEl = document.getElementById('classPicker');
 const classDetailEl = document.getElementById('classDetail');
 const actionPanelEl = document.getElementById('actionPanel');
 const reservePanelEl = document.getElementById('reservePanel');
+const reservePanelTitleEl = document.getElementById('reservePanelTitle');
+const teammatePanelEl = document.getElementById('teammatePanel');
+const teammateListEl = document.getElementById('teammateList');
 const enemyPanelEl = document.getElementById('enemyPanel');
 const endPanelEl = document.getElementById('endPanel');
 const reserveListEl = document.getElementById('reserveList');
@@ -102,10 +105,17 @@ function onDragPointerUp(e) {
   window.removeEventListener('pointercancel', onDragPointerUp);
 }
 
+function canControlUnit(state, unit) {
+  if (state.phase !== 'battle' || state.animating) return false;
+  if (unit.team !== 'blue') return false;
+  if (state.actedUnitIds.includes(unit.id)) return false;
+  if (!state.isHumanTurn) return false;
+  if (state.matchFormat === '2v2') return unit.ownerSeat === 0;
+  return true;
+}
+
 function startUnitDrag(e, unit, state) {
-  if (state.phase !== 'battle' || state.currentPlayer !== 'blue' || state.animating) return;
-  if (unit.team !== 'blue') return;
-  if (state.actedUnitIds.includes(unit.id)) return;
+  if (!canControlUnit(state, unit)) return;
 
   drag = {
     unitId: unit.id,
@@ -118,6 +128,11 @@ function startUnitDrag(e, unit, state) {
   window.addEventListener('pointermove', onDragPointerMove);
   window.addEventListener('pointerup', onDragPointerUp);
   window.addEventListener('pointercancel', onDragPointerUp);
+}
+
+function seatBadgeHtml(state, unit) {
+  if (state.matchFormat !== '2v2' || unit.ownerSeat == null) return '';
+  return `<div class="seat-badge">${unit.ownerSeat + 1}</div>`;
 }
 
 function renderBoard(state) {
@@ -150,6 +165,7 @@ function renderBoard(state) {
         if (state.draggingUnitId === unit.id) cell.classList.add('dragging-source');
         cell.innerHTML = `
           <div class="team-badge">${unit.team === 'blue' ? '藍' : '紅'}</div>
+          ${seatBadgeHtml(state, unit)}
           <div class="unit ${unit.team}${acted ? ' acted' : ''}">
             <div class="unit-icon-wrap"><span class="unit-icon">${cls.icon}</span></div>
             <div class="unit-name">${cls.name}</div>
@@ -157,7 +173,7 @@ function renderBoard(state) {
             <div class="unit-hp">${unit.hp} / ${unit.maxHp}</div>
           </div>
         `;
-        if (unit.team === 'blue' && !acted) {
+        if (canControlUnit(state, unit)) {
           cell.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
             e.preventDefault();
@@ -181,7 +197,15 @@ function renderModePicker(state) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
-    btn.textContent = mode.label;
+    const subtitle =
+      mode.matchFormat === '2v2'
+        ? '2v2 單局'
+        : mode.seriesFormat === 'best_of_3'
+          ? '三戰兩勝'
+          : '';
+    btn.innerHTML = subtitle
+      ? `<span class="mode-btn-label">${mode.label}</span><span class="mode-btn-sub">${subtitle}</span>`
+      : mode.label;
     btn.disabled = !canPick;
     btn.addEventListener('click', () => game.setBoardMode(mode.id));
     modeButtonsEl.appendChild(btn);
@@ -235,51 +259,101 @@ function renderLobbyPanels(state) {
   const inRoster = state.phase === 'roster';
   modePanelEl.classList.toggle('hidden', !inRoster);
   confirmRosterBtn.classList.toggle('hidden', !inRoster);
-}
-
-function renderReserve(state) {
-  reserveListEl.innerHTML = '';
-  const canPick = state.phase === 'battle' && state.currentPlayer === 'blue' && !state.animating;
-
-  if (state.blueReserve.length === 0) {
-    reserveListEl.innerHTML = '<div class="empty-hint">後備已空</div>';
-    return;
-  }
-
-  for (const unit of state.blueReserve) {
-    const cls = CLASSES[unit.classId];
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'reserve-item';
-    if (state.selectedReserveId === unit.id) item.classList.add('selected');
-    if (!canPick) item.classList.add('disabled');
-    item.innerHTML = `<span>${cls.icon} ${cls.name}</span>`;
-    item.addEventListener('click', () => {
-      if (canPick) game.selectReserve(unit.id);
-    });
-    reserveListEl.appendChild(item);
+  if (inRoster) {
+    confirmRosterBtn.textContent = state.startButtonLabel;
   }
 }
 
-function renderEnemyStatus(state) {
-  enemyListEl.innerHTML = '';
+function filterUnitsBySeat(units, seat) {
+  return units.filter((u) => u.ownerSeat === seat);
+}
 
-  const boardUnits = state.board.flat().filter((u) => u?.team === 'red');
-  const reserveUnits = state.redReserve;
-  const units = [...boardUnits, ...reserveUnits];
+function renderUnitList(container, units, { emptyHint = '已空', interactive = false, canPick = false, onSelect = null, selectedId = null }) {
+  container.innerHTML = '';
 
   if (units.length === 0) {
-    enemyListEl.innerHTML = '<div class="empty-hint">已全滅</div>';
+    container.innerHTML = `<div class="empty-hint">${emptyHint}</div>`;
     return;
   }
 
   for (const unit of units) {
     const cls = CLASSES[unit.classId];
-    const item = document.createElement('div');
-    item.className = 'enemy-item';
-    item.innerHTML = `<span class="enemy-item-main">${cls.icon} ${cls.name}</span>`;
-    enemyListEl.appendChild(item);
+    if (interactive) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'reserve-item';
+      if (selectedId === unit.id) item.classList.add('selected');
+      if (!canPick) item.classList.add('disabled');
+      item.innerHTML = `<span>${cls.icon} ${cls.name}</span>`;
+      item.addEventListener('click', () => {
+        if (canPick && onSelect) onSelect(unit.id);
+      });
+      container.appendChild(item);
+    } else {
+      const item = document.createElement('div');
+      item.className = 'enemy-item';
+      item.innerHTML = `<span class="enemy-item-main">${cls.icon} ${cls.name}</span>`;
+      container.appendChild(item);
+    }
   }
+}
+
+function renderReserve(state) {
+  const canPick = state.isHumanTurn;
+  const is2v2 = state.matchFormat === '2v2';
+  reservePanelTitleEl.textContent = is2v2 ? '藍1 後備' : '藍隊後備';
+
+  const reserveUnits = is2v2 ? filterUnitsBySeat(state.blueReserve, 0) : state.blueReserve;
+  renderUnitList(reserveListEl, reserveUnits, {
+    emptyHint: '後備已空',
+    interactive: true,
+    canPick,
+    selectedId: state.selectedReserveId,
+    onSelect: (unitId) => game.selectReserve(unitId),
+  });
+}
+
+function renderTeammate(state) {
+  if (state.matchFormat !== '2v2') {
+    teammatePanelEl.classList.add('hidden');
+    return;
+  }
+
+  teammatePanelEl.classList.remove('hidden');
+  const boardUnits = state.board.flat().filter((u) => u?.team === 'blue' && u.ownerSeat === 1);
+  const reserveUnits = filterUnitsBySeat(state.blueReserve, 1);
+  const units = [...boardUnits, ...reserveUnits];
+
+  renderUnitList(teammateListEl, units, {
+    emptyHint: '隊友單位已空',
+    interactive: false,
+  });
+}
+
+function renderEnemyStatus(state) {
+  enemyListEl.innerHTML = '';
+
+  if (state.matchFormat === '2v2') {
+    for (const seat of [0, 1]) {
+      const boardUnits = state.board.flat().filter((u) => u?.team === 'red' && u.ownerSeat === seat);
+      const reserveUnits = filterUnitsBySeat(state.redReserve, seat);
+      const units = [...boardUnits, ...reserveUnits];
+      const section = document.createElement('div');
+      section.className = 'enemy-section';
+      section.innerHTML = `<h3 class="enemy-section-title">紅${seat + 1}</h3>`;
+      const list = document.createElement('div');
+      list.className = 'enemy-section-list';
+      renderUnitList(list, units, { emptyHint: '已全滅' });
+      section.appendChild(list);
+      enemyListEl.appendChild(section);
+    }
+    return;
+  }
+
+  const boardUnits = state.board.flat().filter((u) => u?.team === 'red');
+  const reserveUnits = state.redReserve;
+  const units = [...boardUnits, ...reserveUnits];
+  renderUnitList(enemyListEl, units, { emptyHint: '已全滅' });
 }
 
 function syncSidebarMode(state) {
@@ -304,10 +378,10 @@ function renderBattlePanels(state) {
   const inBattle = state.phase === 'battle';
   const showEnd = state.phase === 'roundEnd' || state.phase === 'seriesEnd';
 
-  actionPanelEl.classList.toggle('hidden', !inBattle || state.currentPlayer !== 'blue');
+  actionPanelEl.classList.toggle('hidden', !inBattle || !state.isHumanTurn);
   const canEndTurn =
     inBattle &&
-    state.currentPlayer === 'blue' &&
+    state.isHumanTurn &&
     !state.animating &&
     state.actionsRemaining > 0;
   endTurnBtn.classList.toggle('hidden', !canEndTurn);
@@ -320,22 +394,44 @@ function renderBattlePanels(state) {
   restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
 }
 
-function render(state) {
+function formatRoundBadge(state) {
+  if (state.phase === 'roster') return '編隊階段';
+  if (state.phase === 'seriesEnd') {
+    return state.seriesFormat === 'single' ? '對戰結束' : '系列賽結束';
+  }
+  if (state.matchFormat === '2v2') {
+    const suffix = state.isHumanTurn ? ' · 你的回合' : ' · AI 思考中';
+    return `${state.slotLabel} 回合${suffix}`;
+  }
+  return `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合`;
+}
+
+function renderScoreBar(state) {
+  const isSingle = state.seriesFormat === 'single';
+  blueScoreEl.classList.toggle('hidden', isSingle);
+  redScoreEl.classList.toggle('hidden', isSingle);
+
+  if (isSingle) {
+    if (state.phase === 'roster') {
+      roundBadgeEl.textContent = '編隊階段';
+    } else {
+      roundBadgeEl.textContent = formatRoundBadge(state);
+    }
+    return;
+  }
+
   blueScoreEl.textContent = `${TEAM.blue.name} ${state.blueScore} 勝`;
   redScoreEl.textContent = `${TEAM.red.name} ${state.redScore} 勝`;
+  roundBadgeEl.textContent = formatRoundBadge(state);
+}
+
+function render(state) {
+  renderScoreBar(state);
 
   blueScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   redScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'red');
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
-
-  if (state.phase === 'roster') {
-    roundBadgeEl.textContent = '編隊階段';
-  } else if (state.phase === 'seriesEnd') {
-    roundBadgeEl.textContent = '系列賽結束';
-  } else {
-    roundBadgeEl.textContent = `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合`;
-  }
 
   syncSidebarMode(state);
   renderLobbyPanels(state);
@@ -355,6 +451,7 @@ function render(state) {
   renderModePicker(state);
   renderClassPicker();
   renderReserve(state);
+  renderTeammate(state);
   renderEnemyStatus(state);
 }
 
