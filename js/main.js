@@ -27,6 +27,7 @@ const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const nextRoundBtn = document.getElementById('nextRound');
 const restartBtn = document.getElementById('restart');
+const endTurnBtn = document.getElementById('endTurn');
 
 const DRAG_THRESHOLD = 8;
 let drag = null;
@@ -102,6 +103,7 @@ function onDragPointerUp(e) {
 function startUnitDrag(e, unit, state) {
   if (state.phase !== 'battle' || state.currentPlayer !== 'blue' || state.animating) return;
   if (unit.team !== 'blue') return;
+  if (state.actedUnitIds.includes(unit.id)) return;
 
   drag = {
     unitId: unit.id,
@@ -140,18 +142,20 @@ function renderBoard(state) {
       const unit = state.board[r][c];
       if (unit) {
         const cls = CLASSES[unit.classId];
+        const acted = state.actedUnitIds.includes(unit.id);
         cell.classList.add('has-unit', `team-${unit.team}`);
+        if (acted) cell.classList.add('unit-acted');
         if (state.draggingUnitId === unit.id) cell.classList.add('dragging-source');
         cell.innerHTML = `
           <div class="team-badge">${unit.team === 'blue' ? '藍' : '紅'}</div>
-          <div class="unit ${unit.team}">
+          <div class="unit ${unit.team}${acted ? ' acted' : ''}">
             <div class="unit-icon-wrap"><span class="unit-icon">${cls.icon}</span></div>
             <div class="unit-name">${cls.name}</div>
             <div class="hp-bar"><div class="hp-fill" style="width:${hpPercent(unit)}%"></div></div>
             <div class="unit-hp">${unit.hp} / ${unit.maxHp}</div>
           </div>
         `;
-        if (unit.team === 'blue') {
+        if (unit.team === 'blue' && !acted) {
           cell.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
             e.preventDefault();
@@ -291,12 +295,18 @@ function render(state) {
   } else if (state.phase === 'seriesEnd') {
     roundBadgeEl.textContent = '系列賽結束';
   } else {
-    roundBadgeEl.textContent = `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合`;
+    roundBadgeEl.textContent = `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合 · ${state.actionsRemaining}/${state.actionsPerTurn}`;
   }
 
   rosterPanelEl.classList.toggle('hidden', state.phase !== 'roster');
   modePanelEl.classList.toggle('hidden', state.phase !== 'roster');
   actionPanelEl.classList.toggle('hidden', state.phase !== 'battle' || state.currentPlayer !== 'blue');
+  const canEndTurn =
+    state.phase === 'battle' &&
+    state.currentPlayer === 'blue' &&
+    !state.animating &&
+    state.actionsRemaining > 0;
+  endTurnBtn.classList.toggle('hidden', !canEndTurn);
   reservePanelEl.classList.toggle('hidden', state.phase !== 'battle');
   enemyPanelEl.classList.toggle('hidden', state.phase !== 'battle');
   endPanelEl.classList.toggle('hidden', state.phase !== 'roundEnd' && state.phase !== 'seriesEnd');
@@ -314,6 +324,7 @@ function render(state) {
 confirmRosterBtn.addEventListener('click', () => game.confirmBlueRoster());
 nextRoundBtn.addEventListener('click', () => game.nextRound());
 restartBtn.addEventListener('click', () => game.restartSeries());
+endTurnBtn.addEventListener('click', () => game.endTurnEarly());
 
 game.subscribe(render);
 render(game.getState());

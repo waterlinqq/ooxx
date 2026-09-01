@@ -11,6 +11,8 @@ import {
 } from './rules.js';
 import { chooseAiAction } from './ai.js';
 
+const ACTIONS_PER_TURN = 2;
+
 export class Game {
   constructor() {
     this.boardMode = '3x3';
@@ -30,6 +32,8 @@ export class Game {
     this.message = '請選擇棋盤模式並編組藍隊';
     this.lastWinLine = null;
     this.animating = false;
+    this.actionsRemaining = ACTIONS_PER_TURN;
+    this.actedUnitIds = new Set();
     this.playAttackFx = null;
     this.listeners = [];
   }
@@ -93,7 +97,38 @@ export class Game {
       validTargets: this.getHighlightTargets(),
       validDeploy: this.getHighlightDeploy(),
       animating: this.animating,
+      actionsRemaining: this.actionsRemaining,
+      actionsPerTurn: ACTIONS_PER_TURN,
+      actedUnitIds: [...this.actedUnitIds],
     };
+  }
+
+  resetTurnActions() {
+    this.actionsRemaining = ACTIONS_PER_TURN;
+    this.actedUnitIds = new Set();
+  }
+
+  getPlayerTurnMessage() {
+    const team = TEAM[this.currentPlayer];
+    if (this.currentPlayer === 'blue') {
+      return `藍隊回合（剩餘 ${this.actionsRemaining}/${ACTIONS_PER_TURN} 次行動）：拖曳單位移動或攻擊，或點後備再點空格部署`;
+    }
+    return `${team.name}回合（剩餘 ${this.actionsRemaining}/${ACTIONS_PER_TURN} 次行動）`;
+  }
+
+  hasValidActionsForTeam(team = this.currentPlayer) {
+    const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
+    const deployCells = getValidDeployCells(this.board);
+    if (deployCells.length > 0 && reserve.length > 0) return true;
+
+    for (const row of this.board) {
+      for (const unit of row) {
+        if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
+        if (getValidMoves(this.board, unit).length > 0) return true;
+        if (getValidAttackTargets(this.board, unit).length > 0) return true;
+      }
+    }
+    return false;
   }
 
   addRosterUnit(classId, team = 'blue') {
@@ -148,10 +183,11 @@ export class Game {
     this.selectedReserveId = null;
     this.lastWinLine = null;
     this.phase = 'battle';
+    this.resetTurnActions();
 
     const first = TEAM[this.currentPlayer].name;
     if (this.currentPlayer === 'blue') {
-      this.message = `第 ${this.round} 局 — ${first}先攻：拖曳單位移動或攻擊，或點後備再點空格部署`;
+      this.message = `第 ${this.round} 局 — ${first}先攻：每回合 ${ACTIONS_PER_TURN} 次行動，同一單位只能行動一次`;
     } else {
       this.message = `第 ${this.round} 局 — ${first}先攻`;
     }
@@ -175,6 +211,7 @@ export class Game {
 
   beginDragUnit(unitId) {
     if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    if (this.actedUnitIds.has(unitId)) return;
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit || unit.team !== 'blue') return;
     this.selectedReserveId = null;
@@ -186,7 +223,7 @@ export class Game {
   cancelDrag() {
     if (!this.draggingUnitId) return;
     this.draggingUnitId = null;
-    this.message = '藍隊回合：拖曳單位移動或攻擊，或點後備再點空格部署';
+    this.message = this.getPlayerTurnMessage();
     this.notify();
   }
 
@@ -226,8 +263,16 @@ export class Game {
 
   resetPlayerTurn() {
     this.draggingUnitId = null;
-    this.message = '藍隊回合：拖曳單位移動或攻擊，或點後備再點空格部署';
+    this.message = this.getPlayerTurnMessage();
     this.notify();
+  }
+
+  endTurnEarly() {
+    if (this.phase !== 'battle' || this.currentPlayer !== 'blue' || this.animating) return;
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.actionsRemaining = 0;
+    this.switchPlayer();
   }
 
   getCurrentReserve() {
@@ -236,6 +281,7 @@ export class Game {
 
   getHighlightMoves() {
     if (!this.draggingUnitId) return [];
+    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
     return getValidMoves(this.board, unit);
@@ -243,6 +289,7 @@ export class Game {
 
   getHighlightTargets() {
     if (!this.draggingUnitId) return [];
+    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
     return getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
@@ -277,18 +324,19 @@ export class Game {
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
     }
 
-    this.endTurn(`部署 ${CLASSES[unit.classId].name}`);
+    this.endAction(`部署 ${CLASSES[unit.classId].name}`, unit.id);
   }
 
   tryMoveTo(unitId, row, col) {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit) return false;
+    if (this.actedUnitIds.has(unitId)) return false;
     const valid = getValidMoves(this.board, unit);
     if (!valid.some(([r, c]) => r === row && c === col)) return false;
 
     const result = applyMove(this.board, unit, row, col);
     this.board = result.board;
-    this.endTurn('移動');
+    this.endAction('移動', unitId);
     return true;
   }
 
@@ -313,13 +361,14 @@ export class Game {
 
     this.board = result.board;
     this.animating = false;
-    this.endTurn(`${label}（命中 ${result.hits.length} 個目標）`);
+    this.endAction(`${label}（命中 ${result.hits.length} 個目標）`, unit.id);
   }
 
   tryAttackTarget(unitId, row, col) {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     const target = this.board[row][col];
     if (!unit || !target || target.team === unit.team) return false;
+    if (this.actedUnitIds.has(unitId)) return false;
 
     const valid = getValidAttackTargets(this.board, unit);
     if (!valid.some((t) => t.id === target.id)) return false;
@@ -328,14 +377,17 @@ export class Game {
     return true;
   }
 
-  endTurn(actionLabel) {
+  endAction(actionLabel, unitId) {
     const team = TEAM[this.currentPlayer];
     const enemy = this.currentPlayer === 'blue' ? 'red' : 'blue';
     const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
-    const winLine = checkWin(this.board, this.currentPlayer);
 
+    this.actedUnitIds.add(unitId);
+    this.actionsRemaining--;
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+
+    const winLine = checkWin(this.board, this.currentPlayer);
 
     if (winLine) {
       this.lastWinLine = winLine;
@@ -349,13 +401,29 @@ export class Game {
       return;
     }
 
-    this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
-    if (this.currentPlayer === 'blue') {
-      this.message = '藍隊回合：拖曳單位移動或攻擊，或點後備再點空格部署';
-    } else {
-      this.message = `${TEAM[this.currentPlayer].name}回合`;
+    if (this.actionsRemaining > 0) {
+      if (!this.hasValidActionsForTeam()) {
+        this.message = `${actionLabel} — 無更多可行動，換 ${TEAM[enemy].name}回合`;
+        this.notify();
+        this.switchPlayer();
+        return;
+      }
+      this.message = `${actionLabel} — 還可行動 ${this.actionsRemaining} 次`;
+      this.notify();
+      if (this.currentPlayer === 'red') {
+        setTimeout(() => this.runAiTurn(), 500);
+      }
+      return;
     }
 
+    this.message = actionLabel;
+    this.switchPlayer();
+  }
+
+  switchPlayer() {
+    this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
+    this.resetTurnActions();
+    this.message = this.getPlayerTurnMessage();
     this.notify();
 
     if (this.currentPlayer === 'red') {
@@ -370,12 +438,13 @@ export class Game {
       board: this.board,
       redReserve: this.redReserve,
       blueReserve: this.blueReserve,
+      actedUnitIds: this.actedUnitIds,
     });
 
     if (!action) {
-      this.currentPlayer = 'blue';
-      this.message = '紅隊無可行動 — 藍隊回合：拖曳單位移動或攻擊，或點後備再點空格部署';
-      this.notify();
+      if (this.actionsRemaining > 0) {
+        this.switchPlayer();
+      }
       return;
     }
 
@@ -384,7 +453,7 @@ export class Game {
       const result = applyDeploy(this.board, unit, action.row, action.col);
       this.board = result.board;
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      this.endTurn(`紅隊部署 ${CLASSES[unit.classId].name}`);
+      this.endAction(`紅隊部署 ${CLASSES[unit.classId].name}`, unit.id);
       return;
     }
 
@@ -392,7 +461,7 @@ export class Game {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const result = applyMove(this.board, unit, action.row, action.col);
       this.board = result.board;
-      this.endTurn('紅隊移動');
+      this.endAction('紅隊移動', action.unitId);
       return;
     }
 

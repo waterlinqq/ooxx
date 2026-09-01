@@ -47,9 +47,12 @@
         <div class="panel hidden" id="actionPanel">
           <h2>操作提示</h2>
           <div class="action-hint">
-            拖曳棋盤上的藍隊單位 → 移動或攻擊<br />
-            點選後備單位 → 再點空格部署
+            每回合可執行 2 次行動（部署 / 移動 / 攻擊）<br />
+            同一單位每回合只能行動一次<br />
+            拖曳棋盤單位 → 移動或攻擊<br />
+            點選後備 → 再點空格部署
           </div>
+          <button class="btn hidden" id="endTurn" style="width: 100%; margin-top: 12px">結束回合</button>
         </div>
 
         <div class="panel hidden" id="reservePanel">
@@ -72,7 +75,7 @@
           <h2>規則摘要</h2>
           <div class="legend">
             <strong>勝利：</strong>同隊連成整行（3×3 三子、4×4 四子），或全滅對手<br />
-            <strong>回合：</strong>拖曳移動/攻擊，或點後備再點格部署<br />
+            <strong>回合：</strong>每回合 2 次行動，同一單位只能行動一次<br />
             <strong>🏹 弓箭手：</strong>HP 3 / ATK 3 / 射程 3<br />
             <strong>🛡️ 盾牌手：</strong>HP 8 / ATK 1 / 近戰<br />
             <strong>⚔️ 劍士：</strong>HP 5 / ATK 3 / 近戰<br />

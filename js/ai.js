@@ -422,10 +422,11 @@ function evaluateStateForRed(state) {
   return evaluateBoard(state.board, 'red', state.redReserve, state.blueReserve);
 }
 
-function getAllActionsForTeam(board, reserve, team) {
+function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set()) {
   const actions = [];
 
   for (const unit of reserve) {
+    if (actedUnitIds.has(unit.id)) continue;
     for (const [r, c] of getValidDeployCells(board)) {
       actions.push({ type: 'deploy', unitId: unit.id, row: r, col: c });
     }
@@ -433,7 +434,7 @@ function getAllActionsForTeam(board, reserve, team) {
 
   for (const row of board) {
     for (const unit of row) {
-      if (!unit || unit.team !== team) continue;
+      if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
 
       for (const [r, c] of getValidMoves(board, unit)) {
         actions.push({ type: 'move', unitId: unit.id, row: r, col: c });
@@ -495,10 +496,15 @@ function isWinningState(board, team, enemyReserve) {
   return checkWin(board, team) || isTeamEliminated(board, enemyOf(team), enemyReserve);
 }
 
+function getActedUnitIds(state) {
+  return state.actedUnitIds ?? new Set();
+}
+
 function findWinningActions(state, team) {
   const reserve = getReserve(state, team);
   const enemyReserve = getReserve(state, enemyOf(team));
-  const actions = getAllActionsForTeam(state.board, reserve, team);
+  const acted = team === 'red' ? getActedUnitIds(state) : new Set();
+  const actions = getAllActionsForTeam(state.board, reserve, team, acted);
 
   return actions.filter((action) => {
     const next = simulateActionForTeam(state, action, team);
@@ -693,9 +699,11 @@ export function chooseAiAction(state) {
     board: state.board,
     blueReserve: state.blueReserve ?? [],
     redReserve: state.redReserve ?? [],
+    actedUnitIds: state.actedUnitIds ?? new Set(),
   };
 
-  const actions = getAllActionsForTeam(safeState.board, safeState.redReserve, 'red');
+  const acted = getActedUnitIds(safeState);
+  const actions = getAllActionsForTeam(safeState.board, safeState.redReserve, 'red', acted);
   if (actions.length === 0) return null;
 
   const winActions = findWinningActions(safeState, 'red');
