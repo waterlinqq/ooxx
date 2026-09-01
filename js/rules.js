@@ -40,6 +40,16 @@ export function getAdjacentCells(row, col) {
 export function getValidMoves(board, unit) {
   if (unit.row < 0) return [];
 
+  if (unit.jumpMove) {
+    const moves = [];
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (!board[r][c] && (r !== unit.row || c !== unit.col)) moves.push([r, c]);
+      }
+    }
+    return moves;
+  }
+
   const maxSteps = unit.moveRange ?? 1;
   const moves = [];
   const visited = new Set([`${unit.row},${unit.col}`]);
@@ -63,14 +73,32 @@ export function getValidMoves(board, unit) {
   return moves;
 }
 
+const MAGE_DIRS = [
+  [0, 1], [0, -1], [1, 0], [-1, 0],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
+export function isOnMageLine(fromRow, fromCol, toRow, toCol) {
+  const dr = toRow - fromRow;
+  const dc = toCol - fromCol;
+  if (dr === 0 && dc === 0) return false;
+  if (dr === 0 || dc === 0) return true;
+  return Math.abs(dr) === Math.abs(dc);
+}
+
 export function getMageLines(unit) {
   const { row, col } = unit;
   const lines = [];
 
-  for (let c = col + 1; c < 3; c++) lines.push([[row, col], [row, c]]);
-  for (let c = col - 1; c >= 0; c--) lines.push([[row, col], [row, c]]);
-  for (let r = row + 1; r < 3; r++) lines.push([[row, col], [r, col]]);
-  for (let r = row - 1; r >= 0; r--) lines.push([[row, col], [r, col]]);
+  for (const [dr, dc] of MAGE_DIRS) {
+    let r = row + dr;
+    let c = col + dc;
+    while (isInBounds(r, c)) {
+      lines.push([[row, col], [r, c]]);
+      r += dr;
+      c += dc;
+    }
+  }
 
   return lines;
 }

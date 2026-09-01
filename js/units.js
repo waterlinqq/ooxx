@@ -4,7 +4,7 @@ export const CLASSES = {
     name: '弓箭手',
     icon: '🏹',
     hp: 3,
-    atk: 2,
+    atk: 1,
     range: 3,
     type: 'ranged',
     desc: '遠程攻擊，生命值低',
@@ -37,7 +37,7 @@ export const CLASSES = {
     atk: 2,
     range: 3,
     type: 'mage',
-    desc: '直線穿透，傷害低',
+    desc: '任意角度穿透，傷害低',
   },
   assassin: {
     id: 'assassin',
@@ -46,9 +46,9 @@ export const CLASSES = {
     hp: 2,
     atk: 1,
     range: 1,
-    moveRange: 2,
+    jumpMove: true,
     type: 'melee',
-    desc: '低血低攻，最多移動兩格（可轉彎）',
+    desc: '低血低攻，可跳躍至棋盤任意空格',
   },
 };
 
@@ -72,6 +72,7 @@ export function createUnit(classId, teamId) {
     atk: cls.atk,
     range: cls.range,
     moveRange: cls.moveRange ?? 1,
+    jumpMove: cls.jumpMove ?? false,
     type: cls.type,
     row: -1,
     col: -1,
