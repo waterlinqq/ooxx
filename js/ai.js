@@ -10,9 +10,12 @@ import {
   isTeamEliminated,
   getWinLines,
   chebyshev,
+  getEnemiesOnLine,
+  countTeamOnBoard,
 } from './rules.js';
 
 const MAX_MINIMAX_CANDIDATES = 24;
+const ELIMINATION_PRESSURE_THRESHOLD = 4;
 
 function getWinLinesForBoard(board) {
   const size = board.length;
@@ -143,6 +146,151 @@ function scoreKills(killed) {
   return bonus;
 }
 
+function countEnemyRemaining(board, enemyTeam, enemyReserve) {
+  return countTeamOnBoard(board, enemyTeam) + enemyReserve.length;
+}
+
+function scoreEliminationPressure(board, team, enemyReserve, killed) {
+  const enemy = enemyOf(team);
+  const remaining = countEnemyRemaining(board, enemy, enemyReserve);
+  if (remaining > ELIMINATION_PRESSURE_THRESHOLD) return 0;
+
+  let bonus = (ELIMINATION_PRESSURE_THRESHOLD - remaining + 1) * 18;
+  bonus += killed.length * (remaining <= 2 ? 55 : 30);
+  if (remaining - killed.length <= 0 && enemyReserve.length === 0) bonus += 120;
+  return bonus;
+}
+
+function countAdjacentEnemies(board, row, col, team) {
+  const size = board.length;
+  let count = 0;
+  for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    const r = row + dr;
+    const c = col + dc;
+    if (r >= 0 && r < size && c >= 0 && c < size) {
+      const u = board[r][c];
+      if (u && u.team !== team) count++;
+    }
+  }
+  return count;
+}
+
+function countMeleeThreats(board, row, col, team) {
+  const size = board.length;
+  let count = 0;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const u = board[r][c];
+      if (u && u.team !== team && chebyshev(row, col, r, c) <= 1) count++;
+    }
+  }
+  return count;
+}
+
+/** 弓箭手：覆蓋射程內目標，並避免貼臉 */
+function scoreArcherPosition(board, row, col, team, range) {
+  const size = board.length;
+  let bonus = 0;
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const u = board[r][c];
+      if (!u || u.team === team) continue;
+      const dist = chebyshev(row, col, r, c);
+      if (dist > range) continue;
+      bonus += 14 + u.atk * 4;
+      if (dist === 1) bonus -= 28;
+      else if (dist >= 2) bonus += 8;
+    }
+  }
+
+  bonus -= countMeleeThreats(board, row, col, team) * 16;
+  return bonus;
+}
+
+/** 刺客跳躍：佔關鍵格、貼近遠程、脫離集火 */
+function scoreAssassinMove(board, unit, row, col, team) {
+  let bonus = 0;
+  const enemy = enemyOf(team);
+  const critical = findCriticalCells(board, enemy);
+
+  bonus += (critical.get(cellKey(row, col)) ?? 0) * 0.85;
+  bonus += scoreCellForLines(board, row, col, team) * 0.5;
+
+  const size = board.length;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const u = board[r][c];
+      if (!u || u.team === team) continue;
+
+      const before = chebyshev(unit.row, unit.col, r, c);
+      const after = chebyshev(row, col, r, c);
+      const isPriority = u.type === 'ranged' || u.type === 'mage';
+      const value = u.atk * 10 + u.hp;
+
+      if (isPriority && after < before) bonus += value * 0.45;
+      if (isPriority && after === 1) bonus += 22;
+      if (u.hp <= unit.atk && after === 1) bonus += 35;
+    }
+  }
+
+  const threatsBefore = countAdjacentEnemies(board, unit.row, unit.col, team)
+    + countMeleeThreats(board, unit.row, unit.col, team);
+  const threatsAfter = countAdjacentEnemies(board, row, col, team)
+    + countMeleeThreats(board, row, col, team);
+  bonus += (threatsBefore - threatsAfter) * 15;
+
+  return bonus;
+}
+
+/** 魔法師：模擬穿透線上的傷害與多殺價值 */
+function scoreMageAttack(board, attacker, target, killed) {
+  const hits = getEnemiesOnLine(board, attacker, target.row, target.col);
+  let bonus = 0;
+
+  for (const hit of hits) {
+    if (hit.hp <= attacker.atk) {
+      bonus += 30 + hit.maxHp * 3 + hit.atk * 8;
+    } else {
+      bonus += attacker.atk * 4;
+    }
+  }
+
+  const killCount = killed.length;
+  if (killCount >= 2) bonus += 50 + (killCount - 2) * 35;
+  if (hits.length >= 2 && killCount === 0) bonus += hits.length * 10;
+
+  let bestLineHits = hits.length;
+  for (const alt of getValidAttackTargets(board, attacker)) {
+    if (alt.id === target.id) continue;
+    bestLineHits = Math.max(
+      bestLineHits,
+      getEnemiesOnLine(board, attacker, alt.row, alt.col).length,
+    );
+  }
+  if (bestLineHits >= 2 && hits.length < bestLineHits) bonus -= 40;
+
+  return bonus;
+}
+
+function scoreClassAttack(board, action, killed, team) {
+  const attacker = board.flat().find((u) => u?.id === action.unitId);
+  const target = board.flat().find((u) => u?.id === action.targetId);
+  if (!attacker || !target) return 0;
+
+  let bonus = scoreAttackExecution(board, action, killed);
+
+  if (attacker.type === 'mage') {
+    bonus += scoreMageAttack(board, attacker, target, killed);
+  }
+
+  if (attacker.classId === 'assassin' && killed.length > 0) {
+    bonus += killed.length * 12;
+  }
+
+  return bonus;
+}
+
 function scoreAttackExecution(board, action, killed) {
   const attacker = board.flat().find((u) => u?.id === action.unitId);
   const target = board.flat().find((u) => u?.id === action.targetId);
@@ -155,17 +303,6 @@ function scoreAttackExecution(board, action, killed) {
   return bonus;
 }
 
-function countRangedTargetsFromCell(board, row, col, team, range) {
-  const size = board.length;
-  let count = 0;
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      const u = board[r][c];
-      if (u && u.team !== team && chebyshev(row, col, r, c) <= range) count++;
-    }
-  }
-  return count;
-}
 
 function countMageLinesFromCell(board, row, col, team) {
   const size = board.length;
@@ -234,14 +371,17 @@ function scoreDeployUnit(board, row, col, unit, team) {
   }
 
   if (unit.classId === 'archer') {
-    bonus += countRangedTargetsFromCell(board, row, col, team, unit.range) * 12;
+    bonus += scoreArcherPosition(board, row, col, team, unit.range);
   }
 
   if (unit.classId === 'mage') {
     bonus += countMageLinesFromCell(board, row, col, team) * 8;
   }
 
-  if (unit.classId === 'assassin' && lineBonus >= 50) bonus += 15;
+  if (unit.classId === 'assassin') {
+    if (lineBonus >= 50) bonus += 18;
+    bonus += scoreArcherPosition(board, row, col, team, 1) * 0.35;
+  }
 
   if (unit.classId === 'swordsman') {
     const size = board.length;
@@ -393,6 +533,30 @@ function filterThreatResponses(state, actions, team, criticalCells) {
   });
 }
 
+function scorePositioning(board, state, action, team) {
+  if (action.type === 'deploy') {
+    const unit = getReserve(state, team).find((u) => u.id === action.unitId);
+    if (!unit) return 0;
+    if (unit.classId === 'archer') {
+      return scoreArcherPosition(board, action.row, action.col, team, unit.range);
+    }
+    return 0;
+  }
+
+  if (action.type !== 'move') return 0;
+
+  const unit = board.flat().find((u) => u?.id === action.unitId);
+  if (!unit) return 0;
+
+  if (unit.classId === 'assassin' && unit.jumpMove) {
+    return scoreAssassinMove(board, unit, action.row, action.col, team);
+  }
+  if (unit.classId === 'archer') {
+    return scoreArcherPosition(board, action.row, action.col, team, unit.range);
+  }
+  return 0;
+}
+
 function scoreAction(state, action, team = 'red') {
   const next = simulateActionForTeam(state, action, team);
   if (!next) return -Infinity;
@@ -402,7 +566,8 @@ function scoreAction(state, action, team = 'red') {
   let score = evaluateBoard(next.board, team, reserve, enemyReserve);
 
   if (action.type === 'attack') {
-    score += scoreAttackExecution(state.board, action, next.killed);
+    score += scoreClassAttack(state.board, action, next.killed, team);
+    score += scoreEliminationPressure(next.board, team, enemyReserve, next.killed);
     if (isWinningState(next.board, team, enemyReserve)) score += 5000;
   }
 
@@ -410,11 +575,13 @@ function scoreAction(state, action, team = 'red') {
     const unit = getReserve(state, team).find((u) => u.id === action.unitId);
     score += 5 + scoreCellForLines(state.board, action.row, action.col, team);
     if (unit) score += scoreDeployUnit(state.board, action.row, action.col, unit, team);
+    score += scorePositioning(state.board, state, action, team) * 0.5;
     if (isWinningState(next.board, team, enemyReserve)) score += 5000;
   }
 
   if (action.type === 'move') {
     score += scoreCellForLines(state.board, action.row, action.col, team);
+    score += scorePositioning(state.board, state, action, team);
     if (isWinningState(next.board, team, enemyReserve)) score += 5000;
   }
 
@@ -471,7 +638,8 @@ function scoreActionMinimax(state, action, team = 'red') {
   let score = evaluateStateForRed(afterBlue);
 
   if (action.type === 'attack') {
-    score += scoreAttackExecution(state.board, action, next.killed) * 0.15;
+    score += scoreClassAttack(state.board, action, next.killed, team) * 0.15;
+    score += scoreEliminationPressure(next.board, 'red', afterRed.blueReserve, next.killed) * 0.2;
   }
 
   return score;
