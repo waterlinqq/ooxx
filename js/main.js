@@ -1,4 +1,4 @@
-import { Game, CLASSES, TEAM, ROSTER_LIMITS } from './game.js';
+import { Game, CLASSES, TEAM, BOARD_MODES } from './game.js';
 import { playAttackAnimation } from './animations.js';
 
 const game = new Game();
@@ -22,6 +22,8 @@ const blueReserveCountEl = document.getElementById('blueReserveCount');
 const enemyTotalCountEl = document.getElementById('enemyTotalCount');
 const enemySummaryEl = document.getElementById('enemySummary');
 const enemyListEl = document.getElementById('enemyList');
+const modePanelEl = document.getElementById('modePanel');
+const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const nextRoundBtn = document.getElementById('nextRound');
 const restartBtn = document.getElementById('restart');
@@ -118,9 +120,11 @@ function renderBoard(state) {
   if (state.animating) return;
 
   boardEl.innerHTML = '';
+  boardEl.dataset.size = String(state.boardSize);
+  boardEl.style.gridTemplateColumns = `repeat(${state.boardSize}, 1fr)`;
 
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
+  for (let r = 0; r < state.boardSize; r++) {
+    for (let c = 0; c < state.boardSize; c++) {
       const cell = document.createElement('button');
       cell.className = 'cell';
       cell.type = 'button';
@@ -163,9 +167,24 @@ function renderBoard(state) {
   }
 }
 
+function renderModePicker(state) {
+  modeButtonsEl.innerHTML = '';
+  const canPick = state.phase === 'roster';
+
+  for (const mode of Object.values(BOARD_MODES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
+    btn.textContent = mode.label;
+    btn.disabled = !canPick;
+    btn.addEventListener('click', () => game.setBoardMode(mode.id));
+    modeButtonsEl.appendChild(btn);
+  }
+}
+
 function renderClassGrid(state) {
   classGridEl.innerHTML = '';
-  const atMax = state.blueRoster.length >= ROSTER_LIMITS.total;
+  const atMax = state.blueRoster.length >= state.rosterLimit;
 
   for (const cls of Object.values(CLASSES)) {
     const count = state.blueRoster.filter((id) => id === cls.id).length;
@@ -190,7 +209,7 @@ function renderClassGrid(state) {
     });
     classGridEl.appendChild(card);
   }
-  rosterCountEl.textContent = `${state.blueRoster.length} / ${ROSTER_LIMITS.total}`;
+  rosterCountEl.textContent = `${state.blueRoster.length} / ${state.rosterLimit}`;
   confirmRosterBtn.disabled = state.blueRoster.length === 0;
 }
 
@@ -276,6 +295,7 @@ function render(state) {
   }
 
   rosterPanelEl.classList.toggle('hidden', state.phase !== 'roster');
+  modePanelEl.classList.toggle('hidden', state.phase !== 'roster');
   actionPanelEl.classList.toggle('hidden', state.phase !== 'battle' || state.currentPlayer !== 'blue');
   reservePanelEl.classList.toggle('hidden', state.phase !== 'battle');
   enemyPanelEl.classList.toggle('hidden', state.phase !== 'battle');
@@ -285,6 +305,7 @@ function render(state) {
   restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
 
   renderBoard(state);
+  renderModePicker(state);
   renderClassGrid(state);
   renderReserve(state);
   renderEnemyStatus(state);

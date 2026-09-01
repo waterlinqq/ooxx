@@ -30,6 +30,12 @@
           <div class="message" id="message"></div>
         </div>
 
+        <div class="panel" id="modePanel">
+          <h2>棋盤模式</h2>
+          <div class="mode-buttons" id="modeButtons"></div>
+          <p class="mode-hint">3×3：三子連線 · 最多 8 人｜4×4：四子連線 · 最多 12 人</p>
+        </div>
+
         <div class="panel" id="rosterPanel">
           <h2>藍隊編組 <span id="rosterCount">0 / 8</span></h2>
           <div class="class-grid" id="classGrid"></div>
@@ -65,7 +71,7 @@
         <div class="panel">
           <h2>規則摘要</h2>
           <div class="legend">
-            <strong>勝利：</strong>同隊三子連線，或全滅對手<br />
+            <strong>勝利：</strong>同隊連成整行（3×3 三子、4×4 四子），或全滅對手<br />
             <strong>回合：</strong>拖曳移動/攻擊，或點後備再點格部署<br />
             <strong>🏹 弓箭手：</strong>HP 3 / ATK 3 / 射程 3<br />
             <strong>🛡️ 盾牌手：</strong>HP 8 / ATK 1 / 近戰<br />

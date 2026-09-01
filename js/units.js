@@ -57,9 +57,18 @@ export const TEAM = {
   red: { id: 'red', name: '紅隊', color: '#ef4444', light: '#fee2e2' },
 };
 
-export const ROSTER_LIMITS = {
-  total: 8,
+export const BOARD_MODES = {
+  '3x3': { id: '3x3', label: '3×3', size: 3, rosterTotal: 8 },
+  '4x4': { id: '4x4', label: '4×4', size: 4, rosterTotal: 12 },
 };
+
+export function getBoardMode(modeId) {
+  return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
+}
+
+export function getRosterLimit(modeId) {
+  return getBoardMode(modeId).rosterTotal;
+}
 
 export function createUnit(classId, teamId) {
   const cls = CLASSES[classId];
@@ -79,8 +88,8 @@ export function createUnit(classId, teamId) {
   };
 }
 
-export function createEmptyBoard() {
-  return Array.from({ length: 3 }, () => Array(3).fill(null));
+export function createEmptyBoard(size = 3) {
+  return Array.from({ length: size }, () => Array(size).fill(null));
 }
 
 export function cloneBoard(board) {

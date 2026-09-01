@@ -125,11 +125,41 @@ header p {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   aspect-ratio: 1;
   position: relative;
   z-index: 1;
+}
+
+.board[data-size="4"] {
+  gap: 8px;
+}
+
+.board[data-size="4"] .cell {
+  min-height: 72px;
+  border-radius: 10px;
+}
+
+.board[data-size="4"] .unit-icon-wrap {
+  width: 36px;
+  height: 36px;
+}
+
+.board[data-size="4"] .unit-icon {
+  font-size: 1.35rem;
+}
+
+.board[data-size="4"] .unit-name {
+  font-size: 0.65rem;
+}
+
+.board[data-size="4"] .unit-hp {
+  font-size: 0.6rem;
+}
+
+.board[data-size="4"] .team-badge {
+  font-size: 0.58rem;
+  padding: 1px 5px;
 }
 
 .fx-layer {
@@ -526,6 +556,23 @@ header p {
   flex: 1;
   text-align: center;
   font-weight: 700;
+}
+
+.mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mode-btn.active {
+  outline: 2px solid var(--accent);
+}
+
+.mode-hint {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .hidden {

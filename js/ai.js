@@ -8,18 +8,13 @@ import {
   applyAttack,
   checkWin,
   isTeamEliminated,
+  getWinLines,
 } from './rules.js';
 
-const WIN_LINES = [
-  [[0, 0], [0, 1], [0, 2]],
-  [[1, 0], [1, 1], [1, 2]],
-  [[2, 0], [2, 1], [2, 2]],
-  [[0, 0], [1, 0], [2, 0]],
-  [[0, 1], [1, 1], [2, 1]],
-  [[0, 2], [1, 2], [2, 2]],
-  [[0, 0], [1, 1], [2, 2]],
-  [[0, 2], [1, 1], [2, 0]],
-];
+function getWinLinesForBoard(board) {
+  const size = board.length;
+  return getWinLines(size, size);
+}
 
 function enemyOf(team) {
   return team === 'blue' ? 'red' : 'blue';
@@ -31,8 +26,10 @@ function getReserve(state, team) {
 
 function scoreLinePotential(board, team, reserveCount) {
   let score = 0;
+  const winLines = getWinLinesForBoard(board);
+  const winLength = board.length;
 
-  for (const line of WIN_LINES) {
+  for (const line of winLines) {
     let mine = 0;
     let theirs = 0;
     let empty = 0;
@@ -46,11 +43,11 @@ function scoreLinePotential(board, team, reserveCount) {
     if (theirs === 0 && mine > 0) score += mine * mine * 12 + empty * 2;
     if (mine === 0 && theirs > 0) score -= theirs * theirs * 14;
 
-    // 兩子連線 + 一空：高優先佔位 / 阻擋
-    if (theirs === 0 && mine === 2 && empty === 1) score += 90;
-    if (mine === 0 && theirs === 2 && empty === 1) score -= 110;
-    if (theirs === 0 && mine === 1 && empty === 2) score += 20;
-    if (mine === 0 && theirs === 1 && empty === 2) score -= 18;
+    const oneShort = winLength - 1;
+    if (theirs === 0 && mine === oneShort && empty === 1) score += 90;
+    if (mine === 0 && theirs === oneShort && empty === 1) score -= 110;
+    if (theirs === 0 && mine === 1 && empty === winLength - 1) score += 20;
+    if (mine === 0 && theirs === 1 && empty === winLength - 1) score -= 18;
   }
 
   score += reserveCount * 3;
@@ -59,8 +56,10 @@ function scoreLinePotential(board, team, reserveCount) {
 
 function scoreCellForLines(board, row, col, team) {
   let bonus = 0;
+  const winLines = getWinLinesForBoard(board);
+  const winLength = board.length;
 
-  for (const line of WIN_LINES) {
+  for (const line of winLines) {
     if (!line.some(([r, c]) => r === row && c === col)) continue;
 
     let mine = 0;
@@ -72,13 +71,15 @@ function scoreCellForLines(board, row, col, team) {
       else theirs++;
     }
 
-    if (theirs === 0 && mine === 2) bonus += 65;
+    const oneShort = winLength - 1;
+    if (theirs === 0 && mine === oneShort) bonus += 65;
     else if (theirs === 0 && mine === 1) bonus += 22;
-    else if (mine === 0 && theirs === 2) bonus += 75;
+    else if (mine === 0 && theirs === oneShort) bonus += 75;
     else if (mine === 0 && theirs === 1) bonus += 18;
   }
 
-  if (row === 1 && col === 1) bonus += 10;
+  const center = Math.floor(board.length / 2);
+  if (row === center && col === center) bonus += 10;
   return bonus;
 }
 

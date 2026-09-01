@@ -1,15 +1,38 @@
 import { createEmptyBoard, cloneBoard } from './units.js';
 
-const LINES = [
-  [[0, 0], [0, 1], [0, 2]],
-  [[1, 0], [1, 1], [1, 2]],
-  [[2, 0], [2, 1], [2, 2]],
-  [[0, 0], [1, 0], [2, 0]],
-  [[0, 1], [1, 1], [2, 1]],
-  [[0, 2], [1, 2], [2, 2]],
-  [[0, 0], [1, 1], [2, 2]],
-  [[0, 2], [1, 1], [2, 0]],
-];
+export function getWinLines(size, winLength = size) {
+  const lines = [];
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c <= size - winLength; c++) {
+      lines.push(Array.from({ length: winLength }, (_, i) => [r, c + i]));
+    }
+  }
+
+  for (let c = 0; c < size; c++) {
+    for (let r = 0; r <= size - winLength; r++) {
+      lines.push(Array.from({ length: winLength }, (_, i) => [r + i, c]));
+    }
+  }
+
+  for (let r = 0; r <= size - winLength; r++) {
+    for (let c = 0; c <= size - winLength; c++) {
+      lines.push(Array.from({ length: winLength }, (_, i) => [r + i, c + i]));
+    }
+  }
+
+  for (let r = 0; r <= size - winLength; r++) {
+    for (let c = winLength - 1; c < size; c++) {
+      lines.push(Array.from({ length: winLength }, (_, i) => [r + i, c - i]));
+    }
+  }
+
+  return lines;
+}
+
+function boardSize(board) {
+  return board.length;
+}
 
 export function chebyshev(r1, c1, r2, c2) {
   return Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
@@ -19,31 +42,34 @@ export function manhattan(r1, c1, r2, c2) {
   return Math.abs(r1 - r2) + Math.abs(c1 - c2);
 }
 
-export function isInBounds(row, col) {
-  return row >= 0 && row < 3 && col >= 0 && col < 3;
+export function isInBounds(row, col, size = 3) {
+  return row >= 0 && row < size && col >= 0 && col < size;
 }
 
 export function getUnitAt(board, row, col) {
-  if (!isInBounds(row, col)) return null;
+  const size = boardSize(board);
+  if (!isInBounds(row, col, size)) return null;
   return board[row][col];
 }
 
-export function getAdjacentCells(row, col) {
+export function getAdjacentCells(row, col, size = 3) {
   return [
     [row - 1, col],
     [row + 1, col],
     [row, col - 1],
     [row, col + 1],
-  ].filter(([r, c]) => isInBounds(r, c));
+  ].filter(([r, c]) => isInBounds(r, c, size));
 }
 
 export function getValidMoves(board, unit) {
   if (unit.row < 0) return [];
 
+  const size = boardSize(board);
+
   if (unit.jumpMove) {
     const moves = [];
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
         if (!board[r][c] && (r !== unit.row || c !== unit.col)) moves.push([r, c]);
       }
     }
@@ -59,7 +85,7 @@ export function getValidMoves(board, unit) {
     const nextFrontier = [];
     for (const [r, c, steps] of frontier) {
       if (steps >= maxSteps) continue;
-      for (const [nr, nc] of getAdjacentCells(r, c)) {
+      for (const [nr, nc] of getAdjacentCells(r, c, size)) {
         const key = `${nr},${nc}`;
         if (board[nr][nc] || visited.has(key)) continue;
         visited.add(key);
@@ -86,14 +112,14 @@ export function isOnMageLine(fromRow, fromCol, toRow, toCol) {
   return Math.abs(dr) === Math.abs(dc);
 }
 
-export function getMageLines(unit) {
+export function getMageLines(unit, size = 3) {
   const { row, col } = unit;
   const lines = [];
 
   for (const [dr, dc] of MAGE_DIRS) {
     let r = row + dr;
     let c = col + dc;
-    while (isInBounds(r, c)) {
+    while (isInBounds(r, c, size)) {
       lines.push([[row, col], [r, c]]);
       r += dr;
       c += dc;
@@ -104,6 +130,7 @@ export function getMageLines(unit) {
 }
 
 export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
+  const size = boardSize(board);
   const dr = Math.sign(targetRow - unit.row);
   const dc = Math.sign(targetCol - unit.col);
   if (dr === 0 && dc === 0) return [];
@@ -112,7 +139,7 @@ export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
   let r = unit.row + dr;
   let c = unit.col + dc;
 
-  while (isInBounds(r, c)) {
+  while (isInBounds(r, c, size)) {
     const cell = board[r][c];
     if (cell && cell.team !== unit.team) enemies.push(cell);
     r += dr;
@@ -125,10 +152,11 @@ export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
 export function getValidAttackTargets(board, unit) {
   if (unit.row < 0) return [];
 
+  const size = boardSize(board);
   const targets = [];
 
   if (unit.type === 'melee') {
-    for (const [r, c] of getAdjacentCells(unit.row, unit.col)) {
+    for (const [r, c] of getAdjacentCells(unit.row, unit.col, size)) {
       const target = board[r][c];
       if (target && target.team !== unit.team) targets.push(target);
     }
@@ -136,8 +164,8 @@ export function getValidAttackTargets(board, unit) {
   }
 
   if (unit.type === 'ranged') {
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
         const target = board[r][c];
         if (target && target.team !== unit.team && chebyshev(unit.row, unit.col, r, c) <= unit.range) {
           targets.push(target);
@@ -149,7 +177,7 @@ export function getValidAttackTargets(board, unit) {
 
   if (unit.type === 'mage') {
     const seen = new Set();
-    for (const line of getMageLines(unit)) {
+    for (const line of getMageLines(unit, size)) {
       const end = line[1];
       const enemies = getEnemiesOnLine(board, unit, end[0], end[1]);
       for (const enemy of enemies) {
@@ -166,9 +194,10 @@ export function getValidAttackTargets(board, unit) {
 }
 
 export function getValidDeployCells(board) {
+  const size = boardSize(board);
   const cells = [];
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
       if (!board[r][c]) cells.push([r, c]);
     }
   }
@@ -176,9 +205,11 @@ export function getValidDeployCells(board) {
 }
 
 export function checkWin(board, team) {
-  for (const line of LINES) {
+  const size = boardSize(board);
+  const winLength = size;
+  for (const line of getWinLines(size, winLength)) {
     const units = line.map(([r, c]) => board[r][c]).filter(Boolean);
-    if (units.length === 3 && units.every((u) => u.team === team)) {
+    if (units.length === winLength && units.every((u) => u.team === team)) {
       return line;
     }
   }

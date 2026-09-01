@@ -1,4 +1,4 @@
-import { CLASSES, TEAM, ROSTER_LIMITS, createUnit, createEmptyBoard } from './units.js';
+import { CLASSES, TEAM, BOARD_MODES, getBoardMode, getRosterLimit, createUnit, createEmptyBoard } from './units.js';
 import {
   getValidMoves,
   getValidAttackTargets,
@@ -13,11 +13,12 @@ import { chooseAiAction } from './ai.js';
 
 export class Game {
   constructor() {
+    this.boardMode = '3x3';
     this.phase = 'roster';
     this.currentPlayer = 'blue';
     this.draggingUnitId = null;
     this.selectedReserveId = null;
-    this.board = createEmptyBoard();
+    this.board = createEmptyBoard(this.getModeConfig().size);
     this.blueRoster = [];
     this.redRoster = [];
     this.blueReserve = [];
@@ -26,7 +27,7 @@ export class Game {
     this.redScore = 0;
     this.round = 1;
     this.lastRoundWinner = null;
-    this.message = '請編組藍隊（最多 8 人，可重複選擇職業）';
+    this.message = '請選擇棋盤模式並編組藍隊';
     this.lastWinLine = null;
     this.animating = false;
     this.playAttackFx = null;
@@ -44,8 +45,36 @@ export class Game {
     for (const fn of this.listeners) fn(this.getState());
   }
 
+  getModeConfig() {
+    return getBoardMode(this.boardMode);
+  }
+
+  getRosterLimit() {
+    return getRosterLimit(this.boardMode);
+  }
+
+  getWinCountLabel() {
+    return this.getModeConfig().size;
+  }
+
+  setBoardMode(modeId) {
+    if (this.phase !== 'roster') return;
+    if (!BOARD_MODES[modeId]) return;
+    this.boardMode = modeId;
+    this.blueRoster = [];
+    this.redRoster = [];
+    this.board = createEmptyBoard(this.getModeConfig().size);
+    const mode = this.getModeConfig();
+    this.message = `已選 ${mode.label} 模式 — 請編組藍隊（最多 ${mode.rosterTotal} 人）`;
+    this.notify();
+  }
   getState() {
+    const mode = this.getModeConfig();
     return {
+      boardMode: this.boardMode,
+      boardSize: mode.size,
+      rosterLimit: mode.rosterTotal,
+      winCount: mode.size,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
       draggingUnitId: this.draggingUnitId,
@@ -70,11 +99,12 @@ export class Game {
   addRosterUnit(classId, team = 'blue') {
     if (this.phase !== 'roster') return;
     const roster = team === 'blue' ? this.blueRoster : this.redRoster;
-    if (roster.length >= ROSTER_LIMITS.total) return;
+    const rosterLimit = this.getRosterLimit();
+    if (roster.length >= rosterLimit) return;
     roster.push(classId);
 
     if (team === 'blue') {
-      this.message = `藍隊已選 ${this.blueRoster.length} / ${ROSTER_LIMITS.total} 人`;
+      this.message = `藍隊已選 ${this.blueRoster.length} / ${this.getRosterLimit()} 人`;
     }
     this.notify();
   }
@@ -87,7 +117,7 @@ export class Game {
     roster.splice(idx, 1);
 
     if (team === 'blue') {
-      this.message = `藍隊已選 ${this.blueRoster.length} / ${ROSTER_LIMITS.total} 人`;
+      this.message = `藍隊已選 ${this.blueRoster.length} / ${this.getRosterLimit()} 人`;
     }
     this.notify();
   }
@@ -110,7 +140,7 @@ export class Game {
   }
 
   startRound() {
-    this.board = createEmptyBoard();
+    this.board = createEmptyBoard(this.getModeConfig().size);
     this.blueReserve = this.blueRoster.map((id) => createUnit(id, 'blue'));
     this.redReserve = this.redRoster.map((id) => createUnit(id, 'red'));
     this.currentPlayer = this.getRoundFirstPlayer();
@@ -309,7 +339,7 @@ export class Game {
 
     if (winLine) {
       this.lastWinLine = winLine;
-      this.handleRoundWin(this.currentPlayer, `${team.name} ${actionLabel}後連成三子！`);
+      this.handleRoundWin(this.currentPlayer, `${team.name} ${actionLabel}後連成 ${this.getWinCountLabel()} 子！`);
       return;
     }
 
@@ -405,9 +435,11 @@ export class Game {
     this.redScore = 0;
     this.round = 1;
     this.lastRoundWinner = null;
-    this.message = '請重新編組藍隊';
+    this.boardMode = '3x3';
+    this.board = createEmptyBoard(this.getModeConfig().size);
+    this.message = '請選擇棋盤模式並重新編組藍隊';
     this.notify();
   }
 }
 
-export { CLASSES, TEAM, ROSTER_LIMITS };
+export { CLASSES, TEAM, BOARD_MODES };
