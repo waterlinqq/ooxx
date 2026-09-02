@@ -97,7 +97,9 @@ function main() {
       boardSize: mode.size,
       rounds: [{
         round: 1,
-        firstPlayer: is2v2 ? 'blue-0' : firstPlayer,
+        // Team, not slot: in 2v2 the blue team opens through seat blue-0, and the
+        // first-player tally compares this against the winning team.
+        firstPlayer: round.firstPlayer,
         firstSlot: round.firstSlot,
         winner: round.winner,
         reason: round.reason,

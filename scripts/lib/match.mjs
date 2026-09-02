@@ -221,23 +221,28 @@ export function runMatch({
   firstSlot = null,
   unitCounterStart = 0,
   agents,
+  rosters = null,
   maxTurns = MAX_TURNS,
   recordMoves = true,
 }) {
-  const { size, matchFormat, actionsPerTurn, roster } = mode;
+  const { size, matchFormat, actionsPerTurn } = mode;
   const is2v2 = matchFormat === '2v2';
+  // Live matches let each side pick its own lineup, so the runner accepts a per-team
+  // override and only falls back to the mode's preset roster.
+  const blueRoster = rosters?.blue ?? mode.roster;
+  const redRoster = rosters?.red ?? mode.roster;
   let unitCounter = unitCounterStart;
 
   const state = {
     board: createEmptyBoard(size),
-    blueReserve: createSimReserve(roster, 'blue', unitCounter, matchFormat),
-    redReserve: createSimReserve(roster, 'red', unitCounter + roster.length, matchFormat),
+    blueReserve: createSimReserve(blueRoster, 'blue', unitCounter, matchFormat),
+    redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length, matchFormat),
     currentPlayer: is2v2 ? 'blue' : firstPlayer,
     currentSlot: firstSlot ?? `${firstPlayer}-0`,
     actionsRemaining: actionsPerTurn,
     actedUnitIds: new Set(),
   };
-  unitCounter += roster.length * 2;
+  unitCounter += blueRoster.length + redRoster.length;
 
   const moves = [];
   const stats = createStats();
@@ -251,6 +256,7 @@ export function runMatch({
     round,
     firstPlayer: is2v2 ? 'blue' : firstPlayer,
     firstSlot: firstSlot ?? `${firstPlayer}-0`,
+    rosters: { blue: blueRoster, red: redRoster },
     winner,
     reason,
     winLine,
@@ -289,7 +295,13 @@ export function runMatch({
         redReserve: state.redReserve,
         actedUnitIds: state.actedUnitIds,
       },
-      { ...agent.options, team, ownerSeat: seat, actionsPerTurn, roster },
+      {
+        ...agent.options,
+        team,
+        ownerSeat: seat,
+        actionsPerTurn,
+        rosters: { blue: blueRoster, red: redRoster },
+      },
     );
     const elapsed = performance.now() - started;
 

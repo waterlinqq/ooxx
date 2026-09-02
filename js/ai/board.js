@@ -195,6 +195,8 @@ export function createSearchContext(state, { team, actionsPerTurn, ownerSeat = n
     actedStack: [],
     slotCycle: ownerSeat == null ? null : buildSlotCycle(ownerSeat, team),
     slotIndex: 0,
+    // Needed only to break a simultaneous finish the way js/game.js does.
+    lastMover: null,
     hashHi: 0,
     hashLo: 0,
   };
@@ -364,6 +366,7 @@ export function makeAction(ctx, action) {
     actor,
     team,
     turn: ctx.turn,
+    lastMover: ctx.lastMover,
     actionsLeft: ctx.actionsLeft,
     actedAdded: false,
     reserveIndex: -1,
@@ -407,6 +410,7 @@ export function makeAction(ctx, action) {
     xorHash(ctx, ctx.zobrist.acted[actor.searchIndex % ctx.zobrist.acted.length]);
   }
 
+  ctx.lastMover = team;
   advanceTurn(ctx);
   return undo;
 }
@@ -498,6 +502,7 @@ export function unpassTurn(ctx, undo) {
 
 export function unmakeAction(ctx, undo) {
   rewindTurn(ctx, undo);
+  ctx.lastMover = undo.lastMover;
 
   if (undo.actedAdded) {
     ctx.acted.delete(undo.actor.searchIndex);

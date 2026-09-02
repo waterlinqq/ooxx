@@ -70,9 +70,10 @@ npm run preview
 ### 對戰驗證
 
 ```bash
-npm run sim -- --mode 4x4 --games 100      # AI 自我對戰，輸出到 data/
-npm run arena -- --mode 4x4 --games 20     # 目前 AI 對上 js/ai-legacy.js
+npm run sim -- --mode 4x4 --games 100                 # AI 自我對戰，結果輸出到 data/
+npm run arena -- --mode 4x4 --games 20                # 目前 AI 對上 js/ai-legacy.js
+npm run arena -- --mode 4x4 --roster random           # 每局隨機編組，貼近實際對局
 npm run arena -- --mode 4x4 --b ../js/ai.js --difficulty-a hard --difficulty-b normal
 ```
 
-`arena` 會回報勝率、平均與最長決策時間、「落子後立即可被擊殺」比率，以及相異棋局數。
+兩者都接受 `--seed`，同一顆種子可完整重現一批對局。`arena` 會回報勝率、平均與最長決策時間、「落子後立即可被擊殺」比率，以及相異棋局數（用來確認 AI 不是每局都下同一套棋）。

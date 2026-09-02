@@ -1,6 +1,6 @@
 // Head-to-head bench for two AI builds. Colours are swapped every other game so the
 // first-move advantage cancels out and the win rate reflects engine strength only.
-import { getBoardMode, SLOT_ORDER } from '../js/units.js';
+import { getBoardMode, SLOT_ORDER, createRandomRoster } from '../js/units.js';
 import { runMatch, createRng } from './lib/match.mjs';
 
 const DEFAULT_MODES = ['3x3', '4x4', '5x5'];
@@ -17,6 +17,9 @@ function parseArgs(argv) {
     difficulty: 'hard',
     difficultyA: null,
     difficultyB: null,
+    // 'preset' uses the mode's fixed roster; 'random' draws a fresh lineup per game the
+    // way the formation screen does, which is the only way the newer classes get played.
+    roster: 'preset',
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -31,6 +34,7 @@ function parseArgs(argv) {
     else if (arg === '--difficulty') opts.difficulty = argv[++i];
     else if (arg === '--difficulty-a') opts.difficultyA = argv[++i];
     else if (arg === '--difficulty-b') opts.difficultyB = argv[++i];
+    else if (arg === '--roster') opts.roster = argv[++i];
   }
   opts.modes ??= DEFAULT_MODES;
   opts.difficultyA ??= opts.difficulty;
@@ -117,7 +121,7 @@ function report(modeId, tallies, games, reasons, uniqueScripts, totalMoves) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  console.log(`Arena: ${opts.aName} vs ${opts.bName} · seed ${opts.seed}`);
+  console.log(`Arena: ${opts.aName} vs ${opts.bName} · seed ${opts.seed} · 編組 ${opts.roster}`);
 
   for (const modeId of opts.modes) {
     const mode = getBoardMode(modeId);
@@ -128,17 +132,21 @@ async function main() {
     const tallies = [emptyTally(engineA.name), emptyTally(engineB.name)];
     const reasons = {};
     const scripts = new Set();
+    const rosterRng = createRng(opts.seed + 31);
     let unitCounter = 0;
     let totalMoves = 0;
 
     for (let i = 0; i < opts.games; i++) {
       const aIsBlue = i % 2 === 0;
       const firstPlayer = mode.matchFormat === '2v2' ? 'blue' : (i % 4 < 2 ? 'blue' : 'red');
+      // Both sides get the same lineup so the result measures the engine, not the draw.
+      const roster = opts.roster === 'random' ? createRandomRoster(modeId, rosterRng) : null;
       const result = runMatch({
         mode,
         firstPlayer,
         firstSlot: mode.matchFormat === '2v2' ? 'blue-0' : `${firstPlayer}-0`,
         unitCounterStart: unitCounter,
+        rosters: roster ? { blue: roster, red: roster } : null,
         agents: buildAgents(mode, aIsBlue ? engineA : engineB, aIsBlue ? engineB : engineA),
       });
       unitCounter = result.unitCounterEnd;

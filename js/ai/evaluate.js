@@ -230,11 +230,24 @@ function scoreElimination(ctx, team) {
   return score;
 }
 
-/** Terminal check shared by the search so both agree on what counts as decided. */
+/**
+ * Terminal check shared by the search so both agree on what counts as decided.
+ * Returns WIN_SCORE, -WIN_SCORE, 0 for a genuine tie, or null when play continues.
+ */
 export function terminalScore(ctx, team) {
   const enemy = enemyOf(team);
-  if (hasCompletedLine(ctx, team) || isEliminated(ctx, enemy)) return WIN_SCORE;
-  if (hasCompletedLine(ctx, enemy) || isEliminated(ctx, team)) return -WIN_SCORE;
+  const teamWon = hasCompletedLine(ctx, team) || isEliminated(ctx, enemy);
+  const enemyWon = hasCompletedLine(ctx, enemy) || isEliminated(ctx, team);
+
+  if (teamWon && enemyWon) {
+    // Reachable: killing the opponent's last unit can be a bomber whose blast takes our
+    // last unit with it. js/game.js checks the acting team's win first, so they take it.
+    if (ctx.lastMover === team) return WIN_SCORE;
+    if (ctx.lastMover === enemy) return -WIN_SCORE;
+    return 0;
+  }
+  if (teamWon) return WIN_SCORE;
+  if (enemyWon) return -WIN_SCORE;
   return null;
 }
 

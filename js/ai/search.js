@@ -160,6 +160,9 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   }
 
   score += weights[cell] * 4;
+  // Landing somewhere the opponent can kill outright is almost never worth it. The leaf
+  // evaluation is what confirms that; this only keeps such moves from filling the
+  // candidate cap ahead of better ones.
   if (isLethalAt(hostile, cell, unit.hp, unit.isFlying)) {
     score -= 300 + materialValue(unit);
   }
@@ -213,7 +216,12 @@ function negamax(engine, depth, ply, alphaIn, beta) {
   if ((engine.nodes & 255) === 0 && performance.now() > engine.deadline) throw engine.abort;
 
   const terminal = terminalScore(ctx, ctx.turn);
-  if (terminal !== null) return terminal > 0 ? WIN_SCORE - ply : -WIN_SCORE + ply;
+  if (terminal !== null) {
+    // Prefer the fastest win and the slowest loss.
+    if (terminal > 0) return WIN_SCORE - ply;
+    if (terminal < 0) return -WIN_SCORE + ply;
+    return 0;
+  }
   if (depth <= 0) return evaluate(ctx, ctx.turn);
 
   const key = hashKey(ctx);

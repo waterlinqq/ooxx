@@ -12,6 +12,11 @@
 //
 // An empty cell counts as covered when a unit standing there *would* be reachable, which
 // is why ranged rays mark the blocking cell itself and then stop.
+//
+// Flying units (canAttackTarget in js/rules.js) can only be hit by ranged and mage, so
+// coverage is tracked twice: the plain lanes for grounded units and the flying lanes fed
+// only by ranged and mage. That is what makes an eagle correctly unclearable — and its
+// line therefore dead — for a team with no ranged or mage left.
 
 const ORTHOGONAL = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const ALL_DIRS = [
