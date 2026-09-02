@@ -1,19 +1,16 @@
 import { Game, CLASSES, TEAM, BOARD_MODES } from './game.js';
-import { playAttackAnimation } from './animations.js';
+import { BoardScene } from './board3d/BoardScene.js';
 
 const game = new Game();
 
-const boardEl = document.getElementById('board');
+const boardCanvasHost = document.getElementById('boardCanvas');
 const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
-const layoutEl = document.getElementById('layout');
+const lobbyContentEl = document.getElementById('lobbyContent');
+const battleContentEl = document.getElementById('battleContent');
 const blueScoreEl = document.getElementById('blueScore');
 const redScoreEl = document.getElementById('redScore');
 const roundBadgeEl = document.getElementById('roundBadge');
-const tabBarEl = document.getElementById('tabBar');
-const prepBodyEl = document.getElementById('prepBody');
-const battleBodyEl = document.getElementById('battleBody');
-const sidebarEl = document.getElementById('sidebar');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailEl = document.getElementById('classDetail');
 const actionPanelEl = document.getElementById('actionPanel');
@@ -23,87 +20,28 @@ const teammatePanelEl = document.getElementById('teammatePanel');
 const teammateListEl = document.getElementById('teammateList');
 const enemyPanelEl = document.getElementById('enemyPanel');
 const endPanelEl = document.getElementById('endPanel');
+const endResultEl = document.getElementById('endResult');
 const reserveListEl = document.getElementById('reserveList');
 const enemyListEl = document.getElementById('enemyList');
-const modePanelEl = document.getElementById('modePanel');
 const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const nextRoundBtn = document.getElementById('nextRound');
 const restartBtn = document.getElementById('restart');
 const endTurnBtn = document.getElementById('endTurn');
+const phaseChipEl = document.getElementById('phaseChip');
+const turnBadgeEl = document.getElementById('turnBadge');
+const bottomNavEl = document.getElementById('bottomNav');
 
-const DRAG_THRESHOLD = 8;
-let drag = null;
-let activeTab = 'roster';
+const NAV_SCREENS = {
+  battle: document.getElementById('screenBattle'),
+  characters: document.getElementById('screenCharacters'),
+  bag: document.getElementById('screenBag'),
+  shop: document.getElementById('screenShop'),
+};
+
+let activeNav = 'battle';
 let selectedClassId = 'swordsman';
-
-game.playAttackFx = (fx) => playAttackAnimation(boardEl, fxLayerEl, fx);
-
-function hpPercent(unit) {
-  return Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
-}
-
-function cellKey(r, c) {
-  return `${r},${c}`;
-}
-
-function isHighlighted(state, row, col) {
-  const moves = new Set(state.validMoves.map(([r, c]) => cellKey(r, c)));
-  const targets = new Set(state.validTargets.map(([r, c]) => cellKey(r, c)));
-  const deploy = new Set(state.validDeploy.map(([r, c]) => cellKey(r, c)));
-  const win = new Set((state.lastWinLine || []).map(([r, c]) => cellKey(r, c)));
-  const key = cellKey(row, col);
-
-  return {
-    move: moves.has(key),
-    attack: targets.has(key),
-    deploy: deploy.has(key),
-    win: win.has(key),
-  };
-}
-
-function findCellAt(clientX, clientY) {
-  const el = document.elementFromPoint(clientX, clientY);
-  return el?.closest('.cell') ?? null;
-}
-
-function finishDrag(clientX, clientY) {
-  if (!drag?.active) {
-    drag = null;
-    return;
-  }
-
-  const targetCell = findCellAt(clientX, clientY);
-  if (targetCell) {
-    game.dropOnCell(Number(targetCell.dataset.row), Number(targetCell.dataset.col));
-  } else {
-    game.cancelDrag();
-  }
-  drag = null;
-}
-
-function onDragPointerMove(e) {
-  if (!drag || e.pointerId !== drag.pointerId) return;
-
-  const dx = e.clientX - drag.startX;
-  const dy = e.clientY - drag.startY;
-  if (!drag.active && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
-    drag.active = true;
-    game.beginDragUnit(drag.unitId);
-  }
-}
-
-function onDragPointerUp(e) {
-  if (!drag || e.pointerId !== drag.pointerId) return;
-
-  if (drag.active) {
-    finishDrag(e.clientX, e.clientY);
-  }
-  drag = null;
-  window.removeEventListener('pointermove', onDragPointerMove);
-  window.removeEventListener('pointerup', onDragPointerUp);
-  window.removeEventListener('pointercancel', onDragPointerUp);
-}
+let lastPhase = 'roster';
 
 function canControlUnit(state, unit) {
   if (state.phase !== 'battle' || state.animating) return false;
@@ -114,101 +52,34 @@ function canControlUnit(state, unit) {
   return true;
 }
 
-function startUnitDrag(e, unit, state) {
-  if (!canControlUnit(state, unit)) return;
+const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
+  onCellClick: (row, col) => game.clickCell(row, col),
+  onUnitDragStart: (unitId) => game.beginDragUnit(unitId),
+  onUnitDrop: (row, col) => game.dropOnCell(row, col),
+  onDragCancel: () => game.cancelDrag(),
+  canControlUnit,
+});
 
-  drag = {
-    unitId: unit.id,
-    startX: e.clientX,
-    startY: e.clientY,
-    active: false,
-    pointerId: e.pointerId,
-  };
+game.playAttackFx = (fx) => board3d.playAttackFx(fx);
 
-  window.addEventListener('pointermove', onDragPointerMove);
-  window.addEventListener('pointerup', onDragPointerUp);
-  window.addEventListener('pointercancel', onDragPointerUp);
-}
+function switchNav(navId) {
+  if (!NAV_SCREENS[navId]) return;
+  activeNav = navId;
 
-function seatBadgeHtml(state, unit) {
-  if (state.matchFormat !== '2v2' || unit.ownerSeat == null) return '';
-  return `<div class="seat-badge">${unit.ownerSeat + 1}</div>`;
-}
-
-function renderBoard(state) {
-  if (state.animating) return;
-
-  boardEl.innerHTML = '';
-  boardEl.dataset.size = String(state.boardSize);
-  boardEl.style.gridTemplateColumns = `repeat(${state.boardSize}, 1fr)`;
-
-  for (let r = 0; r < state.boardSize; r++) {
-    for (let c = 0; c < state.boardSize; c++) {
-      const cell = document.createElement('button');
-      cell.className = 'cell';
-      cell.type = 'button';
-      cell.dataset.row = String(r);
-      cell.dataset.col = String(c);
-
-      const hl = isHighlighted(state, r, c);
-      if (hl.move) cell.classList.add('highlight-move');
-      if (hl.attack) cell.classList.add('highlight-attack');
-      if (hl.deploy) cell.classList.add('highlight-deploy');
-      if (hl.win) cell.classList.add('win-line');
-
-      const unit = state.board[r][c];
-      if (unit) {
-        const cls = CLASSES[unit.classId];
-        const acted = state.actedUnitIds.includes(unit.id);
-        cell.classList.add('has-unit', `team-${unit.team}`);
-        if (acted) cell.classList.add('unit-acted');
-        if (state.draggingUnitId === unit.id) cell.classList.add('dragging-source');
-        cell.innerHTML = `
-          <div class="team-badge">${unit.team === 'blue' ? '藍' : '紅'}</div>
-          ${seatBadgeHtml(state, unit)}
-          <div class="unit ${unit.team}${acted ? ' acted' : ''}">
-            <div class="unit-icon-wrap"><span class="unit-icon">${cls.icon}</span></div>
-            <div class="unit-name">${cls.name}</div>
-            <div class="hp-bar"><div class="hp-fill" style="width:${hpPercent(unit)}%"></div></div>
-            <div class="unit-hp">${unit.hp} / ${unit.maxHp}</div>
-          </div>
-        `;
-        if (canControlUnit(state, unit)) {
-          cell.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            startUnitDrag(e, unit, state);
-          });
-        }
-      } else {
-        cell.addEventListener('click', () => game.clickCell(r, c));
-      }
-
-      boardEl.appendChild(cell);
-    }
+  for (const [id, screen] of Object.entries(NAV_SCREENS)) {
+    screen.classList.toggle('active', id === navId);
   }
-}
 
-function renderModePicker(state) {
-  modeButtonsEl.innerHTML = '';
-  const canPick = state.phase === 'roster';
+  for (const btn of bottomNavEl.querySelectorAll('.nav-item')) {
+    btn.classList.toggle('active', btn.dataset.nav === navId);
+  }
 
-  for (const mode of Object.values(BOARD_MODES)) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
-    const subtitle =
-      mode.matchFormat === '2v2'
-        ? '2v2 單局'
-        : mode.seriesFormat === 'best_of_3'
-          ? '三戰兩勝'
-          : '';
-    btn.innerHTML = subtitle
-      ? `<span class="mode-btn-label">${mode.label}</span><span class="mode-btn-sub">${subtitle}</span>`
-      : mode.label;
-    btn.disabled = !canPick;
-    btn.addEventListener('click', () => game.setBoardMode(mode.id));
-    modeButtonsEl.appendChild(btn);
+  const state = game.getState();
+  if (state.phase !== 'roster') {
+    board3d.setVisible(navId === 'battle');
+    if (navId === 'battle') {
+      board3d.sync(state);
+    }
   }
 }
 
@@ -236,6 +107,11 @@ function renderClassDetail(classId) {
   `;
 }
 
+function selectClass(classId) {
+  selectedClassId = classId;
+  render(game.getState());
+}
+
 function renderClassPicker() {
   classPickerEl.innerHTML = '';
 
@@ -245,19 +121,38 @@ function renderClassPicker() {
     btn.className = 'class-pick-btn' + (cls.id === selectedClassId ? ' active' : '');
     btn.textContent = cls.icon;
     btn.title = cls.name;
-    btn.addEventListener('click', () => {
-      selectedClassId = cls.id;
-      render(game.getState());
-    });
+    btn.addEventListener('click', () => selectClass(cls.id));
     classPickerEl.appendChild(btn);
   }
 
   renderClassDetail(selectedClassId);
 }
 
-function renderLobbyPanels(state) {
+function renderModePicker(state) {
+  modeButtonsEl.innerHTML = '';
+  const canPick = state.phase === 'roster';
+
+  for (const mode of Object.values(BOARD_MODES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
+    const subtitle =
+      mode.matchFormat === '2v2'
+        ? '2v2 單局'
+        : mode.seriesFormat === 'best_of_3'
+          ? '三戰兩勝'
+          : '';
+    btn.innerHTML = subtitle
+      ? `<span class="mode-btn-label">${mode.label}</span><span class="mode-btn-sub">${subtitle}</span>`
+      : mode.label;
+    btn.disabled = !canPick;
+    btn.addEventListener('click', () => game.setBoardMode(mode.id));
+    modeButtonsEl.appendChild(btn);
+  }
+}
+
+function renderLobbyFooter(state) {
   const inRoster = state.phase === 'roster';
-  modePanelEl.classList.toggle('hidden', !inRoster);
   confirmRosterBtn.classList.toggle('hidden', !inRoster);
   if (inRoster) {
     confirmRosterBtn.textContent = state.startButtonLabel;
@@ -356,21 +251,18 @@ function renderEnemyStatus(state) {
   renderUnitList(enemyListEl, units, { emptyHint: '已全滅' });
 }
 
-function syncSidebarMode(state) {
-  const inBattleFlow = state.phase !== 'roster';
+function renderPhaseChip(state) {
+  phaseChipEl.classList.remove('phase-roster', 'phase-battle', 'phase-end');
 
-  sidebarEl.classList.toggle('in-battle', inBattleFlow);
-  tabBarEl.classList.toggle('hidden', inBattleFlow);
-  prepBodyEl.classList.toggle('hidden', inBattleFlow);
-  battleBodyEl.classList.toggle('hidden', !inBattleFlow);
-
-  if (!inBattleFlow) {
-    for (const btn of tabBarEl.querySelectorAll('.tab-btn')) {
-      btn.classList.toggle('active', btn.dataset.tab === activeTab);
-    }
-    for (const panel of prepBodyEl.querySelectorAll('.tab-panel')) {
-      panel.classList.toggle('active', panel.dataset.tab === activeTab);
-    }
+  if (state.phase === 'roster') {
+    phaseChipEl.textContent = '準備中';
+    phaseChipEl.classList.add('phase-roster');
+  } else if (state.phase === 'battle') {
+    phaseChipEl.textContent = state.isHumanTurn ? '對戰中 · 你的回合' : '對戰中 · AI';
+    phaseChipEl.classList.add('phase-battle');
+  } else {
+    phaseChipEl.textContent = state.phase === 'seriesEnd' ? '系列賽結束' : '本局結束';
+    phaseChipEl.classList.add('phase-end');
   }
 }
 
@@ -386,21 +278,29 @@ function renderBattlePanels(state) {
     state.actionsRemaining > 0;
   endTurnBtn.classList.toggle('hidden', !canEndTurn);
 
+  if (inBattle && state.isHumanTurn) {
+    turnBadgeEl.textContent = state.matchFormat === '2v2' ? state.slotLabel : TEAM.blue.name;
+  }
+
   reservePanelEl.classList.toggle('hidden', !inBattle);
   enemyPanelEl.classList.toggle('hidden', !inBattle);
   endPanelEl.classList.toggle('hidden', !showEnd);
 
   nextRoundBtn.classList.toggle('hidden', state.phase !== 'roundEnd');
   restartBtn.classList.toggle('hidden', state.phase !== 'seriesEnd');
+
+  if (showEnd) {
+    endResultEl.textContent = state.message;
+  }
 }
 
 function formatRoundBadge(state) {
-  if (state.phase === 'roster') return '編隊階段';
+  if (state.phase === 'roster') return '準備階段';
   if (state.phase === 'seriesEnd') {
     return state.seriesFormat === 'single' ? '對戰結束' : '系列賽結束';
   }
   if (state.matchFormat === '2v2') {
-    const suffix = state.isHumanTurn ? ' · 你的回合' : ' · AI 思考中';
+    const suffix = state.isHumanTurn ? ' · 你的回合' : ' · AI';
     return `${state.slotLabel} 回合${suffix}`;
   }
   return `第 ${state.round} 局 · ${TEAM[state.currentPlayer].name}回合`;
@@ -412,11 +312,7 @@ function renderScoreBar(state) {
   redScoreEl.classList.toggle('hidden', isSingle);
 
   if (isSingle) {
-    if (state.phase === 'roster') {
-      roundBadgeEl.textContent = '編隊階段';
-    } else {
-      roundBadgeEl.textContent = formatRoundBadge(state);
-    }
+    roundBadgeEl.textContent = formatRoundBadge(state);
     return;
   }
 
@@ -426,6 +322,7 @@ function renderScoreBar(state) {
 }
 
 function render(state) {
+  renderPhaseChip(state);
   renderScoreBar(state);
 
   blueScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
@@ -433,19 +330,25 @@ function render(state) {
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
 
-  syncSidebarMode(state);
-  renderLobbyPanels(state);
-  renderBattlePanels(state);
-
   const inBattleFlow = state.phase !== 'roster';
-  const showBoard = inBattleFlow;
-  boardWrapEl.classList.toggle('hidden', !showBoard);
-  layoutEl.classList.toggle('no-board', !showBoard);
+  lobbyContentEl.classList.toggle('hidden', inBattleFlow);
+  battleContentEl.classList.toggle('hidden', !inBattleFlow);
+
+  if (state.phase !== lastPhase && inBattleFlow) {
+    switchNav('battle');
+  }
+  lastPhase = state.phase;
+
+  renderBattlePanels(state);
+  renderLobbyFooter(state);
+
+  const showBoard = inBattleFlow && activeNav === 'battle';
+  board3d.setVisible(showBoard);
 
   if (showBoard) {
-    renderBoard(state);
-  } else {
-    boardEl.innerHTML = '';
+    board3d.sync(state);
+  } else if (!inBattleFlow) {
+    board3d.clear();
   }
 
   renderModePicker(state);
@@ -455,10 +358,10 @@ function render(state) {
   renderEnemyStatus(state);
 }
 
-tabBarEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('.tab-btn');
-  if (!btn) return;
-  activeTab = btn.dataset.tab;
+bottomNavEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.nav-item');
+  if (!btn || btn.disabled) return;
+  switchNav(btn.dataset.nav);
   render(game.getState());
 });
 

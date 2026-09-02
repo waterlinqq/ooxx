@@ -5,76 +5,141 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OOXX 戰棋</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <div class="app">
-    <header>
-      <h1>OOXX 戰棋</h1>
+    <header class="app-header">
+      <div class="header-brand">
+        <h1>OOXX 戰棋</h1>
+        <p class="header-sub">連子戰棋 · 部署 · 移動 · 攻擊</p>
+      </div>
+      <div class="phase-chip" id="phaseChip">準備中</div>
     </header>
 
-    <div class="layout" id="layout">
-      <section class="board-wrap">
-        <div class="score-bar">
-          <div class="score-team blue" id="blueScore">藍隊 0 勝</div>
-          <div class="round-badge" id="roundBadge">編隊階段</div>
-          <div class="score-team red" id="redScore">紅隊 0 勝</div>
+    <main class="game-main" id="gameMain">
+      <!-- 戰鬥 -->
+      <section class="game-screen active" id="screenBattle" data-screen="battle">
+        <div class="screen-scroll" id="lobbyContent">
+          <div class="screen-hero">
+            <div class="screen-hero-icon">⚔️</div>
+            <h2 class="screen-title">選擇對戰模式</h2>
+            <p class="screen-desc">挑戰 AI 紅隊，連成整行或全滅對手即可獲勝</p>
+          </div>
+          <div class="mode-buttons" id="modeButtons"></div>
+          <button class="btn primary btn-lg" id="confirmRoster" type="button">開始系列賽</button>
         </div>
-        <div class="board-area">
-          <div class="board-container">
-            <div class="board" id="board"></div>
-            <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+
+        <div class="screen-scroll battle-layout hidden" id="battleContent">
+          <section class="board-wrap">
+            <div class="score-bar">
+              <div class="score-team blue" id="blueScore">藍隊 0 勝</div>
+              <div class="round-badge" id="roundBadge">第 1 局</div>
+              <div class="score-team red" id="redScore">紅隊 0 勝</div>
+            </div>
+            <div class="board-area">
+              <div class="board-container">
+                <div id="boardCanvas" class="board-canvas-host"></div>
+                <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="battle-panels">
+            <div class="panel end-panel hidden" id="endPanel">
+              <div class="end-result" id="endResult"></div>
+              <button class="btn success btn-lg hidden" id="nextRound" type="button">下一局</button>
+              <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
+            </div>
+
+            <div class="panel battle-panel hidden" id="actionPanel">
+              <div class="battle-panel-head">
+                <h2>你的回合</h2>
+                <span class="turn-badge" id="turnBadge"></span>
+              </div>
+              <p class="action-hint">拖曳移動／攻擊 · 點後備再點空格部署</p>
+              <button class="btn btn-block hidden" id="endTurn" type="button">結束回合</button>
+            </div>
+
+            <div class="panel battle-panel hidden" id="reservePanel">
+              <h2 id="reservePanelTitle">藍隊後備</h2>
+              <div class="reserve-list" id="reserveList"></div>
+            </div>
+
+            <div class="panel battle-panel hidden" id="teammatePanel">
+              <h2>藍2 隊友（AI）</h2>
+              <div class="reserve-list" id="teammateList"></div>
+            </div>
+
+            <div class="panel battle-panel hidden" id="enemyPanel">
+              <h2>敵方單位</h2>
+              <div class="enemy-list" id="enemyList"></div>
+            </div>
           </div>
         </div>
       </section>
 
-      <aside class="sidebar" id="sidebar">
-        <nav class="tab-bar" id="tabBar">
-          <button type="button" class="tab-btn active" data-tab="roster">角色</button>
-          <button type="button" class="tab-btn" data-tab="lobby">大廳</button>
-        </nav>
-
-        <div class="tab-body" id="prepBody">
-          <div class="tab-panel active" id="rosterTab" data-tab="roster">
-            <div class="class-picker" id="classPicker"></div>
-            <div class="class-detail" id="classDetail"></div>
+      <!-- 角色 -->
+      <section class="game-screen" id="screenCharacters" data-screen="characters">
+        <div class="screen-scroll">
+          <div class="screen-hero compact">
+            <div class="screen-hero-icon">🧙</div>
+            <h2 class="screen-title">職業圖鑑</h2>
+            <p class="screen-desc">瀏覽各職業能力與特色</p>
           </div>
+          <div class="class-picker" id="classPicker"></div>
+          <div class="class-detail" id="classDetail"></div>
+        </div>
+      </section>
 
-          <div class="tab-panel" id="lobbyTab" data-tab="lobby">
-            <div class="panel flat" id="modePanel">
-              <div class="mode-buttons" id="modeButtons"></div>
-            </div>
-            <button class="btn primary" id="confirmRoster" style="width: 100%">開始系列賽</button>
+      <!-- 背包 -->
+      <section class="game-screen" id="screenBag" data-screen="bag">
+        <div class="screen-scroll">
+          <div class="placeholder-page">
+            <div class="placeholder-icon">🎒</div>
+            <h2 class="placeholder-title">背包</h2>
+            <p class="placeholder-desc">即將開放</p>
           </div>
         </div>
+      </section>
 
-        <div class="battle-body hidden" id="battleBody">
-          <div class="panel flat hidden" id="actionPanel">
-            <div class="action-hint">拖曳移動／攻擊 · 點後備再點空格部署</div>
-            <button class="btn hidden" id="endTurn" style="width: 100%; margin-top: 10px">結束回合</button>
-          </div>
-
-          <div class="panel flat hidden" id="reservePanel">
-            <h2 id="reservePanelTitle">藍1 後備</h2>
-            <div class="reserve-list" id="reserveList"></div>
-          </div>
-
-          <div class="panel flat hidden" id="teammatePanel">
-            <h2>藍2 隊友（AI）</h2>
-            <div class="reserve-list" id="teammateList"></div>
-          </div>
-
-          <div class="panel flat hidden" id="enemyPanel">
-            <h2>紅隊</h2>
-            <div class="enemy-list" id="enemyList"></div>
-          </div>
-
-          <div class="panel flat hidden" id="endPanel">
-            <button class="btn success hidden" id="nextRound" style="width: 100%">下一局</button>
-            <button class="btn primary hidden" id="restart" style="width: 100%; margin-top: 8px">重新開始</button>
+      <!-- 商店 -->
+      <section class="game-screen" id="screenShop" data-screen="shop">
+        <div class="screen-scroll">
+          <div class="placeholder-page">
+            <div class="placeholder-icon">🏪</div>
+            <h2 class="placeholder-title">商店</h2>
+            <p class="placeholder-desc">即將開放</p>
           </div>
         </div>
-      </aside>
-    </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="主選單">
+      <button type="button" class="nav-item active" data-nav="battle">
+        <span class="nav-icon">⚔️</span>
+        <span class="nav-label">戰鬥</span>
+      </button>
+      <button type="button" class="nav-item" data-nav="characters">
+        <span class="nav-icon">🧙</span>
+        <span class="nav-label">角色</span>
+      </button>
+      <button type="button" class="nav-item" data-nav="bag">
+        <span class="nav-icon">🎒</span>
+        <span class="nav-label">背包</span>
+      </button>
+      <button type="button" class="nav-item" data-nav="shop">
+        <span class="nav-icon">🏪</span>
+        <span class="nav-label">商店</span>
+      </button>
+    </nav>
   </div>
 
   <script type="module" src="js/main.js"></script>

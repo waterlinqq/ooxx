@@ -296,7 +296,7 @@ export class Game {
     if (!unit || !this.ownsHumanUnit(unit)) return;
     this.selectedReserveId = null;
     this.draggingUnitId = unitId;
-    this.message = '拖曳至綠格移動、紅格攻擊';
+    this.message = '點選或拖曳至綠格移動、紅格攻擊';
     this.notify();
   }
 

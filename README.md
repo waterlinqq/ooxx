@@ -4,11 +4,35 @@
 
 ## 啟動
 
+**建議（開發用，含熱重載）：**
+
+```bash
+npm install
+npm run dev
+```
+
+瀏覽器開啟終端機顯示的本地網址（預設 http://localhost:5173）
+
+**或使用 Python 靜態伺服器：**
+
 ```bash
 python3 -m http.server 8080
 ```
 
-瀏覽器開啟 http://localhost:8080
+瀏覽器開啟 http://localhost:8080（Three.js 透過 import map 從 CDN 載入）
+
+正式版建置：
+
+```bash
+npm run build
+npm run preview
+```
+
+## 技術
+
+- 棋盤區使用 **Three.js** 等距低多邊形 3D 渲染（`js/board3d/`）
+- 側欄、編隊、大廳維持原有 2D DOM UI
+- 遊戲邏輯（`game.js`、`rules.js`、`ai.js`）完全不變
 
 ## 規則
 
