@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { CLASSES, parseSlot } from '../units.js';
 import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
 
@@ -34,6 +33,14 @@ const CROUCH_DEPTH = {
 const TMP_DIR = new THREE.Vector3();
 const TMP_TARGET = new THREE.Vector3();
 
+const SEAT_CLASSES = ['seat-blue-0', 'seat-blue-1', 'seat-red-0', 'seat-red-1'];
+
+function applySeatClass(wrap, unit, matchFormat) {
+  wrap.classList.remove(...SEAT_CLASSES);
+  if (matchFormat === '2v2' && unit.ownerSeat != null) {
+    wrap.classList.add(`seat-${unit.team}-${unit.ownerSeat}`);
+  }
+}
 function createHpLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label';
@@ -121,7 +128,6 @@ export class UnitMeshManager {
     const acted = new Set(state.actedUnitIds);
     const draggingId = state.draggingUnitId;
     const inspectedId = state.inspectedUnitId;
-    const humanSeat = state.matchFormat === '2v2' ? parseSlot(state.humanSlot).seat : null;
 
     for (let r = 0; r < board.length; r++) {
       for (let c = 0; c < board[r].length; c++) {
@@ -131,16 +137,15 @@ export class UnitMeshManager {
 
         let entry = this.units.get(unit.id);
         if (!entry) {
-          entry = this.createUnitEntry(unit);
+          entry = this.createUnitEntry(unit, state.matchFormat);
           this.units.set(unit.id, entry);
           this.group.add(entry.root);
         }
 
-        this.updateUnitEntry(entry, unit, r, c, {
+        this.updateUnitEntry(entry, unit, r, c, state.matchFormat, {
           acted: acted.has(unit.id),
           dragging: draggingId === unit.id,
           inspected: inspectedId === unit.id,
-          teammate: humanSeat !== null && unit.team === 'blue' && unit.ownerSeat !== humanSeat,
           yaw: facingYaw(board, r, c, unit),
         });
       }
@@ -155,8 +160,11 @@ export class UnitMeshManager {
     }
   }
 
-  createUnitEntry(unit) {
-    const model = buildUnitModel(unit.classId, unit.team);
+  createUnitEntry(unit, matchFormat) {
+    const model = buildUnitModel(unit.classId, unit.team, {
+      ownerSeat: unit.ownerSeat,
+      matchFormat,
+    });
     const root = model.root;
     root.userData = { kind: 'unit', unitId: unit.id };
 
@@ -289,8 +297,7 @@ export class UnitMeshManager {
     mat.opacity = selected ? Math.min(1, baseOpacity + 0.08) : baseOpacity;
   }
 
-  updateUnitEntry(entry, unit, row, col, { acted, dragging, inspected, teammate, yaw }) {
-    const cls = CLASSES[unit.classId];
+  updateUnitEntry(entry, unit, row, col, matchFormat, { acted, dragging, inspected, yaw }) {
     const pos = tileWorldPosition(row, col, this.boardSize);
     TMP_TARGET.set(pos.x, UNIT_BASE_Y, pos.z);
 
@@ -321,7 +328,6 @@ export class UnitMeshManager {
     entry.targetPos.copy(TMP_TARGET);
     entry.enemyYaw = yaw;
 
-    entry.wrap.querySelector('.unit-3d-name').textContent = cls.name;
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
     entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
@@ -335,16 +341,13 @@ export class UnitMeshManager {
       statsEl.textContent = '';
     }
 
-    const badgeEl = entry.wrap.querySelector('.unit-3d-badge');
-    badgeEl.textContent = teammate ? '隊友' : '';
-    badgeEl.classList.toggle('hidden', !teammate);
+    applySeatClass(entry.wrap, unit, matchFormat);
 
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);
     entry.wrap.classList.toggle('selected', dragging);
     entry.wrap.classList.toggle('inspected', inspected);
-    entry.wrap.classList.toggle('enemy', unit.team === 'red');
-    entry.wrap.classList.toggle('teammate', !!teammate);
+    entry.wrap.classList.toggle('enemy', unit.team === 'red' && matchFormat !== '2v2');
     entry.root.userData.row = row;
     entry.root.userData.col = col;
     entry.acted = acted;

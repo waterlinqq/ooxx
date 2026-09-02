@@ -6,10 +6,9 @@
 // actions in place with an undo record, keeping the same 2D-array-of-units shape that
 // js/rules.js reads. Win lines and the cells that feed them are memoized per board size
 // and the per-line occupancy counters are maintained incrementally.
-import { CLASSES } from '../units.js';
+import { CLASSES, CLASS_IDS, SLOT_ORDER, parseSlot } from '../units.js';
 import { getWinLines, getAdjacentCells8, getEnemiesOnLine } from '../rules.js';
 
-const CLASS_IDS = Object.keys(CLASSES);
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
 const MAX_HP = Math.max(...CLASS_IDS.map((id) => CLASSES[id].hp));
 
@@ -72,8 +71,9 @@ function createZobrist(size) {
   const side = [makeLanePair(rng), makeLanePair(rng)];
   const actionsLeft = Array.from({ length: 8 }, () => makeLanePair(rng));
   const acted = Array.from({ length: 64 }, () => makeLanePair(rng));
+  const slot = Array.from({ length: SLOT_ORDER.length }, () => makeLanePair(rng));
 
-  return { cellUnit, reserveCount, side, actionsLeft, acted };
+  return { cellUnit, reserveCount, side, actionsLeft, acted, slot };
 }
 
 function getZobrist(size) {
@@ -113,12 +113,27 @@ function cloneUnit(unit, searchIndex) {
 }
 
 /**
+ * In 2v2 the board passes between four seats in a fixed cycle, so "the other team" is
+ * not enough to know who moves next: after blue-0 comes red-0, then blue-1, then red-1.
+ * The cycle is rotated to start at the seat we are searching for.
+ */
+function buildSlotCycle(ownerSeat, team) {
+  const start = SLOT_ORDER.indexOf(`${team}-${ownerSeat}`);
+  if (start < 0) return null;
+  return SLOT_ORDER.map((_, i) => {
+    const slot = SLOT_ORDER[(start + i) % SLOT_ORDER.length];
+    const parsed = parseSlot(slot);
+    return { slot, team: parsed.team, seat: parsed.seat, key: SLOT_ORDER.indexOf(slot) };
+  });
+}
+
+/**
  * Snapshots a public game state into a mutable search context.
  *
  * @param {{board: Array, blueReserve: Array, redReserve: Array, actedUnitIds: Set<string>}} state
- * @param {{team: string, actionsPerTurn: number}} options
+ * @param {{team: string, actionsPerTurn: number, ownerSeat?: number|null}} options
  */
-export function createSearchContext(state, { team, actionsPerTurn }) {
+export function createSearchContext(state, { team, actionsPerTurn, ownerSeat = null }) {
   const size = state.board.length;
   const { lines, linesByCell } = getWinLinesForSize(size);
   const zobrist = getZobrist(size);
@@ -172,6 +187,8 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
     actionsLeft: Math.max(1, actionsPerTurn - (state.actedUnitIds?.size ?? 0)),
     acted: new Set(),
     actedStack: [],
+    slotCycle: ownerSeat == null ? null : buildSlotCycle(ownerSeat, team),
+    slotIndex: 0,
     hashHi: 0,
     hashLo: 0,
   };
@@ -398,10 +415,22 @@ function xorActionsLeft(ctx) {
   xorHash(ctx, ctx.zobrist.actionsLeft[Math.min(ctx.actionsLeft, 7)]);
 }
 
-/** Hands the board to the other side and clears the per-turn "already acted" set. */
+function xorSlot(ctx) {
+  if (!ctx.slotCycle) return;
+  xorHash(ctx, ctx.zobrist.slot[ctx.slotCycle[ctx.slotIndex].key]);
+}
+
+/** Hands the board to the next mover and clears the per-turn "already acted" set. */
 function flipSide(ctx) {
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
-  ctx.turn = enemyOf(ctx.turn);
+  xorSlot(ctx);
+  if (ctx.slotCycle) {
+    ctx.slotIndex = (ctx.slotIndex + 1) % ctx.slotCycle.length;
+    ctx.turn = ctx.slotCycle[ctx.slotIndex].team;
+  } else {
+    ctx.turn = enemyOf(ctx.turn);
+  }
+  xorSlot(ctx);
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
   ctx.actionsLeft = ctx.actionsPerTurn;
   xorActed(ctx);
@@ -413,8 +442,18 @@ function unflipSide(ctx, previousTurn) {
   ctx.acted = ctx.actedStack.pop();
   xorActed(ctx);
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
+  xorSlot(ctx);
+  if (ctx.slotCycle) {
+    ctx.slotIndex = (ctx.slotIndex - 1 + ctx.slotCycle.length) % ctx.slotCycle.length;
+  }
+  xorSlot(ctx);
   ctx.turn = previousTurn;
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
+}
+
+/** Seat that owns the current action, or null outside 2v2. */
+export function currentSeat(ctx) {
+  return ctx.slotCycle ? ctx.slotCycle[ctx.slotIndex].seat : null;
 }
 
 function advanceTurn(ctx) {

@@ -396,17 +396,14 @@ body {
 .unit-3d-label {
   transform: translate(-50%, -100%);
   text-align: center;
-  min-width: 72px;
+  min-width: 48px;
   pointer-events: none;
   user-select: none;
 }
 
-.unit-3d-name {
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: #e2e8f0;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
-  margin-bottom: 2px;
+.unit-3d-name,
+.unit-3d-badge {
+  display: none;
 }
 
 .unit-3d-hp-bar {
@@ -462,29 +459,28 @@ body {
   background: linear-gradient(90deg, #ef4444, #fca5a5);
 }
 
+.unit-3d-label.seat-blue-0 .unit-3d-hp-fill {
+  background: linear-gradient(90deg, #3b82f6, #93c5fd);
+}
+
+.unit-3d-label.seat-blue-1 .unit-3d-hp-fill {
+  background: linear-gradient(90deg, #9333ea, #d8b4fe);
+}
+
+.unit-3d-label.seat-red-0 .unit-3d-hp-fill {
+  background: linear-gradient(90deg, #ef4444, #fca5a5);
+}
+
+.unit-3d-label.seat-red-1 .unit-3d-hp-fill {
+  background: linear-gradient(90deg, #f97316, #fdba74);
+}
+
 .unit-3d-stats {
   font-size: 0.54rem;
   font-weight: 700;
   color: #fde68a;
   margin-top: 2px;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-}
-
-.unit-3d-badge {
-  font-size: 0.48rem;
-  font-weight: 600;
-  color: #94a3b8;
-  margin-bottom: 1px;
-  letter-spacing: 0.04em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-}
-
-.unit-3d-label.teammate .unit-3d-badge {
-  color: #7dd3fc;
-}
-
-.unit-3d-label.teammate .unit-3d-name {
-  color: #bae6fd;
 }
 
 .reserve-label.selected {

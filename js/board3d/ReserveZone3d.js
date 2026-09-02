@@ -1,8 +1,17 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { CLASSES, parseSlot } from '../units.js';
+import { parseSlot } from '../units.js';
 import { TILE_PITCH, TILE_SIZE } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
+
+const SEAT_CLASSES = ['seat-blue-0', 'seat-blue-1', 'seat-red-0', 'seat-red-1'];
+
+function applySeatClass(wrap, unit, matchFormat) {
+  wrap.classList.remove(...SEAT_CLASSES);
+  if (matchFormat === '2v2' && unit.ownerSeat != null) {
+    wrap.classList.add(`seat-${unit.team}-${unit.ownerSeat}`);
+  }
+}
 
 const UNIT_BASE_Y = 0.072;
 const RESERVE_SCALE = 0.82;
@@ -100,7 +109,7 @@ function createReserveLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label reserve-label';
   wrap.innerHTML = `
-    <div class="unit-3d-badge">後備</div>
+    <div class="unit-3d-badge"></div>
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
     <div class="unit-3d-hp-text"></div>
@@ -191,7 +200,7 @@ export class ReserveZone3d {
   upsertUnit({ unit, side, role, slot, selectable }, state) {
     let entry = this.units.get(unit.id);
     if (!entry) {
-      entry = this.createEntry(unit, side);
+      entry = this.createEntry(unit, side, state.matchFormat);
       this.units.set(unit.id, entry);
       this.group.add(entry.root);
     }
@@ -202,15 +211,12 @@ export class ReserveZone3d {
     entry.body.rotation.y = reserveYaw(side);
     entry.root.scale.setScalar(RESERVE_SCALE);
 
-    const cls = CLASSES[unit.classId];
     const selected = state.selectedReserveId === unit.id;
     const inspected = state.inspectedUnitId === unit.id;
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
 
-    entry.wrap.querySelector('.unit-3d-name').textContent = cls.name;
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
     entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
-    entry.wrap.querySelector('.unit-3d-badge').textContent = role === 'teammate' ? '隊友' : '後備';
 
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
     if (inspected) {
@@ -221,10 +227,11 @@ export class ReserveZone3d {
       statsEl.textContent = '';
     }
 
+    applySeatClass(entry.wrap, unit, state.matchFormat);
+
     entry.wrap.classList.toggle('selected', selected);
     entry.wrap.classList.toggle('inspected', inspected);
-    entry.wrap.classList.toggle('enemy', side === 'red');
-    entry.wrap.classList.toggle('teammate', role === 'teammate');
+    entry.wrap.classList.toggle('enemy', side === 'red' && state.matchFormat !== '2v2');
     entry.wrap.classList.toggle('disabled', side === 'blue' && !selectable);
 
     entry.root.userData = {
@@ -235,8 +242,11 @@ export class ReserveZone3d {
     };
   }
 
-  createEntry(unit, side) {
-    const model = buildUnitModel(unit.classId, unit.team);
+  createEntry(unit, side, matchFormat) {
+    const model = buildUnitModel(unit.classId, unit.team, {
+      ownerSeat: unit.ownerSeat,
+      matchFormat,
+    });
     const root = model.root;
     const { label, wrap } = createReserveLabel();
     label.position.set(0, model.height * RESERVE_SCALE + 0.18, 0);

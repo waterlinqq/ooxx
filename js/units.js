@@ -35,6 +35,8 @@ export const CLASSES = {
     icon: '🔮',
     hp: 4,
     atk: 2,
+    // Unused: the beam pierces every enemy on the ray to the board edge, so
+    // getEnemiesOnLine deliberately ignores range. Kept only for UI symmetry.
     range: 3,
     type: 'mage',
     desc: '八方向光束穿透，傷害低',
@@ -68,6 +70,21 @@ export const TEAM = {
   blue: { id: 'blue', name: '藍隊', color: '#3b82f6', light: '#dbeafe' },
   red: { id: 'red', name: '紅隊', color: '#ef4444', light: '#fee2e2' },
 };
+
+// 2v2 seat tint: self blue, ally purple, enemies red and orange.
+export const SEAT_COLORS = {
+  'blue-0': '#3b82f6',
+  'blue-1': '#9333ea',
+  'red-0': '#ef4444',
+  'red-1': '#f97316',
+};
+
+export function resolveUnitColor(team, ownerSeat = null, matchFormat = '1v1') {
+  if (matchFormat === '2v2' && ownerSeat != null) {
+    return SEAT_COLORS[`${team}-${ownerSeat}`] ?? TEAM[team].color;
+  }
+  return TEAM[team].color;
+}
 
 // Board size drives everything else. Two constraints hold across every mode:
 //   actionsPerTurn < size, or a team could lay a whole winning line uninterrupted.
@@ -115,7 +132,10 @@ export const BOARD_MODES = {
     label: '二十五宮格',
     size: 5,
     matchFormat: '2v2',
-    actionsPerTurn: 2,
+    // 2v2 passes the board to the next seat after every single action, so a seat only
+    // ever gets one. The constraints above are still satisfied: a team gets two actions
+    // per round across its two seats, with an opposing seat acting in between.
+    actionsPerTurn: 1,
     turnDurationMs: 18000,
     turnBonusMs: 5000,
     rosterSize: 14,

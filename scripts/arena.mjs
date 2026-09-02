@@ -15,6 +15,8 @@ function parseArgs(argv) {
     aName: null,
     bName: null,
     difficulty: 'hard',
+    difficultyA: null,
+    difficultyB: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -27,10 +29,16 @@ function parseArgs(argv) {
     else if (arg === '--a') opts.a = argv[++i];
     else if (arg === '--b') opts.b = argv[++i];
     else if (arg === '--difficulty') opts.difficulty = argv[++i];
+    else if (arg === '--difficulty-a') opts.difficultyA = argv[++i];
+    else if (arg === '--difficulty-b') opts.difficultyB = argv[++i];
   }
   opts.modes ??= DEFAULT_MODES;
-  opts.aName ??= opts.a.replace(/^.*\//, '');
-  opts.bName ??= opts.b.replace(/^.*\//, '');
+  opts.difficultyA ??= opts.difficulty;
+  opts.difficultyB ??= opts.difficulty;
+  // Labels have to distinguish the sides even when both are the same module, which is
+  // how difficulty presets get benchmarked against each other.
+  opts.aName ??= `${opts.a.replace(/^.*\//, '')}[${opts.difficultyA}]`;
+  opts.bName ??= `${opts.b.replace(/^.*\//, '')}[${opts.difficultyB}]`;
   return opts;
 }
 
@@ -109,13 +117,13 @@ function report(modeId, tallies, games, reasons, uniqueScripts, totalMoves) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  console.log(`Arena: ${opts.aName} vs ${opts.bName} · seed ${opts.seed} · difficulty ${opts.difficulty}`);
+  console.log(`Arena: ${opts.aName} vs ${opts.bName} · seed ${opts.seed}`);
 
   for (const modeId of opts.modes) {
     const mode = getBoardMode(modeId);
     // Separate streams keep each engine's tie-breaking independent of the other's.
-    const engineA = await loadEngine(opts.a, opts.aName, opts.difficulty, createRng(opts.seed));
-    const engineB = await loadEngine(opts.b, opts.bName, opts.difficulty, createRng(opts.seed + 977));
+    const engineA = await loadEngine(opts.a, opts.aName, opts.difficultyA, createRng(opts.seed));
+    const engineB = await loadEngine(opts.b, opts.bName, opts.difficultyB, createRng(opts.seed + 977));
 
     const tallies = [emptyTally(engineA.name), emptyTally(engineB.name)];
     const reasons = {};

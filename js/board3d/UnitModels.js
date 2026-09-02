@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TEAM } from '../units.js';
+import { resolveUnitColor } from '../units.js';
 
 const geoCache = new Map();
 let contactShadowTex = null;
@@ -51,8 +51,8 @@ function keepColor(material) {
   return material;
 }
 
-export function createMaterialSet(team) {
-  const base = new THREE.Color(TEAM[team].color);
+export function createMaterialSet(team, ownerSeat = null, matchFormat = '1v1') {
+  const base = new THREE.Color(resolveUnitColor(team, ownerSeat, matchFormat));
   const deep = base.clone().lerp(new THREE.Color(0x0b1220), 0.55);
   const light = base.clone().lerp(new THREE.Color(0xffffff), 0.5);
   const glowColor = base.clone().lerp(new THREE.Color(0xffffff), 0.25);
@@ -809,8 +809,8 @@ const SILHOUETTE = {
   bomber: [1.06, 0.9, 1.06],
 };
 
-export function buildUnitModel(classId, team) {
-  const mats = createMaterialSet(team);
+export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {
+  const mats = createMaterialSet(team, ownerSeat, matchFormat);
   const rig = (BUILDERS[classId] ?? buildFallback)(mats);
 
   const root = new THREE.Group();

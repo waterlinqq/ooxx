@@ -116,14 +116,6 @@ export function getValidMoves(board, unit) {
   return moves;
 }
 
-export function isOnMageLine(fromRow, fromCol, toRow, toCol) {
-  const dr = toRow - fromRow;
-  const dc = toCol - fromCol;
-  if (dr === 0 && dc === 0) return false;
-  if (dr === 0 || dc === 0) return true;
-  return Math.abs(dr) === Math.abs(dc);
-}
-
 export function getMageLines(unit, size = 3) {
   const { row, col } = unit;
   const lines = [];
@@ -141,29 +133,7 @@ export function getMageLines(unit, size = 3) {
   return lines;
 }
 
-export function getFirstEnemyOnLine(board, unit, targetRow, targetCol) {
-  const size = boardSize(board);
-  const dr = Math.sign(targetRow - unit.row);
-  const dc = Math.sign(targetCol - unit.col);
-  if (dr === 0 && dc === 0) return null;
-  if (!isOnMageLine(unit.row, unit.col, targetRow, targetCol)) return null;
-
-  const maxRange = unit.range ?? size;
-  let r = unit.row + dr;
-  let c = unit.col + dc;
-  let steps = 0;
-
-  while (isInBounds(r, c, size) && steps < maxRange) {
-    const cell = board[r][c];
-    if (cell) return cell.team !== unit.team ? cell : null;
-    r += dr;
-    c += dc;
-    steps++;
-  }
-
-  return null;
-}
-
+/** Every enemy along the ray, ignoring blockers and range: the mage beam pierces all. */
 export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
   const size = boardSize(board);
   const dr = Math.sign(targetRow - unit.row);
