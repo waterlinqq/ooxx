@@ -21,6 +21,8 @@
   --radius-sm: 10px;
   --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.25);
   --transition-fast: 0.15s ease;
+  --board-width: 360px;
+  --board-height: 500px;
 }
 
 * {
@@ -51,6 +53,9 @@ body {
   padding: 4px 0 0;
   overflow: hidden;
   gap: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .status-bar {
@@ -243,18 +248,17 @@ body {
   flex: 1;
   min-height: 0;
   width: 100%;
-  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
 }
 
-/* --board-aspect is published by BoardScene so the canvas matches the scene exactly. */
-.battle-layout .board-container {
-  --board-aspect: 0.72;
-  width: min(100cqw, calc(100cqh * var(--board-aspect)));
-  height: min(100cqh, calc(100cqw / var(--board-aspect)));
-  min-width: 0;
-  min-height: 0;
-  margin: auto;
-  aspect-ratio: unset;
+.board-container {
+  position: relative;
+  width: var(--board-width);
+  height: var(--board-height);
+  flex-shrink: 0;
 }
 
 .battle-panels {
@@ -359,35 +363,20 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(239, 68, 68, 0.35);
 }
 
-.board-area {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  container-type: size;
-}
-
-.board-container {
-  position: relative;
-  width: min(100cqw, 100cqh, 420px);
-  aspect-ratio: 1;
-  min-width: 240px;
-  min-height: 240px;
-}
-
 .board-canvas-host {
   position: absolute;
   inset: 0;
   z-index: 1;
   border-radius: 12px;
   overflow: hidden;
+  touch-action: none;
 }
 
 .board-canvas-host canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+  touch-action: none;
 }
 
 .board-3d-labels {
@@ -395,6 +384,9 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 2;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .unit-3d-label {
@@ -1085,10 +1077,25 @@ body {
   overflow-y: auto;
 }
 
-.detail-icon {
-  font-size: 3rem;
-  line-height: 1;
+.detail-preview-host {
+  width: 100%;
+  height: min(42vh, 280px);
+  min-height: 200px;
+  border-radius: var(--radius-md);
+  background: #0b1220;
+  overflow: hidden;
+  flex-shrink: 0;
   margin-bottom: 12px;
+}
+
+.detail-preview-host canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.detail-info {
+  width: 100%;
 }
 
 .detail-name {

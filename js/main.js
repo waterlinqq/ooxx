@@ -1,5 +1,6 @@
 import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
+import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -17,7 +18,8 @@ const battleContentEl = document.getElementById('battleContent');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
 const classPickerEl = document.getElementById('classPicker');
-const classDetailEl = document.getElementById('classDetail');
+const classDetailInfoEl = document.getElementById('classDetailInfo');
+const classPreviewHostEl = document.getElementById('classPreviewHost');
 const reservePanelEl = document.getElementById('reservePanel');
 const teammatePanelEl = document.getElementById('teammatePanel');
 const teammateListEl = document.getElementById('teammateList');
@@ -162,6 +164,8 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
   canControlUnit,
 });
 
+const characterPreview = new CharacterPreviewScene(classPreviewHostEl);
+
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
 
 function switchNav(navId) {
@@ -183,6 +187,12 @@ function switchNav(navId) {
       board3d.sync(state);
     }
   }
+
+  const showCharacterPreview = navId === 'characters';
+  characterPreview.setVisible(showCharacterPreview);
+  if (showCharacterPreview) {
+    characterPreview.setClass(selectedClassId);
+  }
 }
 
 function formatClassTrait(cls) {
@@ -197,8 +207,7 @@ function renderClassDetail(classId) {
   const cls = CLASSES[classId];
   if (!cls) return;
 
-  classDetailEl.innerHTML = `
-    <div class="detail-icon">${cls.icon}</div>
+  classDetailInfoEl.innerHTML = `
     <h2 class="detail-name">${cls.name}</h2>
     <p class="detail-desc">${cls.desc}</p>
     <dl class="detail-stats">
@@ -207,6 +216,10 @@ function renderClassDetail(classId) {
       <div><dt>特性</dt><dd>${formatClassTrait(cls)}</dd></div>
     </dl>
   `;
+
+  if (activeNav === 'characters') {
+    characterPreview.setClass(classId);
+  }
 }
 
 function selectClass(classId) {
@@ -351,6 +364,12 @@ function render(state) {
   renderModePicker(state);
   renderClassPicker();
   renderTeammate(state);
+
+  const showCharacterPreview = activeNav === 'characters';
+  characterPreview.setVisible(showCharacterPreview);
+  if (showCharacterPreview) {
+    characterPreview.setClass(selectedClassId);
+  }
 }
 
 bottomNavEl.addEventListener('click', (e) => {

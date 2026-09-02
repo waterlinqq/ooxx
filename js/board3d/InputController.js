@@ -20,6 +20,7 @@ export class InputController {
 
     domElement.addEventListener('pointerdown', this.onPointerDown);
     domElement.addEventListener('click', this.onClick);
+    domElement.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerUp);
@@ -128,6 +129,10 @@ export class InputController {
     return unit?.team === 'red';
   }
 
+  onContextMenu = (event) => {
+    event.preventDefault();
+  };
+
   onPointerDown = (event) => {
     if (event.button !== 0 || !this.state || this.state.animating) return;
     const pick = this.pickCell(event);
@@ -229,6 +234,7 @@ export class InputController {
   dispose() {
     this.domElement.removeEventListener('pointerdown', this.onPointerDown);
     this.domElement.removeEventListener('click', this.onClick);
+    this.domElement.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerUp);

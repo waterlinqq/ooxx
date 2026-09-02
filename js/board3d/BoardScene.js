@@ -184,16 +184,6 @@ export class BoardScene {
     };
   }
 
-  // Let the layout size the canvas to the scene so neither axis is letterboxed.
-  publishAspect(bounds) {
-    const host = this.container.parentElement;
-    if (!host) return;
-    const ratio = (bounds.halfW / bounds.halfH).toFixed(4);
-    if (host.style.getPropertyValue('--board-aspect') !== ratio) {
-      host.style.setProperty('--board-aspect', ratio);
-    }
-  }
-
   onResize() {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
@@ -201,7 +191,6 @@ export class BoardScene {
 
     const aspect = width / height;
     const bounds = this.contentBounds();
-    this.publishAspect(bounds);
 
     let { halfW, halfH } = bounds;
     if (halfW / halfH > aspect) {
