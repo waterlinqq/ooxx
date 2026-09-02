@@ -7,7 +7,7 @@ export const CLASSES = {
     atk: 3,
     range: 3,
     type: 'ranged',
-    desc: '遠程攻擊，生命值低',
+    desc: '八方向射線，首個敵方，不可繞過',
   },
   shield: {
     id: 'shield',
@@ -37,7 +37,7 @@ export const CLASSES = {
     atk: 2,
     range: 3,
     type: 'mage',
-    desc: '任意角度穿透，傷害低',
+    desc: '八方向光束穿透，傷害低',
   },
   assassin: {
     id: 'assassin',
@@ -47,8 +47,9 @@ export const CLASSES = {
     atk: 2,
     range: 1,
     jumpMove: true,
+    jumpRange: 2,
     type: 'melee',
-    desc: '低血低攻，可跳躍至棋盤任意空格',
+    desc: '低血低攻，可跳躍至周遭兩格',
   },
   bomber: {
     id: 'bomber',
@@ -123,6 +124,7 @@ export function createUnit(classId, teamId, ownerSeat = null) {
     range: cls.range,
     moveRange: cls.moveRange ?? 1,
     jumpMove: cls.jumpMove ?? false,
+    jumpRange: cls.jumpRange ?? null,
     deathExplosion: cls.deathExplosion ?? 0,
     type: cls.type,
     row: -1,

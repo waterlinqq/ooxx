@@ -24,7 +24,6 @@ const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const restartBtn = document.getElementById('restart');
 const endTurnBtn = document.getElementById('endTurn');
-const phaseChipEl = document.getElementById('phaseChip');
 const turnBadgeEl = document.getElementById('turnBadge');
 const bottomNavEl = document.getElementById('bottomNav');
 
@@ -83,9 +82,9 @@ function switchNav(navId) {
 
 function formatClassTrait(cls) {
   if (cls.deathExplosion) return `近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
-  if (cls.jumpMove) return '可跳躍至任意空格';
-  if (cls.type === 'mage') return '任意角度穿透攻擊';
-  if (cls.type === 'ranged') return `遠程 · 射程 ${cls.range}`;
+  if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
+  if (cls.type === 'mage') return '八方向光束穿透攻擊';
+  if (cls.type === 'ranged') return `八方向射線 · 射程 ${cls.range}`;
   return '近戰';
 }
 
@@ -203,21 +202,6 @@ function renderTeammate(state) {
   });
 }
 
-function renderPhaseChip(state) {
-  phaseChipEl.classList.remove('phase-roster', 'phase-battle', 'phase-end');
-
-  if (state.phase === 'roster') {
-    phaseChipEl.textContent = '準備中';
-    phaseChipEl.classList.add('phase-roster');
-  } else if (state.phase === 'battle') {
-    phaseChipEl.textContent = state.isHumanTurn ? '對戰中 · 你的回合' : '對戰中 · AI';
-    phaseChipEl.classList.add('phase-battle');
-  } else {
-    phaseChipEl.textContent = '對戰結束';
-    phaseChipEl.classList.add('phase-end');
-  }
-}
-
 function renderBattlePanels(state) {
   const inBattle = state.phase === 'battle';
   const showEnd = state.phase === 'gameEnd';
@@ -262,7 +246,6 @@ function renderScoreBar(state) {
 }
 
 function render(state) {
-  renderPhaseChip(state);
   renderScoreBar(state);
 
   blueScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'blue');

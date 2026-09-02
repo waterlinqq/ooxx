@@ -114,6 +114,58 @@ export class AttackFx3d {
     this.unitManager.triggerAttack(attackerId, fx.type, this.headingTo(fx.from, target));
   }
 
+  spawnBeam(from, to, color = 0xa855f7, duration = 420) {
+    const a = tileWorldPosition(from.row, from.col, this.boardSize);
+    const b = tileWorldPosition(to.row, to.col, this.boardSize);
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    if (length < 0.05) return;
+
+    const geo = new THREE.BoxGeometry(0.1, 0.14, length);
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((a.x + b.x) / 2, 0.58, (a.z + b.z) / 2);
+    mesh.rotation.y = Math.atan2(dx, dz);
+    this.fxGroup.add(mesh);
+
+    const glowGeo = new THREE.BoxGeometry(0.18, 0.08, length);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xd8b4fe,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(mesh.position);
+    glow.rotation.copy(mesh.rotation);
+    this.fxGroup.add(glow);
+
+    const start = performance.now();
+    const tick = () => {
+      const t = (performance.now() - start) / duration;
+      if (t >= 1) {
+        this.fxGroup.remove(mesh);
+        this.fxGroup.remove(glow);
+        geo.dispose();
+        glowGeo.dispose();
+        mat.dispose();
+        glowMat.dispose();
+        return;
+      }
+      const fade = 1 - t;
+      mat.opacity = 0.9 * fade;
+      glowMat.opacity = 0.45 * fade;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   spawnProjectile(from, to, team, kind) {
     const color = kind === 'mage' ? 0xa855f7 : team === 'blue' ? 0x60a5fa : 0xf87171;
     const geo = new THREE.SphereGeometry(kind === 'mage' ? 0.1 : 0.08, 8, 8);
@@ -181,15 +233,17 @@ export class AttackFx3d {
       await wait(CAST_DELAY);
 
       if (fx.type === 'mage' && fx.targets.length > 0) {
-        const lineCells = getLineCells(fx.from, fx.targets[fx.targets.length - 1]);
+        const endTarget = fx.targets[fx.targets.length - 1];
+        const lineCells = getLineCells(fx.from, endTarget);
         for (const [r, c] of lineCells) {
           this.flashTile(r, c, 0xa855f7, 400);
         }
-      }
-
-      for (const target of fx.targets) {
-        const toCenter = this.cellCenter(target.row, target.col);
-        this.spawnProjectile(fromCenter, toCenter, fx.team, fx.type);
+        this.spawnBeam(fx.from, endTarget);
+      } else {
+        for (const target of fx.targets) {
+          const toCenter = this.cellCenter(target.row, target.col);
+          this.spawnProjectile(fromCenter, toCenter, fx.team, fx.type);
+        }
       }
 
       await wait(PROJECTILE_FLIGHT - 40);

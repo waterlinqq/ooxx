@@ -246,21 +246,16 @@ function countMeleeThreats(board, row, col, team) {
   return count;
 }
 
-/** 弓箭手：覆蓋射程內目標，並避免貼臉 */
+/** 弓箭手：八方向射線上首個敵方，並避免貼臉 */
 function scoreArcherPosition(board, row, col, team, range) {
-  const size = board.length;
+  const phantom = { row, col, team, type: 'ranged', range };
   let bonus = 0;
 
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      const u = board[r][c];
-      if (!u || u.team === team) continue;
-      const dist = chebyshev(row, col, r, c);
-      if (dist > range) continue;
-      bonus += 14 + u.atk * 4;
-      if (dist === 1) bonus -= 28;
-      else if (dist >= 2) bonus += 8;
-    }
+  for (const target of getValidAttackTargets(board, phantom)) {
+    const dist = chebyshev(row, col, target.row, target.col);
+    bonus += 14 + target.atk * 4;
+    if (dist === 1) bonus -= 28;
+    else if (dist >= 2) bonus += 8;
   }
 
   bonus -= countMeleeThreats(board, row, col, team) * 16;

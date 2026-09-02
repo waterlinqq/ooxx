@@ -10,7 +10,8 @@ const RESERVE_SCALE = 0.82;
 // Framing assumes a full roster even after units deploy, so the camera never re-zooms mid-match.
 const MAX_RESERVE_UNITS = 8;
 const ROW_SPACING = TILE_PITCH * 0.92;
-const ROW_STEP = TILE_PITCH * 1.12;
+// Wide enough that the front row's floating labels clear the back row's heads.
+const ROW_STEP = TILE_PITCH * 1.55;
 
 // Keep in sync with BoardScene camera (8, 8.5, 8) → lookAt origin.
 const CAMERA_POS = new THREE.Vector3(8, 8.5, 8);

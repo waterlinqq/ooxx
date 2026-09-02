@@ -155,12 +155,8 @@ export class BoardScene {
     return points;
   }
 
-  onResize() {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
-    if (!width || !height) return;
-
-    const aspect = width / height;
+  // Camera-space bounds of everything that must stay on screen, independent of canvas size.
+  contentBounds() {
     this.camera.updateMatrixWorld();
     this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
 
@@ -179,11 +175,34 @@ export class BoardScene {
       }
     }
 
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    let halfW = (maxX - minX) / 2 + FRAME_PADDING;
-    let halfH = (maxY - minY) / 2 + FRAME_PADDING;
+    return {
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
+      halfW: (maxX - minX) / 2 + FRAME_PADDING,
+      halfH: (maxY - minY) / 2 + FRAME_PADDING,
+    };
+  }
 
+  // Let the layout size the canvas to the scene so neither axis is letterboxed.
+  publishAspect(bounds) {
+    const host = this.container.parentElement;
+    if (!host) return;
+    const ratio = (bounds.halfW / bounds.halfH).toFixed(4);
+    if (host.style.getPropertyValue('--board-aspect') !== ratio) {
+      host.style.setProperty('--board-aspect', ratio);
+    }
+  }
+
+  onResize() {
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    if (!width || !height) return;
+
+    const aspect = width / height;
+    const bounds = this.contentBounds();
+    this.publishAspect(bounds);
+
+    let { halfW, halfH } = bounds;
     if (halfW / halfH > aspect) {
       halfH = halfW / aspect;
     } else {
@@ -191,10 +210,10 @@ export class BoardScene {
     }
 
     this.frustumBase = halfH * 2;
-    this.camera.left = centerX - halfW;
-    this.camera.right = centerX + halfW;
-    this.camera.top = centerY + halfH;
-    this.camera.bottom = centerY - halfH;
+    this.camera.left = bounds.centerX - halfW;
+    this.camera.right = bounds.centerX + halfW;
+    this.camera.top = bounds.centerY + halfH;
+    this.camera.bottom = bounds.centerY - halfH;
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);

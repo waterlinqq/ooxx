@@ -82,10 +82,12 @@ export function getValidMoves(board, unit) {
   const size = boardSize(board);
 
   if (unit.jumpMove) {
+    const maxJump = unit.jumpRange ?? size;
     const moves = [];
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (!board[r][c] && (r !== unit.row || c !== unit.col)) moves.push([r, c]);
+        if (board[r][c] || (r === unit.row && c === unit.col)) continue;
+        if (chebyshev(unit.row, unit.col, r, c) <= maxJump) moves.push([r, c]);
       }
     }
     return moves;
@@ -139,6 +141,29 @@ export function getMageLines(unit, size = 3) {
   return lines;
 }
 
+export function getFirstEnemyOnLine(board, unit, targetRow, targetCol) {
+  const size = boardSize(board);
+  const dr = Math.sign(targetRow - unit.row);
+  const dc = Math.sign(targetCol - unit.col);
+  if (dr === 0 && dc === 0) return null;
+  if (!isOnMageLine(unit.row, unit.col, targetRow, targetCol)) return null;
+
+  const maxRange = unit.range ?? size;
+  let r = unit.row + dr;
+  let c = unit.col + dc;
+  let steps = 0;
+
+  while (isInBounds(r, c, size) && steps < maxRange) {
+    const cell = board[r][c];
+    if (cell) return cell.team !== unit.team ? cell : null;
+    r += dr;
+    c += dc;
+    steps++;
+  }
+
+  return null;
+}
+
 export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
   const size = boardSize(board);
   const dr = Math.sign(targetRow - unit.row);
@@ -174,12 +199,23 @@ export function getValidAttackTargets(board, unit) {
   }
 
   if (unit.type === 'ranged') {
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        const target = board[r][c];
-        if (target && target.team !== unit.team && chebyshev(unit.row, unit.col, r, c) <= unit.range) {
-          targets.push(target);
+    const seen = new Set();
+    for (const [dr, dc] of MAGE_DIRS) {
+      let r = unit.row + dr;
+      let c = unit.col + dc;
+      let steps = 0;
+      while (isInBounds(r, c, size) && steps < unit.range) {
+        const cell = board[r][c];
+        if (cell) {
+          if (cell.team !== unit.team && !seen.has(cell.id)) {
+            seen.add(cell.id);
+            targets.push(cell);
+          }
+          break;
         }
+        r += dr;
+        c += dc;
+        steps++;
       }
     }
     return targets;

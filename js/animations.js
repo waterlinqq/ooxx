@@ -85,7 +85,7 @@ export function playAttackAnimation(boardEl, fxLayer, fx) {
     const fromCenter = getCellCenter(boardEl, fx.from.row, fx.from.col);
     const projectiles = [];
 
-    if ((fx.type === 'ranged' || fx.type === 'mage') && fromCenter) {
+    if (fx.type === 'ranged' && fromCenter) {
       for (const target of fx.targets) {
         const toCenter = getCellCenter(boardEl, target.row, target.col);
         if (!toCenter) continue;
