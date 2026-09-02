@@ -1,4 +1,4 @@
-import { cloneBoard, FIXED_ROSTER } from './units.js';
+import { cloneBoard, getBoardMode } from './units.js';
 import {
   getValidMoves,
   getValidAttackTargets,
@@ -14,7 +14,12 @@ import {
   countTeamOnBoard,
 } from './rules.js';
 
-const ACTIONS_PER_TURN = 2;
+// Mode-dependent search config. The entire minimax runs synchronously inside one
+// chooseAiAction call, so setting these once per call keeps them consistent throughout
+// and spares every intermediate helper from threading the mode around.
+let searchActionsPerTurn = getBoardMode().actionsPerTurn;
+let searchRoster = getBoardMode().roster;
+
 const MAX_MINIMAX_CANDIDATES = 32;
 const COMBO_FIRST = 12;
 const COMBO_SECOND = 8;
@@ -143,7 +148,7 @@ function getCriticalSeverity(board, enemyTeam) {
 
 function inferEnemyComposition(state, enemyTeam = 'blue') {
   const rosterTotals = {};
-  for (const classId of FIXED_ROSTER) {
+  for (const classId of searchRoster) {
     rosterTotals[classId] = (rosterTotals[classId] ?? 0) + 1;
   }
 
@@ -832,7 +837,7 @@ function scoreAction(state, action, team = 'red') {
   return score;
 }
 
-function simulateOpponentTurn(state, team = 'blue', maxSteps = ACTIONS_PER_TURN) {
+function simulateOpponentTurn(state, team = 'blue', maxSteps = searchActionsPerTurn) {
   let current = {
     board: state.board,
     blueReserve: state.blueReserve,
@@ -865,7 +870,7 @@ function simulateOpponentTurn(state, team = 'blue', maxSteps = ACTIONS_PER_TURN)
 
 function simulateTeamRemainderThenOpponent(state, team) {
   let current = state;
-  const remaining = ACTIONS_PER_TURN - getActedUnitIds(state).size;
+  const remaining = searchActionsPerTurn - getActedUnitIds(state).size;
   const enemy = enemyOf(team);
 
   for (let i = 0; i < remaining; i++) {
@@ -892,7 +897,7 @@ function simulateTeamRemainderThenOpponent(state, team) {
       actedUnitIds: new Set(),
     },
     enemy,
-    ACTIONS_PER_TURN,
+    searchActionsPerTurn,
   );
 }
 
@@ -916,7 +921,7 @@ function scoreTurnMinimax(state, teamActions, team) {
       actedUnitIds: new Set(),
     },
     enemy,
-    ACTIONS_PER_TURN,
+    searchActionsPerTurn,
   );
 
   if (isWinningState(afterEnemy.board, enemy, getReserve(afterEnemy, team))) return -8000;
@@ -1062,6 +1067,10 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
       : teamOrOptions;
   const { team, ownerSeat } = options;
 
+  const fallbackMode = getBoardMode(`${state.board.length}x${state.board.length}`);
+  searchActionsPerTurn = options.actionsPerTurn ?? fallbackMode.actionsPerTurn;
+  searchRoster = options.roster ?? fallbackMode.roster;
+
   const safeState = {
     board: state.board,
     blueReserve: state.blueReserve ?? [],
@@ -1116,7 +1125,8 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
     }
   }
 
-  if (acted.size === 0) {
+  // Combo search only pays off when a second action follows in the same turn.
+  if (acted.size === 0 && searchActionsPerTurn > 1) {
     return pickBestComboFirstAction(safeState, actions, team);
   }
 

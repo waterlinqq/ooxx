@@ -124,6 +124,7 @@ export class BoardScene {
 
     this.clock = new THREE.Clock();
     this.boardSize = 0;
+    this.maxReserveUnits = 0;
     this.visible = true;
 
     this.onResize = this.onResize.bind(this);
@@ -152,7 +153,7 @@ export class BoardScene {
       new THREE.Vector3(half, 0, -half),
       new THREE.Vector3(half, 0, half),
     ];
-    points.push(...reserveExtentPoints(size));
+    points.push(...reserveExtentPoints(size, this.maxReserveUnits || undefined));
     return points;
   }
 
@@ -222,6 +223,7 @@ export class BoardScene {
     if (state.animating) return;
 
     this.boardSize = state.boardSize;
+    this.maxReserveUnits = state.rosterLimit;
     this.tileGrid.ensureSize(state.boardSize);
     this.unitManager.setBoardSize(state.boardSize);
     this.reserveZone.setBoardSize(state.boardSize);

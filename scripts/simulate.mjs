@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { chooseAiAction } from '../js/ai.js';
 import {
-  FIXED_ROSTER,
   SLOT_ORDER,
   createUnit,
   createEmptyBoard,
@@ -46,10 +45,10 @@ function createSimUnit(classId, teamId, counter, ownerSeat = null) {
   return unit;
 }
 
+// Mirrors createTeamReserve's alternating seat split so simulations match live matches.
 function createSimReserve(roster, teamId, counterStart, matchFormat) {
-  const half = Math.ceil(roster.length / 2);
   return roster.map((classId, index) => {
-    const ownerSeat = matchFormat === '2v2' ? (index < half ? 0 : 1) : null;
+    const ownerSeat = matchFormat === '2v2' ? index % 2 : null;
     return createSimUnit(classId, teamId, counterStart + index, ownerSeat);
   });
 }
@@ -198,18 +197,19 @@ function runRound({ mode, round, firstPlayer, firstSlot, unitCounterStart }) {
   const size = mode.size;
   const matchFormat = mode.matchFormat;
   const actionsPerTurn = mode.actionsPerTurn;
+  const roster = mode.roster;
   let unitCounter = unitCounterStart;
   const board = createEmptyBoard(size);
   const state = {
     board,
-    blueReserve: createSimReserve(FIXED_ROSTER, 'blue', unitCounter, matchFormat),
-    redReserve: createSimReserve(FIXED_ROSTER, 'red', unitCounter + FIXED_ROSTER.length, matchFormat),
+    blueReserve: createSimReserve(roster, 'blue', unitCounter, matchFormat),
+    redReserve: createSimReserve(roster, 'red', unitCounter + roster.length, matchFormat),
     currentPlayer: firstPlayer,
     currentSlot: firstSlot ?? `${firstPlayer}-0`,
     actionsRemaining: actionsPerTurn,
     actedUnitIds: new Set(),
   };
-  unitCounter += FIXED_ROSTER.length * 2;
+  unitCounter += roster.length * 2;
 
   const moves = [];
   let turn = 1;
@@ -237,7 +237,7 @@ function runRound({ mode, round, firstPlayer, firstSlot, unitCounterStart }) {
           redReserve: state.redReserve,
           actedUnitIds: state.actedUnitIds,
         },
-        { team, ownerSeat: seat },
+        { team, ownerSeat: seat, actionsPerTurn, roster },
       );
 
       if (!action) {
@@ -301,7 +301,7 @@ function runRound({ mode, round, firstPlayer, firstSlot, unitCounterStart }) {
         redReserve: state.redReserve,
         actedUnitIds: state.actedUnitIds,
       },
-      team,
+      { team, actionsPerTurn, roster },
     );
 
     if (!action) {

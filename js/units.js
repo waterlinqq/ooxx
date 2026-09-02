@@ -69,46 +69,71 @@ export const TEAM = {
   red: { id: 'red', name: '紅隊', color: '#ef4444', light: '#fee2e2' },
 };
 
+// Board size drives everything else. Two constraints hold across every mode:
+//   actionsPerTurn < size, or a team could lay a whole winning line uninterrupted.
+//   actionsPerTurn >= 2 once the board saturates, or opening a cell (attack) and
+//   claiming it (deploy/move) can never happen before the defender refills it.
+// 3x3 opts out of the second one by keeping the roster small enough that the board
+// never locks up, which is what makes 1 action per turn playable there.
 export const BOARD_MODES = {
   '3x3': {
     id: '3x3',
     label: '九宮格',
     size: 3,
-    rosterTotal: 8,
     matchFormat: '1v1',
-    actionsPerTurn: 2,
+    actionsPerTurn: 1,
+    turnDurationMs: 10000,
+    turnBonusMs: 0,
+    // Four a side is the largest roster that still leaves the 9 cells un-fillable, which
+    // is what keeps a single action per turn viable. AI self-play shows the cliff either
+    // side of it: at five a side every game ends by attrition instead of a line, and
+    // swapping the mage for the bomber deadlocks the board outright.
+    roster: ['swordsman', 'archer', 'shield', 'mage'],
   },
   '4x4': {
     id: '4x4',
     label: '十六宮格',
     size: 4,
-    rosterTotal: 12,
     matchFormat: '1v1',
     actionsPerTurn: 2,
+    turnDurationMs: 15000,
+    turnBonusMs: 5000,
+    roster: [
+      'swordsman', 'swordsman', 'archer', 'archer', 'shield',
+      'shield', 'mage', 'assassin', 'assassin', 'bomber',
+    ],
   },
   '5x5': {
     id: '5x5',
     label: '二十五宮格',
     size: 5,
-    rosterTotal: 8,
     matchFormat: '2v2',
-    actionsPerTurn: 1,
+    actionsPerTurn: 2,
+    turnDurationMs: 18000,
+    turnBonusMs: 5000,
+    // Longest distance is 4, so range-3 units no longer reach everywhere and mobility
+    // matters most — hence the extra assassins. Ordered so the alternating 2v2 seat
+    // split in createTeamReserve hands each player a comparable mix.
+    roster: [
+      'swordsman', 'swordsman', 'swordsman', 'archer', 'archer',
+      'archer', 'shield', 'shield', 'mage', 'mage',
+      'assassin', 'assassin', 'assassin', 'bomber',
+    ],
   },
 };
 
 export const SLOT_ORDER = ['blue-0', 'red-0', 'blue-1', 'red-1'];
 
-export const FIXED_ROSTER = [
-  'swordsman', 'archer', 'shield', 'mage',
-  'assassin', 'bomber', 'swordsman', 'archer',
-];
-
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
 }
 
+export function getModeRoster(modeId) {
+  return getBoardMode(modeId).roster;
+}
+
 export function getRosterLimit(modeId) {
-  return getBoardMode(modeId).rosterTotal;
+  return getBoardMode(modeId).roster.length;
 }
 
 export function createUnit(classId, teamId, ownerSeat = null) {
@@ -144,9 +169,11 @@ export function formatSlotLabel(slot) {
 }
 
 export function createTeamReserve(roster, teamId, matchFormat = '1v1') {
-  const half = Math.ceil(roster.length / 2);
+  // Alternating seats keeps both 2v2 players on a comparable class mix even though the
+  // roster is written grouped by class; splitting it in half would give one player all
+  // the swordsmen and the other all the assassins.
   return roster.map((classId, index) => {
-    const ownerSeat = matchFormat === '2v2' ? (index < half ? 0 : 1) : null;
+    const ownerSeat = matchFormat === '2v2' ? index % 2 : null;
     return createUnit(classId, teamId, ownerSeat);
   });
 }

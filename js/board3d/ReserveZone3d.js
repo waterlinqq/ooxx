@@ -7,8 +7,7 @@ import { buildUnitModel } from './UnitModels.js';
 const UNIT_BASE_Y = 0.072;
 const RESERVE_SCALE = 0.82;
 
-// Framing assumes a full roster even after units deploy, so the camera never re-zooms mid-match.
-const MAX_RESERVE_UNITS = 8;
+const DEFAULT_MAX_RESERVE_UNITS = 8;
 const ROW_SPACING = TILE_PITCH * 0.92;
 // Wide enough that the front row's floating labels clear the back row's heads.
 const ROW_STEP = TILE_PITCH * 1.55;
@@ -65,9 +64,11 @@ function reservePosition(index, total, boardSize, side) {
 }
 
 // Ground-plane corners of both reserve bands, used by the camera to frame the whole scene.
-export function reserveExtentPoints(boardSize) {
+// Sized off the full roster rather than the live count so the camera never re-zooms as
+// units deploy out of reserve.
+export function reserveExtentPoints(boardSize, maxReserveUnits = DEFAULT_MAX_RESERVE_UNITS) {
   const { right, down } = getScreenGroundAxes();
-  const frontRowCount = Math.ceil(MAX_RESERVE_UNITS / 2);
+  const frontRowCount = Math.ceil(maxReserveUnits / 2);
   const lateral = ((frontRowCount - 1) / 2) * ROW_SPACING + TILE_SIZE * 0.6;
   const depth = reserveBandDistance(boardSize) + ROW_STEP + TILE_SIZE * 0.6;
 

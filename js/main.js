@@ -38,13 +38,14 @@ const NAV_SCREENS = {
   shop: document.getElementById('screenShop'),
 };
 
-const TURN_DURATION_MS = 15000;
-const TURN_BONUS_MS = 5000;
+const DEFAULT_TURN_DURATION_MS = 15000;
+const DEFAULT_TURN_BONUS_MS = 5000;
 const TURN_TIMER_TICK_MS = 50;
 
 let turnTimerInterval = null;
-let turnTimerRemainingMs = TURN_DURATION_MS;
-let turnTimerBarMaxMs = TURN_DURATION_MS;
+let turnTimerRemainingMs = DEFAULT_TURN_DURATION_MS;
+let turnTimerBarMaxMs = DEFAULT_TURN_DURATION_MS;
+let turnTimerBonusMs = DEFAULT_TURN_BONUS_MS;
 let turnTimerLastTick = 0;
 let turnTimerPaused = false;
 let turnTimerHumanTurn = false;
@@ -70,16 +71,23 @@ function updateTurnTimerBar() {
 }
 
 function addTurnTimerBonus(actionCount = 1) {
-  turnTimerRemainingMs += actionCount * TURN_BONUS_MS;
+  // Modes with a single action per turn end before the bonus could ever be spent.
+  if (turnTimerBonusMs <= 0) return;
+  turnTimerRemainingMs += actionCount * turnTimerBonusMs;
   turnTimerBarMaxMs = Math.max(turnTimerBarMaxMs, turnTimerRemainingMs);
   updateTurnTimerBar();
 }
 
-function startTurnTimer(actedCount = 0) {
+function startTurnTimer(
+  actedCount = 0,
+  durationMs = DEFAULT_TURN_DURATION_MS,
+  bonusMs = DEFAULT_TURN_BONUS_MS,
+) {
   clearTurnTimer();
   turnTimerHumanTurn = true;
-  turnTimerRemainingMs = TURN_DURATION_MS;
-  turnTimerBarMaxMs = TURN_DURATION_MS;
+  turnTimerRemainingMs = durationMs;
+  turnTimerBarMaxMs = durationMs;
+  turnTimerBonusMs = bonusMs;
   turnTimerLastActedCount = actedCount;
   turnTimerLastTick = performance.now();
   turnTimerEl.classList.remove('hidden');
@@ -126,7 +134,7 @@ function syncTurnTimer(state) {
   }
 
   if (!turnTimerHumanTurn) {
-    startTurnTimer(state.actedUnitIds.length);
+    startTurnTimer(state.actedUnitIds.length, state.turnDurationMs, state.turnBonusMs);
     return;
   }
 
