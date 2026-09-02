@@ -21,8 +21,8 @@
   --radius-sm: 10px;
   --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.25);
   --transition-fast: 0.15s ease;
-  --board-width: 360px;
-  --board-height: 500px;
+  --board-max-width: 1100px;
+  --board-max-height: 1100px;
 }
 
 * {
@@ -246,19 +246,23 @@ body {
 
 .board-area {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
 }
 
+/* The 3D camera fits its content to whatever pixel box it gets, so the container
+   claims all available space instead of a fixed size. */
 .board-container {
   position: relative;
-  width: var(--board-width);
-  height: var(--board-height);
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  max-width: var(--board-max-width);
+  max-height: var(--board-max-height);
 }
 
 .battle-panels {
@@ -470,8 +474,17 @@ body {
   font-size: 0.48rem;
   font-weight: 600;
   color: #94a3b8;
-  margin-top: 2px;
+  margin-bottom: 1px;
   letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.unit-3d-label.teammate .unit-3d-badge {
+  color: #7dd3fc;
+}
+
+.unit-3d-label.teammate .unit-3d-name {
+  color: #bae6fd;
 }
 
 .reserve-label.selected {
@@ -950,20 +963,6 @@ body {
   display: none;
 }
 
-.battle-panel {
-  flex-shrink: 0;
-  background: var(--panel-2);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
-}
-
-.battle-panel h2 {
-  margin: 0 0 4px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .end-panel {
   text-align: center;
   background: linear-gradient(160deg, rgba(30, 64, 175, 0.25), rgba(251, 191, 36, 0.12));
@@ -1207,7 +1206,7 @@ body {
 
 .class-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 8px;
 }
 
@@ -1216,8 +1215,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 88px;
+  gap: 5px;
+  min-height: 104px;
   border: 2px solid transparent;
   border-radius: 12px;
   padding: 12px 8px;
@@ -1236,7 +1235,7 @@ body {
 }
 
 .class-card:disabled {
-  opacity: 0.45;
+  opacity: 0.62;
   cursor: not-allowed;
 }
 
@@ -1250,61 +1249,37 @@ body {
   font-weight: 700;
 }
 
-.reserve-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.reserve-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--panel-2);
-  cursor: pointer;
-  border: 2px solid transparent;
-}
-
-.reserve-item.selected {
-  border-color: var(--accent);
-}
-
-.reserve-item.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.enemy-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.enemy-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(127, 29, 29, 0.35);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  font-size: 0.88rem;
-}
-
-.enemy-item-main {
-  font-weight: 700;
-  color: #fee2e2;
-}
-
-.empty-hint {
-  font-size: 0.85rem;
+.class-meta {
+  font-size: 0.7rem;
+  font-weight: 600;
   color: var(--muted);
-  text-align: center;
-  padding: 8px 0;
+}
+
+.class-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.formation-tools {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+}
+
+.formation-footer {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.formation-footer .btn {
+  padding: 13px 16px;
+  font-size: 1rem;
 }
 
 .panel h2 span {

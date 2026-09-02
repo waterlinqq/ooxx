@@ -2,373 +2,38 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chooseAiAction } from '../js/ai.js';
-import {
-  SLOT_ORDER,
-  createUnit,
-  createEmptyBoard,
-  parseSlot,
-  getBoardMode,
-} from '../js/units.js';
-import {
-  applyDeploy,
-  applyMove,
-  applyAttack,
-  checkWin,
-  isTeamEliminated,
-  getValidDeployCells,
-  getValidMoves,
-  getValidAttackTargets,
-} from '../js/rules.js';
+import { getBoardMode } from '../js/units.js';
+import { runMatch, createRng } from './lib/match.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_GAMES = 100;
 const DEFAULT_MODE = '4x4';
+const DEFAULT_SEED = 20260902;
 
 function parseArgs(argv) {
-  const opts = { games: DEFAULT_GAMES, mode: DEFAULT_MODE, out: null };
+  const opts = {
+    games: DEFAULT_GAMES,
+    mode: DEFAULT_MODE,
+    out: null,
+    seed: DEFAULT_SEED,
+    difficulty: 'hard',
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--games' || arg === '-n') opts.games = Number(argv[++i]);
     else if (arg === '--mode') opts.mode = argv[++i];
     else if (arg === '--out' || arg === '-o') opts.out = argv[++i];
+    else if (arg === '--seed') opts.seed = Number(argv[++i]);
+    else if (arg === '--difficulty') opts.difficulty = argv[++i];
   }
   return opts;
-}
-
-function getModeMeta(modeId) {
-  return getBoardMode(modeId);
-}
-
-function createSimUnit(classId, teamId, counter, ownerSeat = null) {
-  const unit = createUnit(classId, teamId, ownerSeat);
-  unit.id = `${teamId}-${classId}-${counter}`;
-  return unit;
-}
-
-// Mirrors createTeamReserve's alternating seat split so simulations match live matches.
-function createSimReserve(roster, teamId, counterStart, matchFormat) {
-  return roster.map((classId, index) => {
-    const ownerSeat = matchFormat === '2v2' ? index % 2 : null;
-    return createSimUnit(classId, teamId, counterStart + index, ownerSeat);
-  });
-}
-
-function serializeAction(action, board, reserves) {
-  const allUnits = [...board.flat().filter(Boolean), ...reserves.blue, ...reserves.red];
-  const byId = new Map(allUnits.map((u) => [u.id, u]));
-
-  if (action.type === 'deploy') {
-    const unit = byId.get(action.unitId);
-    return {
-      type: 'deploy',
-      classId: unit?.classId ?? null,
-      row: action.row,
-      col: action.col,
-    };
-  }
-
-  if (action.type === 'move') {
-    const unit = byId.get(action.unitId);
-    return {
-      type: 'move',
-      classId: unit?.classId ?? null,
-      from: unit ? { row: unit.row, col: unit.col } : null,
-      to: { row: action.row, col: action.col },
-    };
-  }
-
-  if (action.type === 'attack') {
-    const unit = byId.get(action.unitId);
-    const target = byId.get(action.targetId);
-    return {
-      type: 'attack',
-      classId: unit?.classId ?? null,
-      targetClassId: target?.classId ?? null,
-      from: unit ? { row: unit.row, col: unit.col } : null,
-      target: target ? { row: target.row, col: target.col } : null,
-    };
-  }
-
-  return action;
-}
-
-function hasValidActionsForSlot(board, reserve, slot, actedUnitIds) {
-  const { team, seat } = parseSlot(slot);
-  const slotReserve = seat == null ? reserve : reserve.filter((u) => u.ownerSeat === seat);
-
-  if (getValidDeployCells(board).length > 0 && slotReserve.length > 0) return true;
-
-  for (const row of board) {
-    for (const unit of row) {
-      if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (seat != null && unit.ownerSeat !== seat) continue;
-      if (getValidMoves(board, unit).length > 0) return true;
-      if (getValidAttackTargets(board, unit).length > 0) return true;
-    }
-  }
-  return false;
-}
-
-function applyAiAction(state, action, team) {
-  const reserves = { blue: state.blueReserve, red: state.redReserve };
-
-  if (action.type === 'deploy') {
-    const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
-    const unit = reserve.find((u) => u.id === action.unitId);
-    const result = applyDeploy(state.board, unit, action.row, action.col);
-    state.board = result.board;
-    if (team === 'blue') state.blueReserve = state.blueReserve.filter((u) => u.id !== unit.id);
-    else state.redReserve = state.redReserve.filter((u) => u.id !== unit.id);
-    return { label: 'deploy', detail: serializeAction(action, state.board, reserves) };
-  }
-
-  if (action.type === 'move') {
-    const unit = state.board.flat().find((u) => u?.id === action.unitId);
-    const result = applyMove(state.board, unit, action.row, action.col);
-    state.board = result.board;
-    return { label: 'move', detail: serializeAction(action, state.board, reserves) };
-  }
-
-  if (action.type === 'attack') {
-    const unit = state.board.flat().find((u) => u?.id === action.unitId);
-    const target = state.board.flat().find((u) => u?.id === action.targetId);
-    const result = applyAttack(state.board, unit, target);
-    state.board = result.board;
-    return {
-      label: 'attack',
-      detail: serializeAction(action, state.board, reserves),
-      kills: result.killed.length + (result.explosionKilled?.length ?? 0),
-    };
-  }
-
-  return null;
-}
-
-function checkRoundEnd(state, actingTeam) {
-  const enemy = actingTeam === 'blue' ? 'red' : 'blue';
-  const enemyReserve = enemy === 'blue' ? state.blueReserve : state.redReserve;
-  const winLine = checkWin(state.board, actingTeam);
-
-  if (winLine) {
-    return { winner: actingTeam, reason: 'line', winLine };
-  }
-  if (isTeamEliminated(state.board, enemy, enemyReserve)) {
-    return { winner: actingTeam, reason: 'elimination', winLine: null };
-  }
-  return null;
-}
-
-function hasValidActions(board, reserve, team, actedUnitIds) {
-  if (getValidDeployCells(board).length > 0 && reserve.length > 0) return true;
-
-  for (const row of board) {
-    for (const unit of row) {
-      if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (getValidMoves(board, unit).length > 0) return true;
-      if (getValidAttackTargets(board, unit).length > 0) return true;
-    }
-  }
-  return false;
-}
-
-function advanceSlot(currentSlot, slotOrder) {
-  const idx = slotOrder.indexOf(currentSlot);
-  return slotOrder[(idx + 1) % slotOrder.length];
-}
-
-function findNextActiveSlot(state, slotOrder) {
-  const reserveByTeam = {
-    blue: state.blueReserve,
-    red: state.redReserve,
-  };
-
-  let slot = state.currentSlot;
-  for (let i = 0; i < slotOrder.length; i++) {
-    slot = advanceSlot(slot, slotOrder);
-    const { team } = parseSlot(slot);
-    if (hasValidActionsForSlot(state.board, reserveByTeam[team], slot, state.actedUnitIds)) {
-      return slot;
-    }
-  }
-  return advanceSlot(state.currentSlot, slotOrder);
-}
-
-function runRound({ mode, round, firstPlayer, firstSlot, unitCounterStart }) {
-  const size = mode.size;
-  const matchFormat = mode.matchFormat;
-  const actionsPerTurn = mode.actionsPerTurn;
-  const roster = mode.roster;
-  let unitCounter = unitCounterStart;
-  const board = createEmptyBoard(size);
-  const state = {
-    board,
-    blueReserve: createSimReserve(roster, 'blue', unitCounter, matchFormat),
-    redReserve: createSimReserve(roster, 'red', unitCounter + roster.length, matchFormat),
-    currentPlayer: firstPlayer,
-    currentSlot: firstSlot ?? `${firstPlayer}-0`,
-    actionsRemaining: actionsPerTurn,
-    actedUnitIds: new Set(),
-  };
-  unitCounter += roster.length * 2;
-
-  const moves = [];
-  let turn = 1;
-  const maxTurns = 800;
-  const slotOrder = [...SLOT_ORDER];
-
-  while (turn <= maxTurns) {
-    if (matchFormat === '2v2') {
-      const { team, seat } = parseSlot(state.currentSlot);
-      state.currentPlayer = team;
-      const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
-
-      if (!hasValidActionsForSlot(state.board, reserve, state.currentSlot, state.actedUnitIds)) {
-        state.currentSlot = findNextActiveSlot(state, slotOrder);
-        state.actionsRemaining = actionsPerTurn;
-        state.actedUnitIds = new Set();
-        turn++;
-        continue;
-      }
-
-      const action = chooseAiAction(
-        {
-          board: state.board,
-          blueReserve: state.blueReserve,
-          redReserve: state.redReserve,
-          actedUnitIds: state.actedUnitIds,
-        },
-        { team, ownerSeat: seat, actionsPerTurn, roster },
-      );
-
-      if (!action) {
-        state.currentSlot = findNextActiveSlot(state, slotOrder);
-        state.actionsRemaining = actionsPerTurn;
-        state.actedUnitIds = new Set();
-        turn++;
-        continue;
-      }
-
-      const applied = applyAiAction(state, action, team);
-      state.actedUnitIds.add(action.unitId);
-      state.actionsRemaining--;
-
-      const end = checkRoundEnd(state, team);
-      moves.push({
-        turn,
-        team,
-        slot: state.currentSlot,
-        actionRemainingAfter: state.actionsRemaining,
-        ...applied,
-      });
-
-      if (end) {
-        return {
-          round,
-          firstPlayer,
-          firstSlot: firstSlot ?? 'blue-0',
-          winner: end.winner,
-          reason: end.reason,
-          winLine: end.winLine,
-          totalTurns: turn,
-          totalMoves: moves.length,
-          moves,
-          unitCounterEnd: unitCounter,
-        };
-      }
-
-      state.currentSlot = findNextActiveSlot(state, slotOrder);
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-      continue;
-    }
-
-    const team = state.currentPlayer;
-    const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
-
-    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds)) {
-      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-      continue;
-    }
-
-    const action = chooseAiAction(
-      {
-        board: state.board,
-        blueReserve: state.blueReserve,
-        redReserve: state.redReserve,
-        actedUnitIds: state.actedUnitIds,
-      },
-      { team, actionsPerTurn, roster },
-    );
-
-    if (!action) {
-      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-      continue;
-    }
-
-    const applied = applyAiAction(state, action, team);
-    state.actedUnitIds.add(action.unitId);
-    state.actionsRemaining--;
-
-    const end = checkRoundEnd(state, team);
-    moves.push({
-      turn,
-      team,
-      actionRemainingAfter: state.actionsRemaining,
-      ...applied,
-    });
-
-    if (end) {
-      return {
-        round,
-        firstPlayer,
-        winner: end.winner,
-        reason: end.reason,
-        winLine: end.winLine,
-        totalTurns: turn,
-        totalMoves: moves.length,
-        moves,
-        unitCounterEnd: unitCounter,
-      };
-    }
-
-    if (state.actionsRemaining <= 0) {
-      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-    } else if (!hasValidActions(state.board, reserve, team, state.actedUnitIds)) {
-      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-    }
-  }
-
-  return {
-    round,
-    firstPlayer,
-    firstSlot: firstSlot ?? `${firstPlayer}-0`,
-    winner: null,
-    reason: 'turn_limit',
-    winLine: null,
-    totalTurns: maxTurns,
-    totalMoves: moves.length,
-    moves,
-    unitCounterEnd: unitCounter,
-  };
 }
 
 function summarize(games) {
   const wins = { blue: 0, red: 0 };
   const firstPlayerWins = { blue: 0, red: 0 };
   const reasons = { line: 0, elimination: 0, turn_limit: 0 };
+  const scripts = new Set();
   let totalMoves = 0;
 
   for (const game of games) {
@@ -377,6 +42,7 @@ function summarize(games) {
     if (round.winner === round.firstPlayer) firstPlayerWins[round.firstPlayer]++;
     reasons[round.reason] = (reasons[round.reason] ?? 0) + 1;
     totalMoves += round.totalMoves;
+    scripts.add(`${round.firstPlayer}|${round.moves.map((m) => JSON.stringify(m.detail)).join(';')}`);
   }
 
   return {
@@ -384,38 +50,14 @@ function summarize(games) {
     wins,
     firstPlayerWins,
     roundEndReasons: reasons,
+    uniqueScripts: scripts.size,
     avgMovesPerRound: games.length ? Math.round((totalMoves / games.length) * 10) / 10 : 0,
-  };
-}
-
-function runStandaloneRound(gameId, mode, firstPlayer, unitCounterStart) {
-  const firstSlot = mode.matchFormat === '2v2' ? 'blue-0' : `${firstPlayer}-0`;
-  const result = runRound({
-    mode,
-    round: 1,
-    firstPlayer: mode.matchFormat === '2v2' ? 'blue' : firstPlayer,
-    firstSlot,
-    unitCounterStart,
-  });
-  return {
-    gameId,
-    boardMode: mode.id,
-    boardSize: mode.size,
-    firstPlayer: mode.matchFormat === '2v2' ? 'blue-0' : firstPlayer,
-    winner: result.winner,
-    reason: result.reason,
-    winLine: result.winLine,
-    totalTurns: result.totalTurns,
-    totalMoves: result.totalMoves,
-    moves: result.moves,
-    unitCounterEnd: result.unitCounterEnd,
   };
 }
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const mode = getModeMeta(opts.mode);
-  const size = mode.size;
+  const mode = getBoardMode(opts.mode);
   const outPath = opts.out ?? path.join(
     __dirname,
     '..',
@@ -423,20 +65,47 @@ function main() {
     `${opts.mode}-ai-vs-ai-${opts.games}.json`,
   );
 
-  console.log(`開始模擬：${opts.games} 場單局 · ${opts.mode} · AI vs AI${mode.matchFormat === '2v2' ? ' (2v2)' : ''}`);
+  const label = mode.matchFormat === '2v2' ? ' (2v2)' : '';
+  console.log(`開始模擬：${opts.games} 場單局 · ${opts.mode} · AI vs AI${label} · seed ${opts.seed}`);
   const started = Date.now();
+
+  const rng = createRng(opts.seed);
+  const agent = { choose: chooseAiAction, options: { difficulty: opts.difficulty, rng } };
+  const is2v2 = mode.matchFormat === '2v2';
+  const agents = is2v2
+    ? { 'blue-0': agent, 'blue-1': agent, 'red-0': agent, 'red-1': agent }
+    : { blue: agent, red: agent };
+
   const games = [];
   let unitCounter = 0;
 
   for (let i = 0; i < opts.games; i++) {
-    const firstPlayer = i % 2 === 0 ? 'blue' : 'red';
-    const round = runStandaloneRound(i + 1, mode, firstPlayer, unitCounter);
+    const firstPlayer = is2v2 ? 'blue' : (i % 2 === 0 ? 'blue' : 'red');
+    const round = runMatch({
+      mode,
+      round: 1,
+      firstPlayer,
+      firstSlot: is2v2 ? 'blue-0' : `${firstPlayer}-0`,
+      unitCounterStart: unitCounter,
+      agents,
+    });
     unitCounter = round.unitCounterEnd;
+
     games.push({
-      gameId: round.gameId,
-      boardMode: round.boardMode,
-      boardSize: round.boardSize,
-      rounds: [round],
+      gameId: i + 1,
+      boardMode: mode.id,
+      boardSize: mode.size,
+      rounds: [{
+        round: 1,
+        firstPlayer: is2v2 ? 'blue-0' : firstPlayer,
+        firstSlot: round.firstSlot,
+        winner: round.winner,
+        reason: round.reason,
+        winLine: round.winLine,
+        totalTurns: round.totalTurns,
+        totalMoves: round.totalMoves,
+        moves: round.moves,
+      }],
     });
 
     if ((i + 1) % 10 === 0 || i + 1 === opts.games) {
@@ -445,19 +114,23 @@ function main() {
   }
   process.stdout.write('\n');
 
+  const summary = summarize(games);
   const payload = {
     generatedAt: new Date().toISOString(),
     config: {
       games: opts.games,
       boardMode: opts.mode,
-      boardSize: size,
+      boardSize: mode.size,
       matchFormat: mode.matchFormat,
-      players: mode.matchFormat === '2v2'
+      actionsPerTurn: mode.actionsPerTurn,
+      seed: opts.seed,
+      difficulty: opts.difficulty,
+      players: is2v2
         ? { 'blue-0': 'ai', 'blue-1': 'ai', 'red-0': 'ai', 'red-1': 'ai' }
         : { blue: 'ai', red: 'ai' },
-      firstPlayerAlternation: mode.matchFormat !== '2v2',
+      firstPlayerAlternation: !is2v2,
     },
-    summary: summarize(games),
+    summary,
     games,
   };
 
@@ -467,9 +140,9 @@ function main() {
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`完成：${outPath}`);
   console.log(`耗時 ${elapsed}s`);
-  console.log(`單局勝率 藍 ${payload.summary.wins.blue} : 紅 ${payload.summary.wins.red}`);
-  console.log(`先攻勝率 藍 ${payload.summary.firstPlayerWins.blue} : 紅 ${payload.summary.firstPlayerWins.red}`);
-  console.log(`平均每局 ${payload.summary.avgMovesPerRound} 步`);
+  console.log(`單局勝率 藍 ${summary.wins.blue} : 紅 ${summary.wins.red}`);
+  console.log(`先攻勝率 藍 ${summary.firstPlayerWins.blue} : 紅 ${summary.firstPlayerWins.red}`);
+  console.log(`相異棋局 ${summary.uniqueScripts}/${summary.games} · 平均每局 ${summary.avgMovesPerRound} 步`);
 }
 
 main();

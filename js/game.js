@@ -4,7 +4,11 @@ import {
   BOARD_MODES,
   SLOT_ORDER,
   getBoardMode,
-  getModeRoster,
+  getRosterLimit,
+  getMaxPerClass,
+  canAddToRoster,
+  sortRosterByClass,
+  createRandomRoster,
   createEmptyBoard,
   createTeamReserve,
   parseSlot,
@@ -25,7 +29,7 @@ import { chooseAiAction } from './ai.js';
 export class Game {
   constructor() {
     this.boardMode = '3x3';
-    this.phase = 'roster';
+    this.phase = 'lobby';
     this.currentPlayer = 'blue';
     this.currentSlot = 'blue-0';
     this.humanSlot = 'blue-0';
@@ -34,10 +38,11 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.board = createEmptyBoard(this.getModeConfig().size);
-    this.applyModeRosters();
+    this.blueRoster = [];
+    this.redRoster = [];
     this.blueReserve = [];
     this.redReserve = [];
-    this.message = '請選擇棋盤模式，然後開始對戰';
+    this.message = '請選擇棋盤模式';
     this.lastWinLine = null;
     this.animating = false;
     this.actionsRemaining = this.getActionsPerTurn();
@@ -70,13 +75,11 @@ export class Game {
   }
 
   getRosterLimit() {
-    return this.getModeConfig().roster.length;
+    return getRosterLimit(this.boardMode);
   }
 
-  applyModeRosters() {
-    const roster = getModeRoster(this.boardMode);
-    this.blueRoster = [...roster];
-    this.redRoster = [...roster];
+  getMaxPerClass() {
+    return getMaxPerClass(this.boardMode);
   }
 
   getWinCountLabel() {
@@ -84,20 +87,91 @@ export class Game {
   }
 
   getStartButtonLabel() {
-    return '開始對戰';
+    return '下一步：選擇編隊';
   }
 
   setBoardMode(modeId) {
-    if (this.phase !== 'roster') return;
+    if (this.phase !== 'lobby') return;
     if (!BOARD_MODES[modeId]) return;
     this.boardMode = modeId;
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
-    this.applyModeRosters();
-    const startHint = '按開始對戰';
+    // Roster size and per-class caps differ per mode, so a lineup built for the old mode
+    // can't carry over.
+    this.blueRoster = [];
+    this.redRoster = [];
     const extra = mode.matchFormat === '2v2' ? ' · 2v2 單局' : '';
-    const spec = `每回合 ${mode.actionsPerTurn} 次行動 · 後備 ${mode.roster.length} 人`;
-    this.message = `已選 ${mode.label} 模式${extra}（${spec}） — ${startHint}`;
+    const spec = `每回合 ${mode.actionsPerTurn} 次行動 · 編隊 ${this.getRosterLimit()} 人`;
+    this.message = `已選 ${mode.label} 模式${extra}（${spec}） — 按下一步選擇編隊`;
+    this.notify();
+  }
+
+  isFormationReady() {
+    return this.blueRoster.length === this.getRosterLimit();
+  }
+
+  getFormationMessage() {
+    const limit = this.getRosterLimit();
+    const picked = this.blueRoster.length;
+    if (picked === 0) {
+      return `選擇 ${limit} 名單位組成你的編隊（同職業最多 ${this.getMaxPerClass()} 名）`;
+    }
+    if (picked < limit) {
+      return `已選 ${picked}/${limit} 人 — 還要 ${limit - picked} 名`;
+    }
+    return `編隊完成 ${picked}/${limit} — 按開始對戰，AI 會隨機編隊應戰`;
+  }
+
+  openFormation() {
+    if (this.phase !== 'lobby') return;
+    this.phase = 'formation';
+    this.message = this.getFormationMessage();
+    this.notify();
+  }
+
+  backToLobby() {
+    if (this.phase === 'battle') return;
+    this.phase = 'lobby';
+    this.board = createEmptyBoard(this.getModeConfig().size);
+    this.lastWinLine = null;
+    this.message = '請選擇棋盤模式';
+    this.notify();
+  }
+
+  addToFormation(classId) {
+    if (this.phase !== 'formation') return;
+    if (!canAddToRoster(this.blueRoster, classId, this.boardMode)) {
+      const name = CLASSES[classId]?.name ?? '該職業';
+      this.message = this.isFormationReady()
+        ? `編隊已滿 ${this.blueRoster.length}/${this.getRosterLimit()} 人`
+        : `${name}最多只能帶 ${this.getMaxPerClass()} 名`;
+      this.notify();
+      return;
+    }
+    this.blueRoster = sortRosterByClass([...this.blueRoster, classId]);
+    this.message = this.getFormationMessage();
+    this.notify();
+  }
+
+  removeFromFormation(index) {
+    if (this.phase !== 'formation') return;
+    if (index < 0 || index >= this.blueRoster.length) return;
+    this.blueRoster = this.blueRoster.filter((_, i) => i !== index);
+    this.message = this.getFormationMessage();
+    this.notify();
+  }
+
+  randomizeFormation() {
+    if (this.phase !== 'formation') return;
+    this.blueRoster = createRandomRoster(this.boardMode);
+    this.message = this.getFormationMessage();
+    this.notify();
+  }
+
+  clearFormation() {
+    if (this.phase !== 'formation') return;
+    this.blueRoster = [];
+    this.message = this.getFormationMessage();
     this.notify();
   }
 
@@ -107,7 +181,9 @@ export class Game {
       boardMode: this.boardMode,
       boardSize: mode.size,
       matchFormat: mode.matchFormat,
-      rosterLimit: mode.roster.length,
+      rosterLimit: this.getRosterLimit(),
+      maxPerClass: this.getMaxPerClass(),
+      formationReady: this.isFormationReady(),
       winCount: mode.size,
       turnDurationMs: mode.turnDurationMs,
       turnBonusMs: mode.turnBonusMs,
@@ -219,9 +295,14 @@ export class Game {
     return false;
   }
 
-  confirmBlueRoster() {
-    if (this.phase !== 'roster') return;
-    this.applyModeRosters();
+  startBattle() {
+    if (this.phase !== 'formation') return;
+    if (!this.isFormationReady()) {
+      this.message = this.getFormationMessage();
+      this.notify();
+      return;
+    }
+    this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
   }
 
@@ -605,7 +686,12 @@ export class Game {
         blueReserve: this.blueReserve,
         actedUnitIds: this.actedUnitIds,
       },
-      { team, ownerSeat, actionsPerTurn: mode.actionsPerTurn, roster: mode.roster },
+      {
+        team,
+        ownerSeat,
+        actionsPerTurn: mode.actionsPerTurn,
+        rosters: { blue: this.blueRoster, red: this.redRoster },
+      },
     );
 
     if (!action) {
@@ -654,10 +740,14 @@ export class Game {
   }
 
   restartSeries() {
-    this.phase = 'roster';
-    this.applyModeRosters();
+    // Back to formation rather than the mode picker: the lineup is the interesting
+    // thing to retune between games, and it survives so a rematch is one tap away.
+    this.phase = 'formation';
     this.board = createEmptyBoard(this.getModeConfig().size);
-    this.message = '請選擇棋盤模式，然後按開始對戰';
+    this.lastWinLine = null;
+    this.blueReserve = [];
+    this.redReserve = [];
+    this.message = this.getFormationMessage();
     this.notify();
   }
 }

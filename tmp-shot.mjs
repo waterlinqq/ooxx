@@ -1,4 +1,4 @@
-import puppeteer from '/tmp/ooxx-tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js';
+import puppeteer from '/private/tmp/ooxx-tools/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const URL = 'http://localhost:5178/tmp-spawn.html';
@@ -27,7 +27,7 @@ await page.evaluate(() => {
   window.__deployAll();
 });
 
-const frames = [0, 80, 160, 240, 320, 400, 480, 560, 660, 800];
+const frames = [0, 80, 160, 240, 300, 340, 380, 420, 460, 520, 600, 800];
 for (const t of frames) {
   await page.evaluate((ms) => window.__setT(ms), t);
   await new Promise((r) => setTimeout(r, 120));

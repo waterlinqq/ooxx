@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { CLASSES } from '../units.js';
+import { CLASSES, parseSlot } from '../units.js';
 import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
 
@@ -38,6 +38,7 @@ function createHpLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label';
   wrap.innerHTML = `
+    <div class="unit-3d-badge hidden"></div>
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
     <div class="unit-3d-hp-text"></div>
@@ -120,6 +121,7 @@ export class UnitMeshManager {
     const acted = new Set(state.actedUnitIds);
     const draggingId = state.draggingUnitId;
     const inspectedId = state.inspectedUnitId;
+    const humanSeat = state.matchFormat === '2v2' ? parseSlot(state.humanSlot).seat : null;
 
     for (let r = 0; r < board.length; r++) {
       for (let c = 0; c < board[r].length; c++) {
@@ -138,6 +140,7 @@ export class UnitMeshManager {
           acted: acted.has(unit.id),
           dragging: draggingId === unit.id,
           inspected: inspectedId === unit.id,
+          teammate: humanSeat !== null && unit.team === 'blue' && unit.ownerSeat !== humanSeat,
           yaw: facingYaw(board, r, c, unit),
         });
       }
@@ -286,7 +289,7 @@ export class UnitMeshManager {
     mat.opacity = selected ? Math.min(1, baseOpacity + 0.08) : baseOpacity;
   }
 
-  updateUnitEntry(entry, unit, row, col, { acted, dragging, inspected, yaw }) {
+  updateUnitEntry(entry, unit, row, col, { acted, dragging, inspected, teammate, yaw }) {
     const cls = CLASSES[unit.classId];
     const pos = tileWorldPosition(row, col, this.boardSize);
     TMP_TARGET.set(pos.x, UNIT_BASE_Y, pos.z);
@@ -332,11 +335,16 @@ export class UnitMeshManager {
       statsEl.textContent = '';
     }
 
+    const badgeEl = entry.wrap.querySelector('.unit-3d-badge');
+    badgeEl.textContent = teammate ? '隊友' : '';
+    badgeEl.classList.toggle('hidden', !teammate);
+
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);
     entry.wrap.classList.toggle('selected', dragging);
     entry.wrap.classList.toggle('inspected', inspected);
     entry.wrap.classList.toggle('enemy', unit.team === 'red');
+    entry.wrap.classList.toggle('teammate', !!teammate);
     entry.root.userData.row = row;
     entry.root.userData.col = col;
     entry.acted = acted;
@@ -427,7 +435,7 @@ export class UnitMeshManager {
       entry.spawnScale = 0.3 + 0.7 * eased;
       entry.spawnLift = 0.14 * (1 - eased);
       entry.spawnSpin = (1 - grow) * spawn.spin;
-      entry.ringPop = 1.9 * (1 - p) * (1 - p);
+      entry.ringPop = (1 - p) * (1 - p);
       entry.labelFade = Math.min(1, p / 0.6);
       this.applySpawnFade(entry, Math.min(1, p / 0.45));
       return;
@@ -442,12 +450,12 @@ export class UnitMeshManager {
     if (p > 0.55) {
       const landP = (p - 0.55) / 0.45;
       entry.land = Math.exp(-3.4 * landP) * Math.cos(landP * Math.PI * 2);
-      entry.ringPop = 1.9 * Math.max(0, Math.exp(-4 * landP) * Math.cos(landP * Math.PI * 1.2));
+      entry.ringPop = Math.max(0, Math.exp(-4 * landP) * Math.cos(landP * Math.PI * 1.2));
     }
   }
 
   applySpawnFade(entry, fade) {
-    if (Math.abs(entry.fadeApplied - fade) < 0.01) return;
+    if (entry.fadeApplied === fade) return;
     entry.fadeApplied = fade;
     for (const material of entry.materials) {
       if (material.userData.skipTint) continue;
@@ -530,7 +538,7 @@ export class UnitMeshManager {
           stepBend +
           Math.abs(stance) * 0.45 +
           entry.recoil * 0.35 +
-          Math.max(0, entry.land) * 0.9
+          Math.max(0, entry.land) * 0.7
       );
 
       const joint = legs[side];
@@ -666,8 +674,8 @@ export class UnitMeshManager {
       node.rotation.x =
         rest.group.rot.x + entry.lean + crouch * 0.12 + entry.airborne * 0.16 - entry.recoil * 0.22;
 
-      const flatten = 1 - entry.recoil * 0.06 - entry.land * 0.2 + entry.stretch;
-      const widen = 1 + entry.recoil * 0.04 + entry.land * 0.12 - entry.stretch * 0.5;
+      const flatten = 1 - entry.recoil * 0.06 - entry.land * 0.15 + entry.stretch;
+      const widen = 1 + entry.recoil * 0.04 + entry.land * 0.09 - entry.stretch * 0.5;
       node.scale.set(
         rest.group.scale.x * widen * entry.spawnScale,
         rest.group.scale.y * flatten * entry.spawnScale,
@@ -724,9 +732,11 @@ export class UnitMeshManager {
       if (entry.ring) {
         const baseEmissive = entry.ring.material.userData.baseEmissive ?? 1.1;
         if (entry.ringPop > 0.001) {
-          const pop = 1 + entry.ringPop * 1.6;
+          const pop = 1 + entry.ringPop * 0.55;
           entry.ring.scale.set(pop, pop, 1);
-          entry.ring.material.emissiveIntensity = baseEmissive * (1 + entry.ringPop * 2.4);
+          entry.ring.material.emissiveIntensity = baseEmissive * (1 + entry.ringPop * 1.6);
+          entry.ring.material.opacity =
+            (entry.ring.material.userData.baseOpacity ?? 0.92) * (1 - entry.ringPop * 0.72);
         } else if (entry.dragging) {
           const pulse = 1 + Math.sin(time * 5 + entry.seed) * 0.1;
           entry.ring.scale.setScalar(1.18 * pulse);
@@ -752,7 +762,8 @@ export class UnitMeshManager {
           (1 - Math.min(0.8, height * 0.65));
       }
 
-      if (Math.abs(entry.labelFade - entry.labelFadeApplied) > 0.02) {
+      const fadeSettled = entry.labelFade === 1 && entry.labelFadeApplied !== 1;
+      if (fadeSettled || Math.abs(entry.labelFade - entry.labelFadeApplied) > 0.02) {
         entry.labelFadeApplied = entry.labelFade;
         entry.wrap.style.opacity = entry.labelFade === 1 ? '' : entry.labelFade.toFixed(2);
       }

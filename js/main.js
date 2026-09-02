@@ -14,16 +14,22 @@ const boardCanvasHost = document.getElementById('boardCanvas');
 const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
 const lobbyContentEl = document.getElementById('lobbyContent');
+const formationContentEl = document.getElementById('formationContent');
 const battleContentEl = document.getElementById('battleContent');
+const formationHintEl = document.getElementById('formationHint');
+const formationCountEl = document.getElementById('formationCount');
+const formationLineupEl = document.getElementById('formationLineup');
+const formationPoolEl = document.getElementById('formationPool');
+const formationRandomBtn = document.getElementById('formationRandom');
+const formationClearBtn = document.getElementById('formationClear');
+const formationBackBtn = document.getElementById('formationBack');
+const startBattleBtn = document.getElementById('startBattle');
+const backToLobbyBtn = document.getElementById('backToLobby');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailInfoEl = document.getElementById('classDetailInfo');
 const classPreviewHostEl = document.getElementById('classPreviewHost');
-const reservePanelEl = document.getElementById('reservePanel');
-const teammatePanelEl = document.getElementById('teammatePanel');
-const teammateListEl = document.getElementById('teammateList');
-const enemyPanelEl = document.getElementById('enemyPanel');
 const endPanelEl = document.getElementById('endPanel');
 const endResultEl = document.getElementById('endResult');
 const modeButtonsEl = document.getElementById('modeButtons');
@@ -151,7 +157,9 @@ function syncTurnTimer(state) {
 
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
-let lastPhase = 'roster';
+let lastPhase = 'lobby';
+
+const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
 
 function canControlUnit(state, unit) {
   if (state.phase !== 'battle' || state.animating) return false;
@@ -189,7 +197,7 @@ function switchNav(navId) {
   }
 
   const state = game.getState();
-  if (state.phase !== 'roster') {
+  if (BATTLE_PHASES.has(state.phase)) {
     board3d.setVisible(navId === 'battle');
     if (navId === 'battle') {
       board3d.sync(state);
@@ -251,9 +259,59 @@ function renderClassPicker() {
   renderClassDetail(selectedClassId);
 }
 
+function renderFormation(state) {
+  const limit = state.rosterLimit;
+  const picked = state.blueRoster;
+
+  formationHintEl.textContent = state.message;
+  formationCountEl.textContent = `${picked.length} / ${limit} 人 · 同職業上限 ${state.maxPerClass}`;
+
+  formationLineupEl.classList.toggle('full', picked.length === limit);
+  formationLineupEl.innerHTML = '';
+
+  if (picked.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'roster-lineup-empty';
+    empty.textContent = '尚未選擇任何單位';
+    formationLineupEl.appendChild(empty);
+  } else {
+    picked.forEach((classId, index) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'roster-chip';
+      chip.textContent = CLASSES[classId].icon;
+      chip.title = `移除 ${CLASSES[classId].name}`;
+      chip.addEventListener('click', () => game.removeFromFormation(index));
+      formationLineupEl.appendChild(chip);
+    });
+  }
+
+  formationPoolEl.innerHTML = '';
+  for (const cls of Object.values(CLASSES)) {
+    const used = picked.filter((id) => id === cls.id).length;
+    const soldOut = used >= state.maxPerClass || picked.length >= limit;
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'class-card';
+    card.disabled = soldOut;
+    card.innerHTML = `
+      <span class="class-icon">${cls.icon}</span>
+      <span class="class-name">${cls.name}</span>
+      <span class="class-meta">HP ${cls.hp} · ATK ${cls.atk}</span>
+      <span class="class-count">${used} / ${state.maxPerClass}</span>
+    `;
+    card.addEventListener('click', () => game.addToFormation(cls.id));
+    formationPoolEl.appendChild(card);
+  }
+
+  formationClearBtn.disabled = picked.length === 0;
+  startBattleBtn.disabled = !state.formationReady;
+}
+
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
-  const canPick = state.phase === 'roster';
+  const canPick = state.phase === 'lobby';
 
   for (const mode of Object.values(BOARD_MODES)) {
     const btn = document.createElement('button');
@@ -270,72 +328,19 @@ function renderModePicker(state) {
 }
 
 function renderLobbyFooter(state) {
-  const inRoster = state.phase === 'roster';
-  confirmRosterBtn.classList.toggle('hidden', !inRoster);
-  if (inRoster) {
+  const inLobby = state.phase === 'lobby';
+  confirmRosterBtn.classList.toggle('hidden', !inLobby);
+  if (inLobby) {
     confirmRosterBtn.textContent = state.startButtonLabel;
   }
-}
-
-function filterUnitsBySeat(units, seat) {
-  return units.filter((u) => u.ownerSeat === seat);
-}
-
-function renderUnitList(container, units, { emptyHint = '已空', interactive = false, canPick = false, onSelect = null, selectedId = null }) {
-  container.innerHTML = '';
-
-  if (units.length === 0) {
-    container.innerHTML = `<div class="empty-hint">${emptyHint}</div>`;
-    return;
-  }
-
-  for (const unit of units) {
-    const cls = CLASSES[unit.classId];
-    if (interactive) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'reserve-item';
-      if (selectedId === unit.id) item.classList.add('selected');
-      if (!canPick) item.classList.add('disabled');
-      item.innerHTML = `<span>${cls.icon} ${cls.name}</span>`;
-      item.addEventListener('click', () => {
-        if (canPick && onSelect) onSelect(unit.id);
-      });
-      container.appendChild(item);
-    } else {
-      const item = document.createElement('div');
-      item.className = 'enemy-item';
-      item.innerHTML = `<span class="enemy-item-main">${cls.icon} ${cls.name}</span>`;
-      container.appendChild(item);
-    }
-  }
-}
-
-function renderTeammate(state) {
-  if (state.matchFormat !== '2v2') {
-    teammatePanelEl.classList.add('hidden');
-    return;
-  }
-
-  teammatePanelEl.classList.remove('hidden');
-  const boardUnits = state.board.flat().filter((u) => u?.team === 'blue' && u.ownerSeat === 1);
-  const reserveUnits = filterUnitsBySeat(state.blueReserve, 1);
-  const units = [...boardUnits, ...reserveUnits];
-
-  renderUnitList(teammateListEl, units, {
-    emptyHint: '隊友單位已空',
-    interactive: false,
-  });
 }
 
 function renderBattlePanels(state) {
   const showEnd = state.phase === 'gameEnd';
 
-  reservePanelEl.classList.add('hidden');
-  enemyPanelEl.classList.add('hidden');
   endPanelEl.classList.toggle('hidden', !showEnd);
-
-  restartBtn.classList.toggle('hidden', state.phase !== 'gameEnd');
+  restartBtn.classList.toggle('hidden', !showEnd);
+  backToLobbyBtn.classList.toggle('hidden', !showEnd);
 
   if (showEnd) {
     endResultEl.textContent = state.message;
@@ -348,8 +353,10 @@ function render(state) {
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
 
-  const inBattleFlow = state.phase !== 'roster';
-  lobbyContentEl.classList.toggle('hidden', inBattleFlow);
+  const inFormation = state.phase === 'formation';
+  const inBattleFlow = BATTLE_PHASES.has(state.phase);
+  lobbyContentEl.classList.toggle('hidden', state.phase !== 'lobby');
+  formationContentEl.classList.toggle('hidden', !inFormation);
   battleContentEl.classList.toggle('hidden', !inBattleFlow);
 
   if (state.phase !== lastPhase && inBattleFlow) {
@@ -359,6 +366,7 @@ function render(state) {
 
   renderBattlePanels(state);
   renderLobbyFooter(state);
+  if (inFormation) renderFormation(state);
 
   const showBoard = inBattleFlow && activeNav === 'battle';
   board3d.setVisible(showBoard);
@@ -371,7 +379,6 @@ function render(state) {
 
   renderModePicker(state);
   renderClassPicker();
-  renderTeammate(state);
 
   const showCharacterPreview = activeNav === 'characters';
   characterPreview.setVisible(showCharacterPreview);
@@ -387,8 +394,13 @@ bottomNavEl.addEventListener('click', (e) => {
   render(game.getState());
 });
 
-confirmRosterBtn.addEventListener('click', () => game.confirmBlueRoster());
+confirmRosterBtn.addEventListener('click', () => game.openFormation());
+formationRandomBtn.addEventListener('click', () => game.randomizeFormation());
+formationClearBtn.addEventListener('click', () => game.clearFormation());
+formationBackBtn.addEventListener('click', () => game.backToLobby());
+startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => game.restartSeries());
+backToLobbyBtn.addEventListener('click', () => game.backToLobby());
 
 game.subscribe(render);
 render(game.getState());

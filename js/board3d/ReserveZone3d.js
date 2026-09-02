@@ -34,7 +34,7 @@ function getScreenGroundAxes() {
 
 function reserveBandDistance(boardSize) {
   const boardHalf = ((boardSize - 1) * TILE_PITCH) / 2;
-  const gap = TILE_PITCH * 1.45;
+  const gap = TILE_PITCH * 1.2;
   return boardHalf + gap + TILE_SIZE * 0.45;
 }
 
@@ -47,9 +47,8 @@ function reserveGridSlot(index, total) {
   return { row: 1, col: index - frontRowCount, colsInRow: backRowCount };
 }
 
-function reservePosition(index, total, boardSize, side) {
+function reservePosition({ row, col, colsInRow }, boardSize, side) {
   const { right, down } = getScreenGroundAxes();
-  const { row, col, colsInRow } = reserveGridSlot(index, total);
   const bandDist = reserveBandDistance(boardSize) + row * ROW_STEP;
   TMP_BASE.copy(down).multiplyScalar(side === 'blue' ? -bandDist : bandDist);
 
@@ -69,7 +68,9 @@ function reservePosition(index, total, boardSize, side) {
 export function reserveExtentPoints(boardSize, maxReserveUnits = DEFAULT_MAX_RESERVE_UNITS) {
   const { right, down } = getScreenGroundAxes();
   const frontRowCount = Math.ceil(maxReserveUnits / 2);
-  const lateral = ((frontRowCount - 1) / 2) * ROW_SPACING + TILE_SIZE * 0.6;
+  // The extra margin covers the model's base ring and its floating name label, which both
+  // reach past the slot centre and would otherwise be clipped on narrow viewports.
+  const lateral = ((frontRowCount - 1) / 2) * ROW_SPACING + TILE_SIZE * 0.95;
   const depth = reserveBandDistance(boardSize) + ROW_STEP + TILE_SIZE * 0.6;
 
   const points = [];
@@ -99,11 +100,11 @@ function createReserveLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label reserve-label';
   wrap.innerHTML = `
+    <div class="unit-3d-badge">後備</div>
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
     <div class="unit-3d-hp-text"></div>
     <div class="unit-3d-stats hidden"></div>
-    <div class="unit-3d-badge">後備</div>
   `;
   return { label: new CSS2DObject(wrap), wrap };
 }
@@ -126,17 +127,51 @@ export class ReserveZone3d {
     const seen = new Set();
     const entries = [];
 
-    const humanSeat = state.matchFormat === '2v2' ? parseSlot(state.humanSlot).seat : null;
-    const blueUnits = state.matchFormat === '2v2'
-      ? state.blueReserve.filter((u) => u.ownerSeat === humanSeat)
-      : state.blueReserve;
+    if (state.matchFormat === '2v2') {
+      // A row per seat, so the player reads their own bench apart from the AI teammate's.
+      const humanSeat = parseSlot(state.humanSlot).seat;
+      const ownUnits = state.blueReserve.filter((u) => u.ownerSeat === humanSeat);
+      const mateUnits = state.blueReserve.filter((u) => u.ownerSeat !== humanSeat);
 
-    blueUnits.forEach((unit, i) => {
-      entries.push({ unit, side: 'blue', index: i, total: blueUnits.length, selectable: state.isHumanTurn });
-    });
+      ownUnits.forEach((unit, i) => {
+        entries.push({
+          unit,
+          side: 'blue',
+          role: 'own',
+          slot: { row: 0, col: i, colsInRow: ownUnits.length },
+          selectable: state.isHumanTurn,
+        });
+      });
+
+      mateUnits.forEach((unit, i) => {
+        entries.push({
+          unit,
+          side: 'blue',
+          role: 'teammate',
+          slot: { row: 1, col: i, colsInRow: mateUnits.length },
+          selectable: false,
+        });
+      });
+    } else {
+      state.blueReserve.forEach((unit, i) => {
+        entries.push({
+          unit,
+          side: 'blue',
+          role: 'own',
+          slot: reserveGridSlot(i, state.blueReserve.length),
+          selectable: state.isHumanTurn,
+        });
+      });
+    }
 
     state.redReserve.forEach((unit, i) => {
-      entries.push({ unit, side: 'red', index: i, total: state.redReserve.length, selectable: false });
+      entries.push({
+        unit,
+        side: 'red',
+        role: 'enemy',
+        slot: reserveGridSlot(i, state.redReserve.length),
+        selectable: false,
+      });
     });
 
     for (const entry of entries) {
@@ -153,7 +188,7 @@ export class ReserveZone3d {
     }
   }
 
-  upsertUnit({ unit, side, index, total, selectable }, state) {
+  upsertUnit({ unit, side, role, slot, selectable }, state) {
     let entry = this.units.get(unit.id);
     if (!entry) {
       entry = this.createEntry(unit, side);
@@ -161,7 +196,7 @@ export class ReserveZone3d {
       this.group.add(entry.root);
     }
 
-    const pos = reservePosition(index, total, this.boardSize, side);
+    const pos = reservePosition(slot, this.boardSize, side);
     entry.root.position.set(pos.x, pos.y, pos.z);
     entry.root.rotation.set(0, 0, 0);
     entry.body.rotation.y = reserveYaw(side);
@@ -175,6 +210,7 @@ export class ReserveZone3d {
     entry.wrap.querySelector('.unit-3d-name').textContent = cls.name;
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
     entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
+    entry.wrap.querySelector('.unit-3d-badge').textContent = role === 'teammate' ? '隊友' : '後備';
 
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
     if (inspected) {
@@ -188,6 +224,7 @@ export class ReserveZone3d {
     entry.wrap.classList.toggle('selected', selected);
     entry.wrap.classList.toggle('inspected', inspected);
     entry.wrap.classList.toggle('enemy', side === 'red');
+    entry.wrap.classList.toggle('teammate', role === 'teammate');
     entry.wrap.classList.toggle('disabled', side === 'blue' && !selectable);
 
     entry.root.userData = {

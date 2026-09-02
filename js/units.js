@@ -75,6 +75,9 @@ export const TEAM = {
 //   claiming it (deploy/move) can never happen before the defender refills it.
 // 3x3 opts out of the second one by keeping the roster small enough that the board
 // never locks up, which is what makes 1 action per turn playable there.
+//
+// `roster` is the preset lineup used by simulations and as the fallback when no team
+// has been picked; live matches build their own from rosterSize / maxPerClass.
 export const BOARD_MODES = {
   '3x3': {
     id: '3x3',
@@ -88,6 +91,8 @@ export const BOARD_MODES = {
     // is what keeps a single action per turn viable. AI self-play shows the cliff either
     // side of it: at five a side every game ends by attrition instead of a line, and
     // swapping the mage for the bomber deadlocks the board outright.
+    rosterSize: 4,
+    maxPerClass: 2,
     roster: ['swordsman', 'archer', 'shield', 'mage'],
   },
   '4x4': {
@@ -98,6 +103,8 @@ export const BOARD_MODES = {
     actionsPerTurn: 2,
     turnDurationMs: 15000,
     turnBonusMs: 5000,
+    rosterSize: 10,
+    maxPerClass: 4,
     roster: [
       'swordsman', 'swordsman', 'archer', 'archer', 'shield',
       'shield', 'mage', 'assassin', 'assassin', 'bomber',
@@ -111,6 +118,8 @@ export const BOARD_MODES = {
     actionsPerTurn: 2,
     turnDurationMs: 18000,
     turnBonusMs: 5000,
+    rosterSize: 14,
+    maxPerClass: 5,
     // Longest distance is 4, so range-3 units no longer reach everywhere and mobility
     // matters most — hence the extra assassins. Ordered so the alternating 2v2 seat
     // split in createTeamReserve hands each player a comparable mix.
@@ -122,18 +131,61 @@ export const BOARD_MODES = {
   },
 };
 
+export const CLASS_IDS = Object.keys(CLASSES);
+
 export const SLOT_ORDER = ['blue-0', 'red-0', 'blue-1', 'red-1'];
 
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
 }
 
-export function getModeRoster(modeId) {
-  return getBoardMode(modeId).roster;
+export function getRosterLimit(modeId) {
+  const mode = getBoardMode(modeId);
+  return mode.rosterSize ?? mode.roster.length;
 }
 
-export function getRosterLimit(modeId) {
-  return getBoardMode(modeId).roster.length;
+export function getMaxPerClass(modeId) {
+  const mode = getBoardMode(modeId);
+  return mode.maxPerClass ?? getRosterLimit(modeId);
+}
+
+// Grouping duplicates together matters: createTeamReserve splits a 2v2 roster by
+// alternating index, so adjacent duplicates land one per seat instead of piling every
+// copy of a class onto the same player.
+export function sortRosterByClass(roster) {
+  return [...roster].sort((a, b) => CLASS_IDS.indexOf(a) - CLASS_IDS.indexOf(b));
+}
+
+export function countRosterClasses(roster) {
+  const counts = {};
+  for (const classId of roster) {
+    counts[classId] = (counts[classId] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export function canAddToRoster(roster, classId, modeId) {
+  if (!CLASSES[classId]) return false;
+  if (roster.length >= getRosterLimit(modeId)) return false;
+  const used = roster.filter((id) => id === classId).length;
+  return used < getMaxPerClass(modeId);
+}
+
+export function createRandomRoster(modeId, rng = Math.random) {
+  const limit = getRosterLimit(modeId);
+  const maxPerClass = getMaxPerClass(modeId);
+  const counts = {};
+  const roster = [];
+
+  while (roster.length < limit) {
+    const pool = CLASS_IDS.filter((id) => (counts[id] ?? 0) < maxPerClass);
+    if (pool.length === 0) break;
+    const classId = pool[Math.floor(rng() * pool.length)];
+    counts[classId] = (counts[classId] ?? 0) + 1;
+    roster.push(classId);
+  }
+
+  return sortRosterByClass(roster);
 }
 
 export function createUnit(classId, teamId, ownerSeat = null) {

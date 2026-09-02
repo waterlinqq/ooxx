@@ -26,7 +26,40 @@
             <p class="screen-desc">挑戰 AI 紅隊，連成整行或全滅對手即可獲勝</p>
           </div>
           <div class="mode-buttons" id="modeButtons"></div>
-          <button class="btn primary btn-lg" id="confirmRoster" type="button">開始對戰</button>
+          <button class="btn primary btn-lg" id="confirmRoster" type="button">下一步：選擇編隊</button>
+        </div>
+
+        <div class="screen-scroll hidden" id="formationContent">
+          <div class="screen-hero compact">
+            <div class="screen-hero-icon">🛡️</div>
+            <h2 class="screen-title">選擇你的編隊</h2>
+            <p class="screen-desc" id="formationHint"></p>
+          </div>
+
+          <div>
+            <div class="section-title">
+              我的編隊
+              <span class="section-hint" id="formationCount"></span>
+            </div>
+            <div class="roster-lineup" id="formationLineup"></div>
+          </div>
+
+          <div>
+            <div class="section-title">
+              可選職業
+              <span class="section-hint">點卡片加入 · 點編隊中的單位移除</span>
+            </div>
+            <div class="class-grid" id="formationPool"></div>
+          </div>
+
+          <div class="formation-tools">
+            <button class="btn" id="formationRandom" type="button">🎲 隨機編隊</button>
+            <button class="btn" id="formationClear" type="button">清空</button>
+          </div>
+          <div class="formation-footer">
+            <button class="btn" id="formationBack" type="button">返回模式</button>
+            <button class="btn primary" id="startBattle" type="button">開始對戰</button>
+          </div>
         </div>
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
@@ -48,21 +81,7 @@
             <div class="panel end-panel hidden" id="endPanel">
               <div class="end-result" id="endResult"></div>
               <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
-            </div>
-
-            <div class="panel battle-panel hidden" id="reservePanel">
-              <h2 id="reservePanelTitle">藍隊後備</h2>
-              <div class="reserve-list" id="reserveList"></div>
-            </div>
-
-            <div class="panel battle-panel hidden" id="teammatePanel">
-              <h2>藍2 隊友（AI）</h2>
-              <div class="reserve-list" id="teammateList"></div>
-            </div>
-
-            <div class="panel battle-panel hidden" id="enemyPanel">
-              <h2>敵方單位</h2>
-              <div class="enemy-list" id="enemyList"></div>
+              <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
             </div>
           </div>
         </div>
