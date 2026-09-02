@@ -41,7 +41,9 @@ const DIFFICULTY = {
   hard: { maxDepth: 10, timeFactor: 1, noise: 0 },
 };
 
-const TIME_BUDGET_MS = { 3: 150, 4: 450, 5: 750 };
+// Per-decision budget by board size, in ms. The search runs synchronously on the main
+// thread, so these double as the ceiling on how long the UI can stall for one AI action.
+const TIME_BUDGET_MS = { 3: 120, 4: 400, 5: 600 };
 
 class SearchAbort extends Error {}
 
@@ -158,7 +160,9 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   }
 
   score += weights[cell] * 4;
-  if (isLethalAt(hostile, cell, unit.hp)) score -= 300 + materialValue(unit);
+  if (isLethalAt(hostile, cell, unit.hp, unit.isFlying)) {
+    score -= 300 + materialValue(unit);
+  }
 
   return score;
 }

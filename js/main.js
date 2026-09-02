@@ -212,6 +212,7 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
+  if (cls.isFlying) return '浮空 · 只能被弓箭手與魔法師攻擊';
   if (cls.deathExplosion) return `近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
   if (cls.type === 'mage') return '八方向光束穿透攻擊';

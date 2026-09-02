@@ -7,7 +7,12 @@
 // js/rules.js reads. Win lines and the cells that feed them are memoized per board size
 // and the per-line occupancy counters are maintained incrementally.
 import { CLASSES, CLASS_IDS, SLOT_ORDER, parseSlot } from '../units.js';
-import { getWinLines, getAdjacentCells8, getEnemiesOnLine } from '../rules.js';
+import {
+  getWinLines,
+  getAdjacentCells8,
+  getEnemiesOnLine,
+  canAttackTarget,
+} from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
 const MAX_HP = Math.max(...CLASS_IDS.map((id) => CLASSES[id].hp));
@@ -105,6 +110,7 @@ function cloneUnit(unit, searchIndex) {
     jumpMove: unit.jumpMove ?? false,
     jumpRange: unit.jumpRange ?? null,
     deathExplosion: unit.deathExplosion ?? 0,
+    isFlying: unit.isFlying ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -333,7 +339,7 @@ function resolveExplosions(ctx, directKills, records, casualties) {
     const col = bomber.deadCol;
     for (const [r, c] of getAdjacentCells8(row, col, ctx.size)) {
       const victim = ctx.board[r][c];
-      if (!victim || victim.team === bomber.team) continue;
+      if (!victim || victim.team === bomber.team || victim.isFlying) continue;
       const record = { unit: victim, prevHp: victim.hp, row: r, col: c, died: false };
       record.died = damage(ctx, victim, bomber.deathExplosion);
       records.push(record);
@@ -378,7 +384,7 @@ export function makeAction(ctx, action) {
     const target = ctx.unitsById.get(action.targetId);
     const hits = actor.type === 'mage'
       ? getEnemiesOnLine(ctx.board, actor, target.row, target.col)
-      : [target];
+      : canAttackTarget(actor, target) ? [target] : [];
 
     const directKills = [];
     for (const hit of hits) {

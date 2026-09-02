@@ -20,6 +20,7 @@ const CLASS_BONUS = {
   mage: 10,
   assassin: 6,
   bomber: 6,
+  eagle: 8,
 };
 
 // A reserve unit is real material but contributes nothing to lines until it lands.
@@ -137,10 +138,10 @@ function scoreLines(ctx, team, myThreat, theirThreat) {
         lastEmptyCell = cell;
       } else if (unit.team === team) {
         mine++;
-        theirClearCost += clearCost(unit.hp, damageAt(theirThreat, cell));
+        theirClearCost += clearCost(unit.hp, damageAt(theirThreat, cell, unit.isFlying));
       } else {
         theirs++;
-        myClearCost += clearCost(unit.hp, damageAt(myThreat, cell));
+        myClearCost += clearCost(unit.hp, damageAt(myThreat, cell, unit.isFlying));
       }
     }
 
@@ -193,12 +194,12 @@ function scoreUnits(ctx, team, myThreat, theirThreat) {
       let contribution = value + weight[cell] * POSITION_WEIGHT;
 
       const hostile = own ? theirThreat : myThreat;
-      if (isLethalAt(hostile, cell, unit.hp)) {
+      if (isLethalAt(hostile, cell, unit.hp, unit.isFlying)) {
         // Its own side moving next can retreat, block, or trade first.
         const discount = ctx.turn === unit.team ? OWN_TURN_DISCOUNT : 1;
         contribution -= value * LETHAL_FRACTION * discount;
-      } else if (coverageAt(hostile, cell) > 0) {
-        contribution -= damageAt(hostile, cell) * CHIP_WEIGHT;
+      } else if (coverageAt(hostile, cell, unit.isFlying) > 0) {
+        contribution -= damageAt(hostile, cell, unit.isFlying) * CHIP_WEIGHT;
       }
 
       score += sign * contribution;

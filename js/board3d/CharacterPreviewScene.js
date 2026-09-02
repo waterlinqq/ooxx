@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { buildUnitModel } from './UnitModels.js';
 
 const UNIT_BASE_Y = 0.072;
+const EAGLE_FLIGHT_HEIGHT = 0.34;
 
 function captureRest(node) {
   if (!node) return null;
@@ -148,7 +149,8 @@ export class CharacterPreviewScene {
     const model = buildUnitModel(classId, 'blue');
     if (model.ring) model.ring.visible = false;
 
-    model.root.position.set(0, UNIT_BASE_Y, 0);
+    const flightHeight = classId === 'eagle' ? EAGLE_FLIGHT_HEIGHT : 0;
+    model.root.position.set(0, UNIT_BASE_Y + flightHeight, 0);
     this.scene.add(model.root);
 
     const rig = model.rig;
@@ -170,10 +172,13 @@ export class CharacterPreviewScene {
         robe: captureRest(rig.robe),
         orb: captureRest(rig.orb),
         bomb: captureRest(rig.bomb),
+        wingL: captureRest(rig.wingL),
+        wingR: captureRest(rig.wingR),
       },
       seed: Math.random() * Math.PI * 2,
       materials: model.materials,
       shadow: model.shadow,
+      flightHeight,
     };
   }
 
@@ -250,6 +255,12 @@ export class CharacterPreviewScene {
           rest.bomb.node.rotation.y = rest.bomb.rot.y + Math.sin(t * 1.2) * 0.18;
         }
         break;
+      case 'eagle': {
+        const flap = Math.sin(t * 4.5) * 0.38;
+        if (rest.wingL) rest.wingL.node.rotation.z = rest.wingL.rot.z + flap;
+        if (rest.wingR) rest.wingR.node.rotation.z = rest.wingR.rot.z - flap;
+        break;
+      }
       default:
         break;
     }
@@ -275,11 +286,12 @@ export class CharacterPreviewScene {
     this.posePreview(this.preview, time);
 
     const hover = Math.sin(time * 2 + this.preview.seed) * 0.008;
-    this.preview.root.position.y = UNIT_BASE_Y + hover;
+    this.preview.root.position.y = UNIT_BASE_Y + this.preview.flightHeight + hover;
 
     if (this.preview.shadow) {
-      this.preview.shadow.position.y = 0.006 - hover;
-      const tighten = Math.max(0.15, 1 - hover * 8);
+      const rise = this.preview.flightHeight + hover;
+      this.preview.shadow.position.y = 0.006 - rise;
+      const tighten = Math.max(0.15, 1 - rise * 0.8);
       this.preview.shadow.scale.set(tighten, tighten, 1);
     }
 

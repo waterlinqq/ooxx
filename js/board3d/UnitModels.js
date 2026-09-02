@@ -776,6 +776,81 @@ function buildBomber(mats) {
   };
 }
 
+function buildEagle(mats) {
+  const group = new THREE.Group();
+
+  const torso = part(
+    group,
+    cached('eagle-body', () => new THREE.SphereGeometry(0.2, 18, 14)),
+    mats.armorDeep,
+    { pos: [0, 0.38, 0], scale: [0.82, 1.05, 1.45], rot: [0.16, 0, 0] }
+  );
+
+  const chest = part(
+    group,
+    cached('eagle-chest', () => new THREE.SphereGeometry(0.14, 16, 12)),
+    mats.armor,
+    { pos: [0, 0.4, 0.16], scale: [0.82, 1.2, 0.65] }
+  );
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.58, 0.24);
+  part(head, cached('eagle-head', () => new THREE.SphereGeometry(0.12, 16, 12)), mats.steel, {
+    scale: [0.9, 1, 1.08],
+  });
+  part(head, cached('eagle-brow', () => new THREE.BoxGeometry(0.15, 0.025, 0.035)), mats.steel, {
+    pos: [0, 0.025, 0.105],
+  });
+  part(head, cached('eagle-beak', () => new THREE.ConeGeometry(0.055, 0.17, 8)), mats.gold, {
+    pos: [0, -0.015, 0.16],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  const eyes = addEyes(head, mats, { z: 0.105, y: 0.012, spread: 0.05, size: 0.015 });
+  group.add(head);
+
+  const wingGeo = cached('eagle-wing-feather', () => new THREE.CapsuleGeometry(0.045, 0.34, 5, 10));
+  const wings = {};
+  for (const side of [-1, 1]) {
+    const wing = new THREE.Group();
+    wing.position.set(side * 0.12, 0.46, 0);
+    for (let i = 0; i < 4; i++) {
+      part(wing, wingGeo, i === 0 ? mats.armor : mats.armorDeep, {
+        pos: [side * (0.15 + i * 0.055), -i * 0.025, -0.035 - i * 0.025],
+        rot: [0.08 + i * 0.04, 0, side * (Math.PI / 2 - 0.16 - i * 0.05)],
+        scale: [1 - i * 0.08, 1, 0.72],
+      });
+    }
+    group.add(wing);
+    wings[side < 0 ? 'left' : 'right'] = wing;
+  }
+
+  const tailGeo = cached('eagle-tail-feather', () => new THREE.CapsuleGeometry(0.035, 0.22, 5, 8));
+  for (const side of [-1, 0, 1]) {
+    part(group, tailGeo, mats.steel, {
+      pos: [side * 0.055, 0.33, -0.25],
+      rot: [Math.PI / 2.8, 0, side * 0.16],
+      scale: [1, 1, 0.7],
+    });
+  }
+
+  for (const side of [-1, 1]) {
+    part(group, cached('eagle-talon', () => new THREE.TorusGeometry(0.045, 0.012, 6, 12, Math.PI)), mats.gold, {
+      pos: [side * 0.075, 0.18, 0.08],
+      rot: [Math.PI / 2, 0, side * 0.25],
+    });
+  }
+
+  return {
+    group,
+    torso,
+    chest,
+    head,
+    wingL: wings.left,
+    wingR: wings.right,
+    eyes,
+  };
+}
+
 function buildFallback(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);
@@ -795,6 +870,7 @@ const BUILDERS = {
   mage: buildMage,
   assassin: buildAssassin,
   bomber: buildBomber,
+  eagle: buildEagle,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -807,6 +883,7 @@ const SILHOUETTE = {
   mage: [0.96, 1.02, 0.96],
   assassin: [0.92, 1.03, 0.92],
   bomber: [1.06, 0.9, 1.06],
+  eagle: [0.92, 0.92, 0.92],
 };
 
 export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {

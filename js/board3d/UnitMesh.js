@@ -11,8 +11,8 @@ const WALK_SPEED = 2.4;
 const STRIDE = 0.3;
 const LEAP_DISTANCE = 1.6;
 
-// Mages and assassins materialise on the spot; everyone else drops in.
-const SPAWN_STYLE = { mage: 'warp', assassin: 'warp' };
+// Magical and flying units materialise on the spot; everyone else drops in.
+const SPAWN_STYLE = { mage: 'warp', assassin: 'warp', eagle: 'warp' };
 const SPAWN_SPIN = { assassin: Math.PI * 2 };
 
 function easeOutBack(x) {
@@ -28,6 +28,7 @@ const CROUCH_DEPTH = {
   mage: 0.5,
   assassin: 1.2,
   bomber: 0.9,
+  eagle: 0,
 };
 
 const TMP_DIR = new THREE.Vector3();
@@ -188,6 +189,8 @@ export class UnitMeshManager {
       orb: captureRest(rig.orb),
       spark: captureRest(rig.spark),
       bomb: captureRest(rig.bomb),
+      wingL: captureRest(rig.wingL),
+      wingR: captureRest(rig.wingR),
     };
 
     return {
@@ -204,6 +207,7 @@ export class UnitMeshManager {
       displayPos: new THREE.Vector3(),
       classId: unit.classId,
       crouchDepth: CROUCH_DEPTH[unit.classId] ?? 1,
+      flightHeight: unit.isFlying ? 0.34 : 0,
       team: unit.team,
       seed: Math.random() * Math.PI * 2,
       jitter: Math.random(),
@@ -665,6 +669,22 @@ export class UnitMeshManager {
         }
         break;
       }
+      case 'eagle': {
+        const flight = 0.38 + entry.walk * 0.32 + entry.swing * 0.18;
+        const flap = Math.sin(t * (entry.walk > 0.2 ? 10 : 4.5)) * flight;
+        if (rest.wingL) {
+          rest.wingL.node.rotation.z = rest.wingL.rot.z + flap;
+          rest.wingL.node.rotation.x = rest.wingL.rot.x - entry.swing * 0.16;
+        }
+        if (rest.wingR) {
+          rest.wingR.node.rotation.z = rest.wingR.rot.z - flap;
+          rest.wingR.node.rotation.x = rest.wingR.rot.x - entry.swing * 0.16;
+        }
+        if (rest.head) {
+          rest.head.node.rotation.x -= entry.lean * 0.45;
+        }
+        break;
+      }
       default:
         break;
     }
@@ -725,14 +745,17 @@ export class UnitMeshManager {
 
       entry.root.position.copy(entry.displayPos).add(entry.fxOffset);
 
-      const hover = Math.sin(time * 2 + entry.seed) * 0.01 * (1 - entry.walk);
+      const hoverAmount = entry.flightHeight > 0 ? 0.035 : 0.01;
+      const hover = Math.sin(time * 2 + entry.seed) * hoverAmount * (1 - entry.walk);
       const selectLift = entry.dragging
         ? 0.045 + Math.sin(time * 5 + entry.seed) * 0.012
         : 0;
-      const rise = entry.fxOffset.y + entry.lift + entry.spawnLift + hover + selectLift;
+      const rise =
+        entry.flightHeight + entry.fxOffset.y + entry.lift + entry.spawnLift + hover + selectLift;
       entry.root.position.y = entry.displayPos.y + rise;
 
       if (entry.ring) {
+        entry.ring.position.y = 0.012 - rise;
         const baseEmissive = entry.ring.material.userData.baseEmissive ?? 1.1;
         if (entry.ringPop > 0.001) {
           const pop = 1 + entry.ringPop * 0.55;

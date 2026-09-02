@@ -64,6 +64,18 @@ export const CLASSES = {
     deathExplosion: 2,
     desc: '近戰，被擊殺時自爆反擊相鄰敵人',
   },
+  eagle: {
+    id: 'eagle',
+    name: '老鷹',
+    icon: '🦅',
+    hp: 1,
+    atk: 1,
+    range: 1,
+    moveRange: 1,
+    type: 'melee',
+    isFlying: true,
+    desc: '浮空近戰，只會受到弓箭與魔法攻擊',
+  },
 };
 
 export const TEAM = {
@@ -223,6 +235,7 @@ export function createUnit(classId, teamId, ownerSeat = null) {
     jumpMove: cls.jumpMove ?? false,
     jumpRange: cls.jumpRange ?? null,
     deathExplosion: cls.deathExplosion ?? 0,
+    isFlying: cls.isFlying ?? false,
     type: cls.type,
     row: -1,
     col: -1,

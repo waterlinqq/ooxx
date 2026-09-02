@@ -57,6 +57,12 @@ export function getUnitAt(board, row, col) {
   return board[row][col];
 }
 
+export function canAttackTarget(attacker, target) {
+  if (!attacker || !target || attacker.team === target.team) return false;
+  if (!target.isFlying) return true;
+  return attacker.type === 'ranged' || attacker.type === 'mage';
+}
+
 export function getAdjacentCells(row, col, size = 3) {
   return [
     [row - 1, col],
@@ -146,7 +152,7 @@ export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
 
   while (isInBounds(r, c, size)) {
     const cell = board[r][c];
-    if (cell && cell.team !== unit.team) enemies.push(cell);
+    if (cell && canAttackTarget(unit, cell)) enemies.push(cell);
     r += dr;
     c += dc;
   }
@@ -163,7 +169,7 @@ export function getValidAttackTargets(board, unit) {
   if (unit.type === 'melee') {
     for (const [r, c] of getAdjacentCells(unit.row, unit.col, size)) {
       const target = board[r][c];
-      if (target && target.team !== unit.team) targets.push(target);
+      if (target && canAttackTarget(unit, target)) targets.push(target);
     }
     return targets;
   }
@@ -177,7 +183,7 @@ export function getValidAttackTargets(board, unit) {
       while (isInBounds(r, c, size) && steps < unit.range) {
         const cell = board[r][c];
         if (cell) {
-          if (cell.team !== unit.team && !seen.has(cell.id)) {
+          if (canAttackTarget(unit, cell) && !seen.has(cell.id)) {
             seen.add(cell.id);
             targets.push(cell);
           }
@@ -269,7 +275,7 @@ export function resolveDeathExplosions(board, killedUnits) {
 
     for (const [r, c] of getAdjacentCells8(bomber.row, bomber.col, size)) {
       const cell = next[r][c];
-      if (!cell || cell.team === bomber.team) continue;
+      if (!cell || cell.team === bomber.team || cell.isFlying) continue;
 
       cell.hp -= damage;
       explosionHits.push(cell);
@@ -297,7 +303,7 @@ export function applyAttack(board, attacker, target) {
   const next = cloneBoard(board);
   const hits = attacker.type === 'mage'
     ? getEnemiesOnLine(board, attacker, target.row, target.col)
-    : [target];
+    : canAttackTarget(attacker, target) ? [target] : [];
 
   const killed = [];
   for (const hit of hits) {

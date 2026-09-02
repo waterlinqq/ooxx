@@ -15,6 +15,7 @@ function applySeatClass(wrap, unit, matchFormat) {
 
 const UNIT_BASE_Y = 0.072;
 const RESERVE_SCALE = 0.82;
+const FLYING_HEIGHT = 0.34;
 
 const DEFAULT_MAX_RESERVE_UNITS = 8;
 const ROW_SPACING = TILE_PITCH * 0.92;
@@ -209,6 +210,8 @@ export class ReserveZone3d {
     entry.root.position.set(pos.x, pos.y, pos.z);
     entry.root.rotation.set(0, 0, 0);
     entry.body.rotation.y = reserveYaw(side);
+    entry.body.position.y = unit.isFlying ? FLYING_HEIGHT : 0;
+    entry.label.position.y = entry.labelBaseY + (unit.isFlying ? FLYING_HEIGHT : 0);
     entry.root.scale.setScalar(RESERVE_SCALE);
 
     const selected = state.selectedReserveId === unit.id;
@@ -260,7 +263,14 @@ export class ReserveZone3d {
       }
     }
 
-    return { root, body: model.body, wrap, label, materials: model.materials };
+    return {
+      root,
+      body: model.body,
+      wrap,
+      label,
+      labelBaseY: model.height * RESERVE_SCALE + 0.18,
+      materials: model.materials,
+    };
   }
 
   getPickTargets() {
