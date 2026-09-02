@@ -5,7 +5,7 @@ import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
 
 const UNIT_BASE_Y = 0.072;
-const DEFAULT_YAW = Math.PI / 4;
+const DEFAULT_YAW = 0;
 const FADED = new THREE.Color(0x64748b);
 
 const WALK_SPEED = 2.4;

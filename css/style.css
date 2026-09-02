@@ -45,8 +45,8 @@ body {
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  max-width: 520px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 4px 0 0;
   overflow: hidden;
   gap: 4px;
@@ -209,12 +209,36 @@ body {
   padding: 4px 2px 2px;
 }
 
-.battle-layout .score-bar {
+.battle-layout .turn-timer {
   margin-bottom: 4px;
-  gap: 6px;
 }
 
-.battle-layout .board-area {
+.turn-timer {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.turn-timer-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.turn-timer-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  transition: width 0.05s linear, background 0.2s ease;
+}
+
+.turn-timer.turn-timer-low .turn-timer-fill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.board-area {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -296,10 +320,6 @@ body {
 }
 
 @media (min-width: 640px) {
-  .app {
-    max-width: 780px;
-  }
-
   .battle-layout {
     display: grid;
     grid-template-columns: 1fr 260px;
@@ -338,15 +358,6 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(239, 68, 68, 0.35);
 }
 
-.score-bar {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  gap: 12px;
-}
-
 .board-area {
   flex: 1;
   min-height: 0;
@@ -354,40 +365,6 @@ body {
   align-items: center;
   justify-content: center;
   container-type: size;
-}
-
-.score-team {
-  flex: 1;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.score-team.blue {
-  background: linear-gradient(135deg, rgba(30, 64, 175, 0.55), rgba(59, 130, 246, 0.25));
-  border: 2px solid rgba(96, 165, 250, 0.7);
-  color: #dbeafe;
-}
-
-.score-team.red {
-  text-align: right;
-  background: linear-gradient(135deg, rgba(153, 27, 27, 0.55), rgba(239, 68, 68, 0.25));
-  border: 2px solid rgba(248, 113, 113, 0.7);
-  color: #fee2e2;
-}
-
-.score-team.active-turn {
-  transform: scale(1.02);
-  box-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
-}
-
-.round-badge {
-  background: var(--panel-2);
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  white-space: nowrap;
 }
 
 .board-container {
@@ -994,27 +971,6 @@ body {
   color: var(--muted);
 }
 
-.battle-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 3px;
-}
-
-.battle-panel-head h2 {
-  margin: 0;
-}
-
-.turn-badge {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
-}
-
 .end-panel {
   text-align: center;
   background: linear-gradient(160deg, rgba(30, 64, 175, 0.25), rgba(251, 191, 36, 0.12));
@@ -1170,13 +1126,6 @@ body {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-}
-
-.action-hint {
-  margin: 0;
-  font-size: 0.76rem;
-  line-height: 1.4;
-  color: var(--muted);
 }
 
 .cell.dragging-source {

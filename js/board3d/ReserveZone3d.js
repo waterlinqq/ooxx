@@ -13,8 +13,8 @@ const ROW_SPACING = TILE_PITCH * 0.92;
 // Wide enough that the front row's floating labels clear the back row's heads.
 const ROW_STEP = TILE_PITCH * 1.55;
 
-// Keep in sync with BoardScene camera (8, 8.5, 8) → lookAt origin.
-const CAMERA_POS = new THREE.Vector3(8, 8.5, 8);
+// Keep in sync with BoardScene camera (0, 8.5, 8) → lookAt origin.
+const CAMERA_POS = new THREE.Vector3(0, 8.5, 8);
 const LOOK_AT = new THREE.Vector3(0, 0, 0);
 
 const TMP_RIGHT = new THREE.Vector3();
@@ -35,7 +35,7 @@ function getScreenGroundAxes() {
 
 function reserveBandDistance(boardSize) {
   const boardHalf = ((boardSize - 1) * TILE_PITCH) / 2;
-  const gap = TILE_PITCH * 0.85;
+  const gap = TILE_PITCH * 1.45;
   return boardHalf + gap + TILE_SIZE * 0.45;
 }
 

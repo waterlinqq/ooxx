@@ -36,7 +36,8 @@ export class BoardScene {
       0.1,
       100
     );
-    this.camera.position.set(8, 8.5, 8);
+    // Front-facing tilt (Z axis) so square tiles read upright on screen, not as diamonds.
+    this.camera.position.set(0, 8.5, 8);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

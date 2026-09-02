@@ -1,4 +1,4 @@
-import { Game, CLASSES, TEAM, BOARD_MODES } from './game.js';
+import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 
 const game = new Game();
@@ -8,12 +8,10 @@ const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
 const lobbyContentEl = document.getElementById('lobbyContent');
 const battleContentEl = document.getElementById('battleContent');
-const blueScoreEl = document.getElementById('blueScore');
-const redScoreEl = document.getElementById('redScore');
-const roundBadgeEl = document.getElementById('roundBadge');
+const turnTimerEl = document.getElementById('turnTimer');
+const turnTimerFillEl = document.getElementById('turnTimerFill');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailEl = document.getElementById('classDetail');
-const actionPanelEl = document.getElementById('actionPanel');
 const reservePanelEl = document.getElementById('reservePanel');
 const teammatePanelEl = document.getElementById('teammatePanel');
 const teammateListEl = document.getElementById('teammateList');
@@ -23,8 +21,6 @@ const endResultEl = document.getElementById('endResult');
 const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const restartBtn = document.getElementById('restart');
-const endTurnBtn = document.getElementById('endTurn');
-const turnBadgeEl = document.getElementById('turnBadge');
 const bottomNavEl = document.getElementById('bottomNav');
 
 const NAV_SCREENS = {
@@ -33,6 +29,87 @@ const NAV_SCREENS = {
   bag: document.getElementById('screenBag'),
   shop: document.getElementById('screenShop'),
 };
+
+const TURN_DURATION_MS = 15000;
+const TURN_TIMER_TICK_MS = 50;
+
+let turnTimerInterval = null;
+let turnTimerRemainingMs = TURN_DURATION_MS;
+let turnTimerLastTick = 0;
+let turnTimerPaused = false;
+let turnTimerHumanTurn = false;
+
+function clearTurnTimer() {
+  if (turnTimerInterval) {
+    clearInterval(turnTimerInterval);
+    turnTimerInterval = null;
+  }
+  turnTimerPaused = false;
+  turnTimerHumanTurn = false;
+  turnTimerLastTick = 0;
+}
+
+function updateTurnTimerBar() {
+  const pct = Math.max(0, turnTimerRemainingMs / TURN_DURATION_MS);
+  turnTimerFillEl.style.width = `${pct * 100}%`;
+  turnTimerEl.classList.toggle('turn-timer-low', pct <= 0.25 && pct > 0);
+}
+
+function startTurnTimer() {
+  clearTurnTimer();
+  turnTimerHumanTurn = true;
+  turnTimerRemainingMs = TURN_DURATION_MS;
+  turnTimerLastTick = performance.now();
+  turnTimerEl.classList.remove('hidden');
+  turnTimerEl.setAttribute('aria-hidden', 'false');
+  updateTurnTimerBar();
+
+  turnTimerInterval = setInterval(() => {
+    if (turnTimerPaused) {
+      turnTimerLastTick = performance.now();
+      return;
+    }
+
+    const now = performance.now();
+    turnTimerRemainingMs -= now - turnTimerLastTick;
+    turnTimerLastTick = now;
+
+    if (turnTimerRemainingMs <= 0) {
+      turnTimerRemainingMs = 0;
+      updateTurnTimerBar();
+      clearTurnTimer();
+      turnTimerEl.classList.add('hidden');
+      turnTimerEl.setAttribute('aria-hidden', 'true');
+      game.endTurnEarly();
+      return;
+    }
+
+    updateTurnTimerBar();
+  }, TURN_TIMER_TICK_MS);
+}
+
+function syncTurnTimer(state) {
+  const active = state.phase === 'battle' && state.isHumanTurn;
+
+  if (!active) {
+    turnTimerEl.classList.add('hidden');
+    turnTimerEl.setAttribute('aria-hidden', 'true');
+    clearTurnTimer();
+    return;
+  }
+
+  if (state.animating) {
+    turnTimerPaused = true;
+    return;
+  }
+
+  if (!turnTimerHumanTurn) {
+    startTurnTimer();
+    return;
+  }
+
+  turnTimerPaused = false;
+}
 
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
@@ -203,20 +280,7 @@ function renderTeammate(state) {
 }
 
 function renderBattlePanels(state) {
-  const inBattle = state.phase === 'battle';
   const showEnd = state.phase === 'gameEnd';
-
-  actionPanelEl.classList.toggle('hidden', !inBattle || !state.isHumanTurn);
-  const canEndTurn =
-    inBattle &&
-    state.isHumanTurn &&
-    !state.animating &&
-    state.actionsRemaining > 0;
-  endTurnBtn.classList.toggle('hidden', !canEndTurn);
-
-  if (inBattle && state.isHumanTurn) {
-    turnBadgeEl.textContent = state.matchFormat === '2v2' ? state.slotLabel : TEAM.blue.name;
-  }
 
   reservePanelEl.classList.add('hidden');
   enemyPanelEl.classList.add('hidden');
@@ -229,27 +293,9 @@ function renderBattlePanels(state) {
   }
 }
 
-function formatRoundBadge(state) {
-  if (state.phase === 'roster') return '準備階段';
-  if (state.phase === 'gameEnd') return '對戰結束';
-  if (state.matchFormat === '2v2') {
-    const suffix = state.isHumanTurn ? ' · 你的回合' : ' · AI';
-    return `${state.slotLabel} 回合${suffix}`;
-  }
-  return `${TEAM[state.currentPlayer].name}回合`;
-}
-
-function renderScoreBar(state) {
-  blueScoreEl.textContent = TEAM.blue.name;
-  redScoreEl.textContent = TEAM.red.name;
-  roundBadgeEl.textContent = formatRoundBadge(state);
-}
-
 function render(state) {
-  renderScoreBar(state);
+  syncTurnTimer(state);
 
-  blueScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
-  redScoreEl.classList.toggle('active-turn', state.phase === 'battle' && state.currentPlayer === 'red');
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
 
@@ -288,7 +334,6 @@ bottomNavEl.addEventListener('click', (e) => {
 
 confirmRosterBtn.addEventListener('click', () => game.confirmBlueRoster());
 restartBtn.addEventListener('click', () => game.restartSeries());
-endTurnBtn.addEventListener('click', () => game.endTurnEarly());
 
 game.subscribe(render);
 render(game.getState());
