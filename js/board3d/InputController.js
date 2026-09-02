@@ -3,11 +3,12 @@ import * as THREE from 'three';
 const DRAG_THRESHOLD = 8;
 
 export class InputController {
-  constructor({ domElement, camera, tileGrid, unitManager, callbacks }) {
+  constructor({ domElement, camera, tileGrid, unitManager, reserveZone, callbacks }) {
     this.domElement = domElement;
     this.camera = camera;
     this.tileGrid = tileGrid;
     this.unitManager = unitManager;
+    this.reserveZone = reserveZone;
     this.callbacks = callbacks;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -39,7 +40,8 @@ export class InputController {
   findInteractiveRoot(object) {
     let obj = object;
     while (obj) {
-      if (obj.userData?.kind === 'tile' || obj.userData?.kind === 'unit') {
+      const kind = obj.userData?.kind;
+      if (kind === 'tile' || kind === 'unit' || kind === 'reserve') {
         return obj;
       }
       obj = obj.parent;
@@ -63,6 +65,10 @@ export class InputController {
       }
     });
 
+    if (this.reserveZone) {
+      targets.push(...this.reserveZone.getPickTargets());
+    }
+
     this.tileGrid.group.traverse((obj) => {
       if (obj.isMesh && obj.userData?.kind === 'tile') {
         targets.push(obj);
@@ -72,19 +78,29 @@ export class InputController {
     return this.raycaster.intersectObjects(targets, false);
   }
 
-  pickCell(event) {
+  pickTarget(event) {
     if (!this.updatePointer(event)) return null;
     const hits = this.raycastTargets();
     for (const hit of hits) {
       const root = this.findInteractiveRoot(hit.object);
       if (!root) continue;
 
+      if (root.userData.kind === 'reserve') {
+        return {
+          kind: 'reserve',
+          unitId: root.userData.unitId,
+          side: root.userData.side,
+          selectable: root.userData.selectable,
+        };
+      }
+
       if (root.userData.kind === 'tile') {
-        return { row: root.userData.row, col: root.userData.col, unitId: null };
+        return { kind: 'tile', row: root.userData.row, col: root.userData.col, unitId: null };
       }
 
       if (root.userData.kind === 'unit') {
         return {
+          kind: 'unit',
           row: root.userData.row,
           col: root.userData.col,
           unitId: root.userData.unitId,
@@ -94,11 +110,22 @@ export class InputController {
     return null;
   }
 
+  pickCell(event) {
+    const pick = this.pickTarget(event);
+    if (!pick || pick.kind === 'reserve') return null;
+    return pick;
+  }
+
   canControlUnit(unitId) {
     if (!this.state || !this.callbacks.canControlUnit) return false;
     const unit = this.state.board.flat().find((u) => u?.id === unitId);
     if (!unit) return false;
     return this.callbacks.canControlUnit(this.state, unit);
+  }
+
+  isEnemyUnit(unitId) {
+    const unit = this.state.board.flat().find((u) => u?.id === unitId);
+    return unit?.team === 'red';
   }
 
   onPointerDown = (event) => {
@@ -153,7 +180,7 @@ export class InputController {
     }
     if (!this.state || this.state.animating) return;
 
-    const pick = this.pickCell(event);
+    const pick = this.pickTarget(event);
     if (!pick) {
       if (this.state.draggingUnitId) {
         this.callbacks.onDragCancel();
@@ -161,11 +188,29 @@ export class InputController {
       return;
     }
 
-    if (pick.unitId && this.canControlUnit(pick.unitId)) {
+    if (pick.kind === 'reserve') {
+      if (pick.side === 'blue' && pick.selectable) {
+        this.callbacks.onReserveSelect(pick.unitId);
+      } else if (pick.side === 'red') {
+        this.callbacks.onUnitInspect(pick.unitId);
+      }
+      return;
+    }
+
+    if (pick.kind === 'unit' && this.canControlUnit(pick.unitId)) {
       if (this.state.draggingUnitId === pick.unitId) {
         this.callbacks.onDragCancel();
       } else {
         this.callbacks.onUnitDragStart(pick.unitId);
+      }
+      return;
+    }
+
+    if (pick.kind === 'unit' && this.isEnemyUnit(pick.unitId)) {
+      if (this.state.draggingUnitId) {
+        this.callbacks.onUnitDrop(pick.row, pick.col);
+      } else {
+        this.callbacks.onUnitInspect(pick.unitId);
       }
       return;
     }

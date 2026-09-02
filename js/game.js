@@ -32,15 +32,12 @@ export class Game {
     this.slotOrder = [...SLOT_ORDER];
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+    this.inspectedUnitId = null;
     this.board = createEmptyBoard(this.getModeConfig().size);
     this.applyFixedRosters();
     this.blueReserve = [];
     this.redReserve = [];
-    this.blueScore = 0;
-    this.redScore = 0;
-    this.round = 1;
-    this.lastRoundWinner = null;
-    this.message = '請選擇棋盤模式，然後開始系列賽';
+    this.message = '請選擇棋盤模式，然後開始對戰';
     this.lastWinLine = null;
     this.animating = false;
     this.actionsRemaining = this.getActionsPerTurn();
@@ -86,7 +83,7 @@ export class Game {
   }
 
   getStartButtonLabel() {
-    return this.getModeConfig().seriesFormat === 'single' ? '開始對戰' : '開始系列賽';
+    return '開始對戰';
   }
 
   setBoardMode(modeId) {
@@ -95,7 +92,7 @@ export class Game {
     this.boardMode = modeId;
     this.board = createEmptyBoard(this.getModeConfig().size);
     const mode = this.getModeConfig();
-    const startHint = mode.seriesFormat === 'single' ? '按開始對戰' : '按開始系列賽';
+    const startHint = '按開始對戰';
     const extra = mode.matchFormat === '2v2' ? ' · 2v2 單局' : '';
     this.message = `已選 ${mode.label} 模式${extra} — ${startHint}`;
     this.notify();
@@ -106,7 +103,6 @@ export class Game {
     return {
       boardMode: this.boardMode,
       boardSize: mode.size,
-      seriesFormat: mode.seriesFormat,
       matchFormat: mode.matchFormat,
       rosterLimit: FIXED_ROSTER.length,
       winCount: mode.size,
@@ -118,14 +114,12 @@ export class Game {
       slotLabel: formatSlotLabel(this.currentSlot),
       draggingUnitId: this.draggingUnitId,
       selectedReserveId: this.selectedReserveId,
+      inspectedUnitId: this.inspectedUnitId,
       board: this.board,
       blueRoster: this.blueRoster,
       redRoster: this.redRoster,
       blueReserve: this.blueReserve,
       redReserve: this.redReserve,
-      blueScore: this.blueScore,
-      redScore: this.redScore,
-      round: this.round,
       message: this.message,
       lastWinLine: this.lastWinLine,
       validMoves: this.getHighlightMoves(),
@@ -166,7 +160,7 @@ export class Game {
     if (this.is2v2()) {
       const label = formatSlotLabel(this.currentSlot);
       if (this.canHumanAct()) {
-        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，或點後備再點空格部署`;
+        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
       }
       return `${label} 回合 · AI 思考中`;
     }
@@ -174,7 +168,7 @@ export class Game {
     const team = TEAM[this.currentPlayer];
     const actionsPerTurn = mode.actionsPerTurn;
     if (this.currentPlayer === 'blue') {
-      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，或點後備再點空格部署`;
+      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
     }
     return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
   }
@@ -227,9 +221,7 @@ export class Game {
   }
 
   getRoundFirstPlayer() {
-    if (this.round === 1) return 'blue';
-    if (this.round === 2) return 'red';
-    return this.lastRoundWinner === 'blue' ? 'red' : 'blue';
+    return 'blue';
   }
 
   getRoundFirstSlot() {
@@ -247,6 +239,7 @@ export class Game {
     this.syncCurrentPlayerFromSlot();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+    this.inspectedUnitId = null;
     this.lastWinLine = null;
     this.phase = 'battle';
     this.resetTurnActions();
@@ -256,9 +249,9 @@ export class Game {
     } else {
       const first = TEAM[this.currentPlayer].name;
       if (this.currentPlayer === 'blue') {
-        this.message = `第 ${this.round} 局 — ${first}先攻：每回合 ${mode.actionsPerTurn} 次行動，同一單位只能行動一次`;
+        this.message = `${first}先攻：每回合 ${mode.actionsPerTurn} 次行動，同一單位只能行動一次`;
       } else {
-        this.message = `第 ${this.round} 局 — ${first}先攻`;
+        this.message = `${first}先攻`;
       }
     }
 
@@ -284,9 +277,33 @@ export class Game {
     const unit = this.getCurrentReserve().find((u) => u.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
     this.draggingUnitId = null;
+    this.inspectedUnitId = null;
     this.selectedReserveId = unitId;
     this.message = `點選空格部署 ${CLASSES[unit.classId].name}`;
     this.notify();
+  }
+
+  inspectUnit(unitId) {
+    if (this.phase !== 'battle' || this.animating) return;
+    const unit = this.findUnitById(unitId);
+    if (!unit || unit.team === 'blue') return;
+    if (this.inspectedUnitId === unitId) {
+      this.inspectedUnitId = null;
+      this.message = this.getPlayerTurnMessage();
+    } else {
+      this.inspectedUnitId = unitId;
+      const cls = CLASSES[unit.classId];
+      const onBoard = this.board.flat().some((u) => u?.id === unitId);
+      const where = onBoard ? '場上' : '後備';
+      this.message = `${cls.name}（${where}）HP ${unit.hp}/${unit.maxHp} · ATK ${unit.atk}`;
+    }
+    this.notify();
+  }
+
+  findUnitById(unitId) {
+    const onBoard = this.board.flat().find((u) => u?.id === unitId);
+    if (onBoard) return onBoard;
+    return [...this.blueReserve, ...this.redReserve].find((u) => u.id === unitId) ?? null;
   }
 
   beginDragUnit(unitId) {
@@ -295,6 +312,7 @@ export class Game {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
     this.selectedReserveId = null;
+    this.inspectedUnitId = null;
     this.draggingUnitId = unitId;
     this.message = '點選或拖曳至綠格移動、紅格攻擊';
     this.notify();
@@ -351,6 +369,7 @@ export class Game {
     if (!this.canHumanAct()) return;
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+    this.inspectedUnitId = null;
     if (this.is2v2()) {
       this.advanceSlot();
       return;
@@ -620,46 +639,18 @@ export class Game {
   }
 
   handleRoundWin(winner, detail) {
-    if (winner === 'blue') this.blueScore++;
-    else this.redScore++;
-
-    this.lastRoundWinner = winner;
-    const mode = this.getModeConfig();
-    const seriesOver = mode.seriesFormat === 'single' || this.blueScore >= 2 || this.redScore >= 2;
-    this.phase = seriesOver ? 'seriesEnd' : 'roundEnd';
-
-    if (mode.seriesFormat === 'single') {
-      this.message = `${detail} — ${TEAM[winner].name}獲勝！`;
-    } else {
-      this.message = `${detail} — ${TEAM[winner].name}拿下第 ${this.round} 局！`;
-      if (seriesOver) {
-        this.message += ` 系列賽結束：${TEAM[winner].name}三戰兩勝！`;
-      } else {
-        this.message += ` 比分 藍 ${this.blueScore} : ${this.redScore} 紅`;
-      }
-    }
-
+    this.phase = 'gameEnd';
+    this.message = `${detail} — ${TEAM[winner].name}獲勝！`;
     this.notify();
-  }
-
-  nextRound() {
-    if (this.phase !== 'roundEnd') return;
-    this.round++;
-    this.startRound();
   }
 
   restartSeries() {
     const savedMode = this.boardMode;
     this.phase = 'roster';
     this.applyFixedRosters();
-    this.blueScore = 0;
-    this.redScore = 0;
-    this.round = 1;
-    this.lastRoundWinner = null;
     this.boardMode = savedMode;
     this.board = createEmptyBoard(this.getModeConfig().size);
-    const startHint = this.getModeConfig().seriesFormat === 'single' ? '開始對戰' : '開始系列賽';
-    this.message = `請選擇棋盤模式，然後${startHint}`;
+    this.message = '請選擇棋盤模式，然後按開始對戰';
     this.notify();
   }
 }

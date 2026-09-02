@@ -26,12 +26,11 @@ const DEFAULT_GAMES = 100;
 const DEFAULT_MODE = '4x4';
 
 function parseArgs(argv) {
-  const opts = { games: DEFAULT_GAMES, mode: DEFAULT_MODE, format: 'round', out: null };
+  const opts = { games: DEFAULT_GAMES, mode: DEFAULT_MODE, out: null };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--games' || arg === '-n') opts.games = Number(argv[++i]);
     else if (arg === '--mode') opts.mode = argv[++i];
-    else if (arg === '--format') opts.format = argv[++i];
     else if (arg === '--out' || arg === '-o') opts.out = argv[++i];
   }
   return opts;
@@ -366,79 +365,7 @@ function runRound({ mode, round, firstPlayer, firstSlot, unitCounterStart }) {
   };
 }
 
-function getRoundFirstPlayer(round, lastWinner) {
-  if (round === 1) return 'blue';
-  if (round === 2) return 'red';
-  return lastWinner === 'blue' ? 'red' : 'blue';
-}
-
-function runSeries(gameId, mode) {
-  let blueScore = 0;
-  let redScore = 0;
-  let round = 1;
-  let lastWinner = null;
-  let unitCounter = 0;
-  const rounds = [];
-
-  while (blueScore < 2 && redScore < 2) {
-    const firstPlayer = getRoundFirstPlayer(round, lastWinner);
-    const result = runRound({
-      mode,
-      round,
-      firstPlayer,
-      firstSlot: `${firstPlayer}-0`,
-      unitCounterStart: unitCounter,
-    });
-    unitCounter = result.unitCounterEnd;
-    rounds.push(result);
-
-    if (result.winner === 'blue') blueScore++;
-    else if (result.winner === 'red') redScore++;
-
-    lastWinner = result.winner;
-    round++;
-  }
-
-  return {
-    gameId,
-    boardMode: mode.id,
-    boardSize: mode.size,
-    blueScore,
-    redScore,
-    seriesWinner: blueScore >= 2 ? 'blue' : 'red',
-    roundsPlayed: rounds.length,
-    rounds,
-  };
-}
-
-function summarize(games, format) {
-  if (format === 'series') {
-    const seriesWins = { blue: 0, red: 0 };
-    const roundWins = { blue: 0, red: 0 };
-    const reasons = { line: 0, elimination: 0, turn_limit: 0 };
-    let totalMoves = 0;
-    let totalRounds = 0;
-
-    for (const game of games) {
-      seriesWins[game.seriesWinner]++;
-      for (const round of game.rounds) {
-        totalRounds++;
-        if (round.winner) roundWins[round.winner]++;
-        reasons[round.reason] = (reasons[round.reason] ?? 0) + 1;
-        totalMoves += round.totalMoves;
-      }
-    }
-
-    return {
-      games: games.length,
-      seriesWins,
-      roundWins,
-      roundEndReasons: reasons,
-      avgMovesPerRound: totalRounds ? Math.round((totalMoves / totalRounds) * 10) / 10 : 0,
-      avgRoundsPerSeries: games.length ? Math.round((totalRounds / games.length) * 100) / 100 : 0,
-    };
-  }
-
+function summarize(games) {
   const wins = { blue: 0, red: 0 };
   const firstPlayerWins = { blue: 0, red: 0 };
   const reasons = { line: 0, elimination: 0, turn_limit: 0 };
@@ -489,34 +416,28 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   const mode = getModeMeta(opts.mode);
   const size = mode.size;
-  const format = opts.format;
-  const formatLabel = format === 'series' ? '系列賽' : '單局';
   const outPath = opts.out ?? path.join(
     __dirname,
     '..',
     'data',
-    `${opts.mode}-ai-vs-ai-${opts.games}${format === 'series' ? '-series' : ''}.json`,
+    `${opts.mode}-ai-vs-ai-${opts.games}.json`,
   );
 
-  console.log(`開始模擬：${opts.games} 場${formatLabel} · ${opts.mode} · AI vs AI${mode.matchFormat === '2v2' ? ' (2v2)' : ''}`);
+  console.log(`開始模擬：${opts.games} 場單局 · ${opts.mode} · AI vs AI${mode.matchFormat === '2v2' ? ' (2v2)' : ''}`);
   const started = Date.now();
   const games = [];
   let unitCounter = 0;
 
   for (let i = 0; i < opts.games; i++) {
-    if (format === 'series') {
-      games.push(runSeries(i + 1, mode));
-    } else {
-      const firstPlayer = i % 2 === 0 ? 'blue' : 'red';
-      const round = runStandaloneRound(i + 1, mode, firstPlayer, unitCounter);
-      unitCounter = round.unitCounterEnd;
-      games.push({
-        gameId: round.gameId,
-        boardMode: round.boardMode,
-        boardSize: round.boardSize,
-        rounds: [round],
-      });
-    }
+    const firstPlayer = i % 2 === 0 ? 'blue' : 'red';
+    const round = runStandaloneRound(i + 1, mode, firstPlayer, unitCounter);
+    unitCounter = round.unitCounterEnd;
+    games.push({
+      gameId: round.gameId,
+      boardMode: round.boardMode,
+      boardSize: round.boardSize,
+      rounds: [round],
+    });
 
     if ((i + 1) % 10 === 0 || i + 1 === opts.games) {
       process.stdout.write(`\r進度：${i + 1}/${opts.games}`);
@@ -534,11 +455,9 @@ function main() {
       players: mode.matchFormat === '2v2'
         ? { 'blue-0': 'ai', 'blue-1': 'ai', 'red-0': 'ai', 'red-1': 'ai' }
         : { blue: 'ai', red: 'ai' },
-      format,
-      seriesFormat: mode.seriesFormat,
-      firstPlayerAlternation: format === 'round' && mode.matchFormat !== '2v2',
+      firstPlayerAlternation: mode.matchFormat !== '2v2',
     },
-    summary: summarize(games, format),
+    summary: summarize(games),
     games,
   };
 
@@ -548,15 +467,9 @@ function main() {
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`完成：${outPath}`);
   console.log(`耗時 ${elapsed}s`);
-
-  if (format === 'series') {
-    console.log(`系列賽勝率 藍 ${payload.summary.seriesWins.blue} : 紅 ${payload.summary.seriesWins.red}`);
-    console.log(`平均每局 ${payload.summary.avgMovesPerRound} 步 · 平均 ${payload.summary.avgRoundsPerSeries} 局/系列賽`);
-  } else {
-    console.log(`單局勝率 藍 ${payload.summary.wins.blue} : 紅 ${payload.summary.wins.red}`);
-    console.log(`先攻勝率 藍 ${payload.summary.firstPlayerWins.blue} : 紅 ${payload.summary.firstPlayerWins.red}`);
-    console.log(`平均每局 ${payload.summary.avgMovesPerRound} 步`);
-  }
+  console.log(`單局勝率 藍 ${payload.summary.wins.blue} : 紅 ${payload.summary.wins.red}`);
+  console.log(`先攻勝率 藍 ${payload.summary.firstPlayerWins.blue} : 紅 ${payload.summary.firstPlayerWins.red}`);
+  console.log(`平均每局 ${payload.summary.avgMovesPerRound} 步`);
 }
 
 main();

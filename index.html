@@ -34,15 +34,15 @@
             <p class="screen-desc">挑戰 AI 紅隊，連成整行或全滅對手即可獲勝</p>
           </div>
           <div class="mode-buttons" id="modeButtons"></div>
-          <button class="btn primary btn-lg" id="confirmRoster" type="button">開始系列賽</button>
+          <button class="btn primary btn-lg" id="confirmRoster" type="button">開始對戰</button>
         </div>
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
           <section class="board-wrap">
             <div class="score-bar">
-              <div class="score-team blue" id="blueScore">藍隊 0 勝</div>
-              <div class="round-badge" id="roundBadge">第 1 局</div>
-              <div class="score-team red" id="redScore">紅隊 0 勝</div>
+              <div class="score-team blue" id="blueScore">藍隊</div>
+              <div class="round-badge" id="roundBadge">準備階段</div>
+              <div class="score-team red" id="redScore">紅隊</div>
             </div>
             <div class="board-area">
               <div class="board-container">
@@ -55,7 +55,6 @@
           <div class="battle-panels">
             <div class="panel end-panel hidden" id="endPanel">
               <div class="end-result" id="endResult"></div>
-              <button class="btn success btn-lg hidden" id="nextRound" type="button">下一局</button>
               <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
             </div>
 
@@ -64,7 +63,7 @@
                 <h2>你的回合</h2>
                 <span class="turn-badge" id="turnBadge"></span>
               </div>
-              <p class="action-hint">拖曳移動／攻擊 · 點後備再點空格部署</p>
+              <p class="action-hint">拖曳移動／攻擊 · 點下方後備再點空格部署 · 點敵方單位查看資訊</p>
               <button class="btn btn-block hidden" id="endTurn" type="button">結束回合</button>
             </div>
 

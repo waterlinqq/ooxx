@@ -261,8 +261,8 @@ body {
 
 .battle-layout .board-area {
   flex: none;
-  width: min(100%, calc(100vw - 56px), 420px);
-  aspect-ratio: 1;
+  width: 100%;
+  height: min(calc((100vw - 56px) * 1.25), 62vh);
   margin: 0 auto;
   align-self: center;
 }
@@ -348,7 +348,7 @@ body {
 
 @media (min-width: 640px) {
   .app {
-    max-width: 640px;
+    max-width: 780px;
   }
 
   .battle-layout {
@@ -361,6 +361,19 @@ body {
   .battle-layout .board-wrap {
     min-height: 0;
     height: 100%;
+  }
+
+  .battle-layout .board-area {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* Match the isometric scene's own aspect so the canvas is never wider than its content. */
+  .battle-layout .board-container {
+    width: min(100%, 78cqh);
+    height: 100%;
+    margin: 0 auto;
   }
 
   .battle-panels {
@@ -511,12 +524,59 @@ body {
 }
 
 .unit-3d-label.selected {
-  opacity: 0.95;
-  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.95));
+  filter: drop-shadow(0 0 10px rgba(96, 165, 250, 0.95));
 }
 
 .unit-3d-label.selected .unit-3d-name {
   color: #93c5fd;
+}
+
+.unit-3d-label.dragging .unit-3d-name {
+  font-weight: 700;
+}
+
+.unit-3d-label.dragging .unit-3d-hp-bar {
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.7);
+}
+
+.unit-3d-label.inspected {
+  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.95));
+}
+
+.unit-3d-label.inspected .unit-3d-name {
+  color: #fde68a;
+}
+
+.unit-3d-label.enemy .unit-3d-hp-fill {
+  background: linear-gradient(90deg, #ef4444, #fca5a5);
+}
+
+.unit-3d-stats {
+  font-size: 0.54rem;
+  font-weight: 700;
+  color: #fde68a;
+  margin-top: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.unit-3d-badge {
+  font-size: 0.48rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+.reserve-label.selected {
+  filter: drop-shadow(0 0 10px rgba(96, 165, 250, 0.95));
+}
+
+.reserve-label.selected .unit-3d-name {
+  color: #93c5fd;
+}
+
+.reserve-label.disabled {
+  opacity: 0.55;
 }
 
 .board {

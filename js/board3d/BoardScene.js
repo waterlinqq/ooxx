@@ -6,6 +6,12 @@ import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
+import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
+
+// Headroom above the ground plane for unit models and their floating labels.
+const CONTENT_HEIGHT = 1.35;
+const FRAME_PADDING = 0.12;
+const TMP_VIEW = new THREE.Vector3();
 
 export class BoardScene {
   constructor(containerEl, fxLayerEl, callbacks) {
@@ -95,6 +101,7 @@ export class BoardScene {
 
     this.tileGrid = new TileGrid(this.scene);
     this.unitManager = new UnitMeshManager(this.scene);
+    this.reserveZone = new ReserveZone3d(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.attackFx = new AttackFx3d({
       scene: this.scene,
@@ -110,6 +117,7 @@ export class BoardScene {
       camera: this.camera,
       tileGrid: this.tileGrid,
       unitManager: this.unitManager,
+      reserveZone: this.reserveZone,
       callbacks,
     });
 
@@ -134,19 +142,59 @@ export class BoardScene {
     });
   }
 
+  contentGroundPoints() {
+    const size = this.boardSize || 3;
+    const half = (size * TILE_PITCH) / 2;
+    const points = [
+      new THREE.Vector3(-half, 0, -half),
+      new THREE.Vector3(-half, 0, half),
+      new THREE.Vector3(half, 0, -half),
+      new THREE.Vector3(half, 0, half),
+    ];
+    points.push(...reserveExtentPoints(size));
+    return points;
+  }
+
   onResize() {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     if (!width || !height) return;
 
     const aspect = width / height;
-    const boardScale = Math.max(3.6, this.boardSize * TILE_PITCH * 1.15);
-    this.frustumBase = boardScale;
+    this.camera.updateMatrixWorld();
+    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
 
-    this.camera.left = (-this.frustumBase * aspect) / 2;
-    this.camera.right = (this.frustumBase * aspect) / 2;
-    this.camera.top = this.frustumBase / 2;
-    this.camera.bottom = -this.frustumBase / 2;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const point of this.contentGroundPoints()) {
+      for (const y of [0, CONTENT_HEIGHT]) {
+        TMP_VIEW.set(point.x, y, point.z).applyMatrix4(this.camera.matrixWorldInverse);
+        minX = Math.min(minX, TMP_VIEW.x);
+        maxX = Math.max(maxX, TMP_VIEW.x);
+        minY = Math.min(minY, TMP_VIEW.y);
+        maxY = Math.max(maxY, TMP_VIEW.y);
+      }
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    let halfW = (maxX - minX) / 2 + FRAME_PADDING;
+    let halfH = (maxY - minY) / 2 + FRAME_PADDING;
+
+    if (halfW / halfH > aspect) {
+      halfH = halfW / aspect;
+    } else {
+      halfW = halfH * aspect;
+    }
+
+    this.frustumBase = halfH * 2;
+    this.camera.left = centerX - halfW;
+    this.camera.right = centerX + halfW;
+    this.camera.top = centerY + halfH;
+    this.camera.bottom = centerY - halfH;
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
@@ -167,9 +215,11 @@ export class BoardScene {
     this.boardSize = state.boardSize;
     this.tileGrid.ensureSize(state.boardSize);
     this.unitManager.setBoardSize(state.boardSize);
+    this.reserveZone.setBoardSize(state.boardSize);
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
     this.unitManager.syncBoard(state.board, state);
+    this.reserveZone.sync(state);
     this.input.setState(state);
     this.updateTurnAmbience(state);
 
@@ -213,6 +263,7 @@ export class BoardScene {
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.unitManager.dispose();
+    this.reserveZone.dispose();
     this.tileGrid.clear();
     this.highlightSystem.clear();
     this.renderer.dispose();

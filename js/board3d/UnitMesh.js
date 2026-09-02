@@ -12,6 +12,15 @@ const WALK_SPEED = 2.4;
 const STRIDE = 0.3;
 const LEAP_DISTANCE = 1.6;
 
+// Mages and assassins materialise on the spot; everyone else drops in.
+const SPAWN_STYLE = { mage: 'warp', assassin: 'warp' };
+const SPAWN_SPIN = { assassin: Math.PI * 2 };
+
+function easeOutBack(x) {
+  const c = x - 1;
+  return 1 + 2.2 * c * c * c + 1.4 * c * c;
+}
+
 // How deeply each class settles into its standby pose after acting.
 const CROUCH_DEPTH = {
   swordsman: 1,
@@ -32,6 +41,7 @@ function createHpLabel() {
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
     <div class="unit-3d-hp-text"></div>
+    <div class="unit-3d-stats hidden"></div>
   `;
   const label = new CSS2DObject(wrap);
   return { label, wrap };
@@ -109,6 +119,7 @@ export class UnitMeshManager {
     const seen = new Set();
     const acted = new Set(state.actedUnitIds);
     const draggingId = state.draggingUnitId;
+    const inspectedId = state.inspectedUnitId;
 
     for (let r = 0; r < board.length; r++) {
       for (let c = 0; c < board[r].length; c++) {
@@ -126,6 +137,7 @@ export class UnitMeshManager {
         this.updateUnitEntry(entry, unit, r, c, {
           acted: acted.has(unit.id),
           dragging: draggingId === unit.id,
+          inspected: inspectedId === unit.id,
           yaw: facingYaw(board, r, c, unit),
         });
       }
@@ -183,6 +195,18 @@ export class UnitMeshManager {
       crouchDepth: CROUCH_DEPTH[unit.classId] ?? 1,
       team: unit.team,
       seed: Math.random() * Math.PI * 2,
+      jitter: Math.random(),
+      spawnStyle: SPAWN_STYLE[unit.classId] ?? 'drop',
+      spawn: null,
+      spawnLift: 0,
+      spawnScale: 1,
+      spawnSpin: 0,
+      stretch: 0,
+      land: 0,
+      ringPop: 0,
+      labelFade: 1,
+      labelFadeApplied: 1,
+      fadeApplied: 1,
       yaw: DEFAULT_YAW,
       enemyYaw: DEFAULT_YAW,
       moveYaw: DEFAULT_YAW,
@@ -253,7 +277,16 @@ export class UnitMeshManager {
     }
   }
 
-  updateUnitEntry(entry, unit, row, col, { acted, dragging, yaw }) {
+  applySelectionLook(entry, selected) {
+    if (entry.selectedLook === selected) return;
+    entry.selectedLook = selected;
+    if (!entry.ring) return;
+    const mat = entry.ring.material;
+    const baseOpacity = mat.userData.baseOpacity ?? 0.92;
+    mat.opacity = selected ? Math.min(1, baseOpacity + 0.08) : baseOpacity;
+  }
+
+  updateUnitEntry(entry, unit, row, col, { acted, dragging, inspected, yaw }) {
     const cls = CLASSES[unit.classId];
     const pos = tileWorldPosition(row, col, this.boardSize);
     TMP_TARGET.set(pos.x, UNIT_BASE_Y, pos.z);
@@ -263,6 +296,13 @@ export class UnitMeshManager {
       entry.displayPos.copy(TMP_TARGET);
       entry.root.position.copy(TMP_TARGET);
       entry.yaw = yaw;
+      entry.spawn = {
+        start: performance.now(),
+        duration: entry.spawnStyle === 'warp' ? 540 : 580 + entry.jitter * 180,
+        height: 1.0 + entry.jitter * 0.4,
+        spin: SPAWN_SPIN[unit.classId] ?? 0,
+        style: entry.spawnStyle,
+      };
     } else if (!entry.targetPos.equals(TMP_TARGET)) {
       const travel = entry.displayPos.distanceTo(TMP_TARGET);
       if (travel > LEAP_DISTANCE) {
@@ -282,14 +322,28 @@ export class UnitMeshManager {
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
     entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
+
+    const statsEl = entry.wrap.querySelector('.unit-3d-stats');
+    if (inspected && unit.team === 'red') {
+      statsEl.classList.remove('hidden');
+      statsEl.textContent = `ATK ${unit.atk}`;
+    } else {
+      statsEl.classList.add('hidden');
+      statsEl.textContent = '';
+    }
+
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);
-    entry.root.visible = !dragging;
+    entry.wrap.classList.toggle('selected', dragging);
+    entry.wrap.classList.toggle('inspected', inspected);
+    entry.wrap.classList.toggle('enemy', unit.team === 'red');
     entry.root.userData.row = row;
     entry.root.userData.col = col;
     entry.acted = acted;
+    entry.dragging = dragging;
 
     this.applyActedLook(entry, acted);
+    this.applySelectionLook(entry, dragging);
   }
 
   getUnitRoot(unitId) {
@@ -344,6 +398,63 @@ export class UnitMeshManager {
 
     const yawGoal = entry.walk > 0.35 ? entry.moveYaw : entry.enemyYaw;
     entry.yaw += shortestAngle(entry.yaw, yawGoal) * Math.min(1, delta * 8);
+  }
+
+  updateSpawn(entry, now) {
+    entry.spawnLift = 0;
+    entry.spawnScale = 1;
+    entry.spawnSpin = 0;
+    entry.stretch = 0;
+    entry.land = 0;
+    entry.ringPop = 0;
+    entry.labelFade = 1;
+
+    const spawn = entry.spawn;
+    if (!spawn) return;
+
+    const p = (now - spawn.start) / spawn.duration;
+    if (p >= 1) {
+      entry.spawn = null;
+      this.applySpawnFade(entry, 1);
+      entry.selectedLook = null;
+      this.applySelectionLook(entry, !!entry.dragging);
+      return;
+    }
+
+    if (spawn.style === 'warp') {
+      const grow = Math.min(1, p / 0.7);
+      const eased = easeOutBack(grow);
+      entry.spawnScale = 0.3 + 0.7 * eased;
+      entry.spawnLift = 0.14 * (1 - eased);
+      entry.spawnSpin = (1 - grow) * spawn.spin;
+      entry.ringPop = 1.9 * (1 - p) * (1 - p);
+      entry.labelFade = Math.min(1, p / 0.6);
+      this.applySpawnFade(entry, Math.min(1, p / 0.45));
+      return;
+    }
+
+    const fall = Math.min(1, p / 0.55);
+    entry.spawnLift = spawn.height * (1 - fall * fall);
+    entry.stretch = (1 - fall) * 0.16;
+    entry.airborne = Math.max(entry.airborne, 1 - fall);
+    entry.labelFade = Math.max(0, Math.min(1, (p - 0.5) / 0.25));
+
+    if (p > 0.55) {
+      const landP = (p - 0.55) / 0.45;
+      entry.land = Math.exp(-3.4 * landP) * Math.cos(landP * Math.PI * 2);
+      entry.ringPop = 1.9 * Math.max(0, Math.exp(-4 * landP) * Math.cos(landP * Math.PI * 1.2));
+    }
+  }
+
+  applySpawnFade(entry, fade) {
+    if (Math.abs(entry.fadeApplied - fade) < 0.01) return;
+    entry.fadeApplied = fade;
+    for (const material of entry.materials) {
+      if (material.userData.skipTint) continue;
+      const base = material.userData.baseOpacity ?? 1;
+      material.opacity = base * fade;
+      material.transparent = material.opacity < 1;
+    }
   }
 
   updateAction(entry, now) {
@@ -414,7 +525,12 @@ export class UnitMeshManager {
       const hip = crouchHip + tuckHip + stepSwing + stance;
       const bend = Math.max(
         0,
-        crouchBend + tuckBend + stepBend + Math.abs(stance) * 0.45 + entry.recoil * 0.35
+        crouchBend +
+          tuckBend +
+          stepBend +
+          Math.abs(stance) * 0.45 +
+          entry.recoil * 0.35 +
+          Math.max(0, entry.land) * 0.9
       );
 
       const joint = legs[side];
@@ -549,11 +665,13 @@ export class UnitMeshManager {
       node.position.y = rest.group.pos.y - rootDrop * rest.group.scale.y;
       node.rotation.x =
         rest.group.rot.x + entry.lean + crouch * 0.12 + entry.airborne * 0.16 - entry.recoil * 0.22;
-      const squash = 1 - entry.recoil * 0.06;
+
+      const flatten = 1 - entry.recoil * 0.06 - entry.land * 0.2 + entry.stretch;
+      const widen = 1 + entry.recoil * 0.04 + entry.land * 0.12 - entry.stretch * 0.5;
       node.scale.set(
-        rest.group.scale.x * (1 + entry.recoil * 0.04),
-        rest.group.scale.y * squash,
-        rest.group.scale.z * (1 + entry.recoil * 0.04)
+        rest.group.scale.x * widen * entry.spawnScale,
+        rest.group.scale.y * flatten * entry.spawnScale,
+        rest.group.scale.z * widen * entry.spawnScale
       );
     }
   }
@@ -590,28 +708,53 @@ export class UnitMeshManager {
     const now = performance.now();
 
     for (const entry of this.units.values()) {
-      if (!entry.root.visible) continue;
-
       this.updateMotion(entry, delta, now);
       this.updateAction(entry, now);
+      this.updateSpawn(entry, now);
 
       entry.root.position.copy(entry.displayPos).add(entry.fxOffset);
 
       const hover = Math.sin(time * 2 + entry.seed) * 0.01 * (1 - entry.walk);
-      const rise = entry.fxOffset.y + entry.lift + hover;
+      const selectLift = entry.dragging
+        ? 0.045 + Math.sin(time * 5 + entry.seed) * 0.012
+        : 0;
+      const rise = entry.fxOffset.y + entry.lift + entry.spawnLift + hover + selectLift;
       entry.root.position.y = entry.displayPos.y + rise;
 
+      if (entry.ring) {
+        const baseEmissive = entry.ring.material.userData.baseEmissive ?? 1.1;
+        if (entry.ringPop > 0.001) {
+          const pop = 1 + entry.ringPop * 1.6;
+          entry.ring.scale.set(pop, pop, 1);
+          entry.ring.material.emissiveIntensity = baseEmissive * (1 + entry.ringPop * 2.4);
+        } else if (entry.dragging) {
+          const pulse = 1 + Math.sin(time * 5 + entry.seed) * 0.1;
+          entry.ring.scale.setScalar(1.18 * pulse);
+          entry.ring.material.emissiveIntensity = baseEmissive * (2.1 + Math.sin(time * 5) * 0.35);
+        } else {
+          entry.ring.scale.setScalar(1);
+          entry.ring.material.emissiveIntensity = baseEmissive;
+        }
+      }
+
       entry.body.rotation.y =
-        entry.yaw + Math.sin(time * 0.8 + entry.seed) * 0.05 * (1 - entry.walk);
+        entry.yaw + entry.spawnSpin + Math.sin(time * 0.8 + entry.seed) * 0.05 * (1 - entry.walk);
 
       if (entry.shadow) {
+        const height = Math.max(0, rise);
         entry.shadow.position.y = 0.006 - rise;
-        const tighten = 1 - rise * 0.9;
+        const tighten =
+          Math.max(0.12, 1 - height * 0.8) * (1 + Math.max(0, entry.land) * 0.6) * entry.spawnScale;
         entry.shadow.scale.set(tighten, tighten, 1);
         entry.shadow.material.opacity =
           (entry.shadow.material.userData.baseOpacity ?? 0.5) *
           (entry.acted ? 0.6 : 1) *
-          (1 - entry.airborne * 0.45);
+          (1 - Math.min(0.8, height * 0.65));
+      }
+
+      if (Math.abs(entry.labelFade - entry.labelFadeApplied) > 0.02) {
+        entry.labelFadeApplied = entry.labelFade;
+        entry.wrap.style.opacity = entry.labelFade === 1 ? '' : entry.labelFade.toFixed(2);
       }
 
       this.poseUnit(entry, time);
