@@ -1,6 +1,12 @@
 import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 
+// Block browser pinch / trackpad zoom so gestures stay on the board.
+document.addEventListener('wheel', (e) => {
+  if (e.ctrlKey) e.preventDefault();
+}, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
 const game = new Game();
 
 const boardCanvasHost = document.getElementById('boardCanvas');
@@ -31,13 +37,16 @@ const NAV_SCREENS = {
 };
 
 const TURN_DURATION_MS = 15000;
+const TURN_BONUS_MS = 5000;
 const TURN_TIMER_TICK_MS = 50;
 
 let turnTimerInterval = null;
 let turnTimerRemainingMs = TURN_DURATION_MS;
+let turnTimerBarMaxMs = TURN_DURATION_MS;
 let turnTimerLastTick = 0;
 let turnTimerPaused = false;
 let turnTimerHumanTurn = false;
+let turnTimerLastActedCount = 0;
 
 function clearTurnTimer() {
   if (turnTimerInterval) {
@@ -47,18 +56,29 @@ function clearTurnTimer() {
   turnTimerPaused = false;
   turnTimerHumanTurn = false;
   turnTimerLastTick = 0;
+  turnTimerLastActedCount = 0;
 }
 
 function updateTurnTimerBar() {
-  const pct = Math.max(0, turnTimerRemainingMs / TURN_DURATION_MS);
+  const pct = turnTimerBarMaxMs > 0
+    ? Math.min(1, turnTimerRemainingMs / turnTimerBarMaxMs)
+    : 0;
   turnTimerFillEl.style.width = `${pct * 100}%`;
   turnTimerEl.classList.toggle('turn-timer-low', pct <= 0.25 && pct > 0);
 }
 
-function startTurnTimer() {
+function addTurnTimerBonus(actionCount = 1) {
+  turnTimerRemainingMs += actionCount * TURN_BONUS_MS;
+  turnTimerBarMaxMs = Math.max(turnTimerBarMaxMs, turnTimerRemainingMs);
+  updateTurnTimerBar();
+}
+
+function startTurnTimer(actedCount = 0) {
   clearTurnTimer();
   turnTimerHumanTurn = true;
   turnTimerRemainingMs = TURN_DURATION_MS;
+  turnTimerBarMaxMs = TURN_DURATION_MS;
+  turnTimerLastActedCount = actedCount;
   turnTimerLastTick = performance.now();
   turnTimerEl.classList.remove('hidden');
   turnTimerEl.setAttribute('aria-hidden', 'false');
@@ -104,8 +124,16 @@ function syncTurnTimer(state) {
   }
 
   if (!turnTimerHumanTurn) {
-    startTurnTimer();
+    startTurnTimer(state.actedUnitIds.length);
     return;
+  }
+
+  if (!state.animating) {
+    const actedCount = state.actedUnitIds.length;
+    if (actedCount > turnTimerLastActedCount) {
+      addTurnTimerBonus(actedCount - turnTimerLastActedCount);
+      turnTimerLastActedCount = actedCount;
+    }
   }
 
   turnTimerPaused = false;
