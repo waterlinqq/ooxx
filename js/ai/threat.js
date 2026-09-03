@@ -7,6 +7,7 @@
 // Reach mirrors js/rules.js exactly:
 //   melee/support - four neighbouring cells; the bomber keeps all eight
 //   ranged - four rays, up to `range` steps, stopping at the first occupied cell
+//   artillery - four orthogonal cells exactly two steps away (no melee on adjacent cells)
 //   tower  - four orthogonal rays, up to `range` steps, stopping at the first occupied cell
 //   mage   - four rays to the board edge, piercing everything (getEnemiesOnLine ignores
 //            both `range` and blockers)
@@ -89,6 +90,16 @@ export function buildThreatMap(ctx, attackerTeam) {
             nr += dr;
             nc += dc;
           }
+        }
+        continue;
+      }
+
+      if (unit.type === 'artillery') {
+        for (const [dr, dc] of ORTHOGONAL_DIRS) {
+          const nr = r + dr * 2;
+          const nc = c + dc * 2;
+          if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+          mark(map, nr * size + nc, unit.atk, false);
         }
         continue;
       }

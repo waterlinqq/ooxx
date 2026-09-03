@@ -910,6 +910,71 @@ function buildEagle(mats) {
   };
 }
 
+function buildCannon(mats) {
+  const cannon = new THREE.Group();
+  part(cannon, cached('cannon-wheel', () => new THREE.TorusGeometry(0.08, 0.022, 8, 16)), mats.charcoal, {
+    pos: [-0.12, -0.04, 0],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(cannon, cached('cannon-wheel2', () => new THREE.TorusGeometry(0.08, 0.022, 8, 16)), mats.charcoal, {
+    pos: [0.12, -0.04, 0],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(cannon, cached('cannon-carriage', () => new THREE.BoxGeometry(0.28, 0.06, 0.14)), mats.wood, {
+    pos: [0, 0, 0],
+  });
+  part(cannon, cached('cannon-barrel', () => new THREE.CylinderGeometry(0.045, 0.055, 0.34, 10)), mats.steel, {
+    pos: [0, 0.05, 0.12],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(cannon, cached('cannon-muzzle', () => new THREE.TorusGeometry(0.05, 0.012, 8, 14)), mats.gold, {
+    pos: [0, 0.05, 0.29],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  return cannon;
+}
+
+function buildArtillery(mats) {
+  const group = new THREE.Group();
+  const legs = addLegs(group, mats, { spread: 0.082, legLength: 0.14 });
+  const torso = addTorso(group, mats, { width: 0.98, height: 0.25, y: 0.45 });
+  part(torso, cached('artillery-strap', () => new THREE.BoxGeometry(0.05, 0.24, 0.02)), mats.leather, {
+    pos: [-0.02, 0.02, 0.1],
+    rot: [0, 0, -0.35],
+  });
+  addPauldrons(group, mats, { radius: 0.074, x: 0.16, material: mats.armorDeep });
+  const armL = addArm(group, mats, -1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
+  const head = addHead(group, mats, { y: 0.71, radius: 0.108 });
+  const eyes = addEyes(head, mats, { y: 0.002, z: 0.095, size: 0.014 });
+  part(head, cached('artillery-helm', () => new THREE.SphereGeometry(0.12, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55)), mats.armor, {
+    pos: [0, 0.012, 0],
+  });
+  part(head, cached('artillery-helm-rim', () => new THREE.TorusGeometry(0.108, 0.012, 8, 18)), mats.trim, {
+    pos: [0, 0.03, 0],
+    rot: [-Math.PI / 2, 0, 0],
+  });
+
+  const cannon = buildCannon(mats);
+  cannon.position.set(0.04, -0.08, 0.1);
+  cannon.rotation.set(-0.15, 0.22, 0);
+  group.add(cannon);
+
+  armL.pivot.rotation.set(-0.42, 0, -0.28);
+  armR.pivot.rotation.set(-0.38, 0, 0.22);
+
+  return {
+    group,
+    legs,
+    torso,
+    head,
+    armL: armL.pivot,
+    armR: armR.pivot,
+    eyes,
+    cannon,
+  };
+}
+
 function buildTower(mats) {
   const group = new THREE.Group();
 
@@ -965,6 +1030,35 @@ function buildTower(mats) {
   return { group, turret };
 }
 
+function buildGhost(mats) {
+  const group = new THREE.Group();
+  const sheet = part(
+    group,
+    cached('ghost-sheet', () => new THREE.SphereGeometry(0.22, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.72)),
+    mats.cloth,
+    { pos: [0, 0.38, 0], scale: [1, 1.15, 0.85] }
+  );
+  sheet.material = sheet.material.clone();
+  sheet.material.transparent = true;
+  sheet.material.opacity = 0.72;
+
+  const head = part(group, cached('ghost-head', () => new THREE.SphereGeometry(0.12, 14, 12)), mats.cloth, {
+    pos: [0, 0.62, 0],
+    scale: [1.05, 0.95, 1],
+  });
+  head.material = head.material.clone();
+  head.material.transparent = true;
+  head.material.opacity = 0.78;
+
+  const eyes = addEyes(head, mats, { y: -0.01, z: 0.1, spread: 0.055, size: 0.018 });
+  part(group, cached('ghost-tail', () => new THREE.ConeGeometry(0.1, 0.22, 8)), mats.cloth, {
+    pos: [0, 0.12, 0],
+    scale: [1, 0.8, 0.7],
+  });
+
+  return { group, torso: sheet, head, eyes };
+}
+
 function buildFallback(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);
@@ -980,6 +1074,7 @@ function buildFallback(mats) {
 const BUILDERS = {
   swordsman: buildSwordsman,
   archer: buildArcher,
+  artillery: buildArtillery,
   tower: buildTower,
   shield: buildShield,
   mage: buildMage,
@@ -987,6 +1082,7 @@ const BUILDERS = {
   bomber: buildBomber,
   eagle: buildEagle,
   priest: buildPriest,
+  ghost: buildGhost,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -995,6 +1091,7 @@ const GLOBAL_SCALE = 0.88;
 const SILHOUETTE = {
   swordsman: [1, 1, 1],
   archer: [0.94, 1.04, 0.94],
+  artillery: [1.02, 0.96, 1.04],
   tower: [0.92, 0.92, 0.92],
   shield: [1.1, 0.94, 1.08],
   mage: [0.96, 1.02, 0.96],
@@ -1002,6 +1099,7 @@ const SILHOUETTE = {
   bomber: [1.06, 0.9, 1.06],
   eagle: [0.92, 0.92, 0.92],
   priest: [0.94, 1, 0.94],
+  ghost: [0.9, 1.08, 0.9],
 };
 
 export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {

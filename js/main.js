@@ -352,10 +352,12 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
+  if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
   if (cls.deathExplosion) return `八向近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
   if (cls.moveRange === Infinity) return '移動距離無限';
   if (cls.type === 'mage') return '上下左右光束穿透攻擊';
+  if (cls.type === 'artillery') return '上下左右第二格 · 無法近戰';
   if (cls.type === 'ranged') return `上下左右射線 · 射程 ${cls.range}`;
   if (cls.type === 'tower') return `上下左右齊射 · 射程 ${cls.range}`;
   if (cls.passiveBlessing) return '上下左右祝福 · 恢復 1 生命';
@@ -636,11 +638,15 @@ function renderBattlePanels(state) {
   surrenderBtn.disabled = !inBattle || state.animating;
 
   endPanelEl.classList.toggle('hidden', !showEnd);
-  restartBtn.classList.toggle('hidden', !showEnd);
+  restartBtn.classList.toggle('hidden', !showEnd || inTutorial);
   backToLobbyBtn.classList.toggle('hidden', !showEnd);
 
-  restartBtn.textContent = inTutorial ? '再看一次教學' : '再來一局';
-  backToLobbyBtn.textContent = inTutorial ? '開始遊戲' : '換模式';
+  if (!inTutorial) {
+    restartBtn.textContent = '再來一局';
+    backToLobbyBtn.textContent = '換模式';
+  } else {
+    backToLobbyBtn.textContent = '開始遊戲';
+  }
 
   if (showEnd) {
     const coinLine = state.lastCoinReward > 0

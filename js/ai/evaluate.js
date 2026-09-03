@@ -17,12 +17,14 @@ const CLASS_BONUS = {
   shield: 6,
   swordsman: 0,
   archer: 8,
+  artillery: 8,
   tower: 6,
   mage: 10,
   assassin: 6,
   bomber: 6,
   eagle: 8,
   priest: 8,
+  ghost: 10,
 };
 
 // A reserve unit is real material but contributes nothing to lines until it lands.

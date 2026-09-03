@@ -30,12 +30,20 @@ function previewTilePosition(row, col) {
 
 function getAttackRangeCells(unit) {
   const directions = unit.classId === 'bomber' ? ALL_DIRECTIONS : ORTHOGONAL_DIRECTIONS;
+  const cells = [];
+
+  if (unit.type === 'artillery') {
+    for (const [dr, dc] of ORTHOGONAL_DIRECTIONS) {
+      cells.push([unit.row + dr * 2, unit.col + dc * 2]);
+    }
+    return cells.filter(([row, col]) => isInBounds(row, col, PREVIEW_BOARD_SIZE));
+  }
+
   const maxRange = unit.type === 'melee' || unit.type === 'support'
     ? 1
     : unit.type === 'mage'
       ? PREVIEW_BOARD_SIZE
       : unit.range;
-  const cells = [];
 
   for (const [dr, dc] of directions) {
     for (let step = 1; step <= maxRange; step++) {

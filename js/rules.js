@@ -1,4 +1,4 @@
-import { createEmptyBoard, cloneBoard } from './units.js';
+import { CLASSES, createEmptyBoard, cloneBoard } from './units.js';
 
 export function getWinLines(size, winLength = size) {
   const lines = [];
@@ -204,13 +204,37 @@ export function getTowerTargets(board, unit) {
   return targets;
 }
 
-export function getValidAttackTargets(board, unit) {
+/** Enemies on the second orthogonal cell; adjacent cells are never valid targets. */
+export function getArtilleryTargets(board, unit) {
   if (unit.row < 0) return [];
 
   const size = boardSize(board);
   const targets = [];
 
-  if (unit.type === 'melee' || unit.type === 'support') {
+  for (const [dr, dc] of ORTHOGONAL_DIRS) {
+    const r = unit.row + dr * 2;
+    const c = unit.col + dc * 2;
+    if (!isInBounds(r, c, size)) continue;
+
+    const target = board[r][c];
+    if (target && canAttackTarget(unit, target)) targets.push(target);
+  }
+
+  return targets;
+}
+
+function unitAttackType(unit) {
+  return unit.type ?? CLASSES[unit.classId]?.type;
+}
+
+export function getValidAttackTargets(board, unit) {
+  if (unit.row < 0) return [];
+
+  const size = boardSize(board);
+  const targets = [];
+  const type = unitAttackType(unit);
+
+  if (type === 'melee' || type === 'support') {
     const attackCells = unit.classId === 'bomber'
       ? getAdjacentCells8(unit.row, unit.col, size)
       : getAdjacentCells(unit.row, unit.col, size);
@@ -221,7 +245,7 @@ export function getValidAttackTargets(board, unit) {
     return targets;
   }
 
-  if (unit.type === 'ranged') {
+  if (type === 'ranged') {
     const seen = new Set();
     for (const [dr, dc] of ORTHOGONAL_DIRS) {
       let r = unit.row + dr;
@@ -244,11 +268,15 @@ export function getValidAttackTargets(board, unit) {
     return targets;
   }
 
-  if (unit.type === 'tower') {
+  if (type === 'artillery') {
+    return getArtilleryTargets(board, unit);
+  }
+
+  if (type === 'tower') {
     return getTowerTargets(board, unit);
   }
 
-  if (unit.type === 'mage') {
+  if (type === 'mage') {
     const seen = new Set();
     for (const line of getMageLines(unit, size)) {
       const end = line[1];
@@ -360,6 +388,44 @@ export function applyTeamPriestBlessings(board, team, excludePriestIds = []) {
   return { board: next, targets };
 }
 
+/** Transforms attacker into the possessed form of victim, keeping ghost hp and taking victim atk. */
+export function applyPossession(attacker, victim) {
+  const cls = CLASSES[victim.classId];
+  const prev = {
+    classId: attacker.classId,
+    hp: attacker.hp,
+    maxHp: attacker.maxHp,
+    atk: attacker.atk,
+    baseAtk: attacker.baseAtk,
+    range: attacker.range,
+    minRange: attacker.minRange ?? null,
+    moveRange: attacker.moveRange,
+    jumpMove: attacker.jumpMove,
+    jumpRange: attacker.jumpRange,
+    type: attacker.type,
+    deathExplosion: attacker.deathExplosion,
+    passiveBlessing: attacker.passiveBlessing,
+    possessionOnKill: attacker.possessionOnKill,
+  };
+
+  attacker.classId = victim.classId;
+  attacker.hp = prev.hp;
+  attacker.maxHp = prev.hp;
+  attacker.atk = cls.atk;
+  attacker.baseAtk = cls.atk;
+  attacker.range = cls.range;
+  attacker.minRange = cls.minRange ?? null;
+  attacker.moveRange = cls.moveRange ?? 1;
+  attacker.jumpMove = cls.jumpMove ?? false;
+  attacker.jumpRange = cls.jumpRange ?? null;
+  attacker.type = cls.type;
+  attacker.deathExplosion = cls.deathExplosion ?? 0;
+  attacker.passiveBlessing = cls.passiveBlessing ?? false;
+  attacker.possessionOnKill = false;
+
+  return prev;
+}
+
 export function resolveDeathExplosions(board, killedUnits) {
   const bombers = killedUnits.filter((u) => (u.deathExplosion ?? 0) > 0);
   if (bombers.length === 0) {
@@ -405,10 +471,12 @@ export function resolveDeathExplosions(board, killedUnits) {
 export function applyAttack(board, attacker, target) {
   const next = cloneBoard(board);
   let hits;
-  if (attacker.type === 'mage') {
+  if (unitAttackType(attacker) === 'mage') {
     hits = getEnemiesOnLine(board, attacker, target.row, target.col);
-  } else if (attacker.type === 'tower') {
+  } else if (unitAttackType(attacker) === 'tower') {
     hits = getTowerTargets(board, attacker);
+  } else if (unitAttackType(attacker) === 'artillery') {
+    hits = getArtilleryTargets(board, attacker).filter((hit) => hit.id === target.id);
   } else {
     hits = canAttackTarget(attacker, target) ? [target] : [];
   }
@@ -424,12 +492,31 @@ export function applyAttack(board, attacker, target) {
     }
   }
 
+  const possessed = [];
+  const attackerOnBoard = next[attacker.row]?.[attacker.col];
+  if (attackerOnBoard?.possessionOnKill && canAttackTarget(attacker, target)) {
+    const victimIdx = killed.findIndex((k) => k.id === target.id);
+    if (victimIdx >= 0) {
+      const victim = killed[victimIdx];
+      applyPossession(attackerOnBoard, victim);
+      next[attacker.row][attacker.col] = null;
+      next[victim.row][victim.col] = attackerOnBoard;
+      killed.splice(victimIdx, 1);
+      possessed.push({
+        from: { row: attacker.row, col: attacker.col },
+        unit: attackerOnBoard,
+        victimClassId: victim.classId,
+      });
+    }
+  }
+
   const explosion = resolveDeathExplosions(next, killed);
 
   return {
     board: explosion.board,
     hits,
     killed,
+    possessed,
     explosionKilled: explosion.explosionKilled,
     explosions: explosion.explosions,
   };

@@ -995,7 +995,7 @@ export class Game {
         killed: directKilledIds.has(h.id),
       })),
       team: unit.team,
-      type: unit.type === 'support' ? 'melee' : unit.type,
+      type: unit.type === 'support' ? 'melee' : unit.type === 'artillery' ? 'ranged' : unit.type,
       damage: unit.atk,
       volleyEndpoints,
       explosions: result.explosions ?? [],
@@ -1015,6 +1015,10 @@ export class Game {
     this.animating = false;
 
     let detail = `${label}（命中 ${result.hits.length} 個目標`;
+    if (result.possessed?.length > 0) {
+      const victimName = CLASSES[result.possessed[0].victimClassId]?.name ?? '敵人';
+      detail += `，幽魂附身 ${victimName}`;
+    }
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);
       detail += `，自爆波及 ${blastHits} 人`;
@@ -1302,10 +1306,6 @@ export class Game {
   }
 
   restartSeries() {
-    if (this.tutorial) {
-      this.startTutorial();
-      return;
-    }
     // Back to formation rather than the mode picker: the lineup is the interesting
     // thing to retune between games, and it survives so a rematch is one tap away.
     this.phase = 'formation';

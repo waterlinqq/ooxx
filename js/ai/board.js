@@ -13,7 +13,9 @@ import {
   getAdjacentCells8,
   getEnemiesOnLine,
   getTowerTargets,
+  getArtilleryTargets,
   canAttackTarget,
+  applyPossession,
 } from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
@@ -109,11 +111,13 @@ function cloneUnit(unit, searchIndex) {
     atk: unit.atk,
     baseAtk: unit.baseAtk ?? CLASSES[unit.classId].atk,
     range: unit.range,
+    minRange: unit.minRange ?? null,
     moveRange: unit.moveRange ?? 1,
     jumpMove: unit.jumpMove ?? false,
     jumpRange: unit.jumpRange ?? null,
     deathExplosion: unit.deathExplosion ?? 0,
     passiveBlessing: unit.passiveBlessing ?? false,
+    possessionOnKill: unit.possessionOnKill ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -430,6 +434,7 @@ export function makeAction(ctx, action) {
     fromCol: actor.col,
     damageRecords: [],
     blessRecords: [],
+    possessUndo: null,
     enemyKills: [],
     selfLosses: [],
   };
@@ -447,6 +452,8 @@ export function makeAction(ctx, action) {
       hits = getEnemiesOnLine(ctx.board, actor, target.row, target.col);
     } else if (actor.type === 'tower') {
       hits = getTowerTargets(ctx.board, actor);
+    } else if (actor.type === 'artillery') {
+      hits = getArtilleryTargets(ctx.board, actor).filter((hit) => hit.id === target.id);
     } else {
       hits = canAttackTarget(actor, target) ? [target] : [];
     }
@@ -460,6 +467,24 @@ export function makeAction(ctx, action) {
       if (record.died) {
         directKills.push(hit);
         undo.enemyKills.push(hit);
+      }
+    }
+
+    if (actor.possessionOnKill) {
+      const killIdx = directKills.findIndex((k) => k.id === target.id);
+      if (killIdx >= 0) {
+        const victim = directKills[killIdx];
+        undo.possessUndo = {
+          actorPrev: applyPossession(actor, victim),
+          fromRow: undo.fromRow,
+          fromCol: undo.fromCol,
+          victimRow: victim.deadRow,
+          victimCol: victim.deadCol,
+        };
+        directKills.splice(killIdx, 1);
+        undo.enemyKills = undo.enemyKills.filter((k) => k.id !== target.id);
+        lift(ctx, actor);
+        place(ctx, actor, victim.deadRow, victim.deadCol);
       }
     }
 
@@ -593,6 +618,12 @@ export function unmakeAction(ctx, undo) {
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
     return;
+  }
+
+  if (undo.possessUndo) {
+    lift(ctx, actor);
+    Object.assign(actor, undo.possessUndo.actorPrev);
+    place(ctx, actor, undo.possessUndo.fromRow, undo.possessUndo.fromCol);
   }
 
   for (let i = undo.damageRecords.length - 1; i >= 0; i--) {

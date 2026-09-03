@@ -24,6 +24,7 @@ function easeOutBack(x) {
 const CROUCH_DEPTH = {
   swordsman: 1,
   archer: 1,
+  artillery: 0.85,
   tower: 0,
   shield: 0.85,
   mage: 0.5,
@@ -121,6 +122,12 @@ export class UnitMeshManager {
 
         let entry = this.units.get(unit.id);
         if (!entry) {
+          entry = this.createUnitEntry(unit, state.matchFormat);
+          this.units.set(unit.id, entry);
+          this.group.add(entry.root);
+        } else if (entry.classId !== unit.classId || entry.team !== unit.team) {
+          this.group.remove(entry.root);
+          this.disposeEntry(entry);
           entry = this.createUnitEntry(unit, state.matchFormat);
           this.units.set(unit.id, entry);
           this.group.add(entry.root);
