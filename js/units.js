@@ -17,7 +17,7 @@ export const CLASSES = {
     atk: 1,
     range: 1,
     type: 'melee',
-    desc: '生命值極高，近戰',
+    desc: '生命值極高，可攻擊相鄰八格',
   },
   swordsman: {
     id: 'swordsman',
@@ -27,7 +27,7 @@ export const CLASSES = {
     atk: 3,
     range: 1,
     type: 'melee',
-    desc: '近戰高傷害',
+    desc: '八向近戰高傷害',
   },
   mage: {
     id: 'mage',
@@ -51,7 +51,7 @@ export const CLASSES = {
     jumpMove: true,
     jumpRange: 2,
     type: 'melee',
-    desc: '低血低攻，可跳躍至周遭兩格',
+    desc: '八向近戰，可跳躍至周遭兩格',
   },
   bomber: {
     id: 'bomber',
@@ -62,7 +62,7 @@ export const CLASSES = {
     range: 1,
     type: 'melee',
     deathExplosion: 2,
-    desc: '近戰，被擊殺時自爆反擊相鄰敵人',
+    desc: '八向近戰，被擊殺時自爆反擊相鄰敵人',
   },
   eagle: {
     id: 'eagle',
@@ -74,7 +74,18 @@ export const CLASSES = {
     moveRange: 1,
     type: 'melee',
     isFlying: true,
-    desc: '浮空近戰，只會受到弓箭與魔法攻擊',
+    desc: '浮空八向近戰，只會受到弓箭與魔法攻擊',
+  },
+  priest: {
+    id: 'priest',
+    name: '牧師',
+    icon: '✨',
+    hp: 2,
+    atk: 1,
+    range: 1,
+    type: 'support',
+    canBless: true,
+    desc: '可八向近戰，並祝福相鄰隊友，使其生命與攻擊各增加 1',
   },
 };
 
@@ -236,6 +247,7 @@ export function createUnit(classId, teamId, ownerSeat = null) {
     jumpRange: cls.jumpRange ?? null,
     deathExplosion: cls.deathExplosion ?? 0,
     isFlying: cls.isFlying ?? false,
+    canBless: cls.canBless ?? false,
     type: cls.type,
     row: -1,
     col: -1,

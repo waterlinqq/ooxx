@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildUnitModel } from './UnitModels.js';
 
-const THUMB_SIZE = 256;
+const THUMB_SIZE = 384;
 const UNIT_BASE_Y = 0.072;
 const EAGLE_FLIGHT_HEIGHT = 0.34;
 const PREVIEW_ROTATION_Y = 0.35;
-const FRAME_PADDING = 1.06;
+const FRAME_PADDING = 1.04;
 
 function disposeModel(model) {
   model.root.traverse((obj) => {
@@ -33,12 +33,6 @@ function setupScene(renderer) {
 
   const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
   keyLight.position.set(4, 8, 4);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(512, 512);
-  keyLight.shadow.camera.left = -3;
-  keyLight.shadow.camera.right = 3;
-  keyLight.shadow.camera.top = 3;
-  keyLight.shadow.camera.bottom = -3;
   scene.add(keyLight);
 
   const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
@@ -61,24 +55,92 @@ function setupCamera() {
 
 function fitCameraToModel(camera, object) {
   const box = new THREE.Box3().setFromObject(object);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const viewHeight = Math.max(size.y, size.x * 0.72, size.z * 0.72) * FRAME_PADDING;
+  const corners = [
+    new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+  ];
 
-  camera.left = -viewHeight / 2;
-  camera.right = viewHeight / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
+  camera.updateMatrixWorld(true);
+  const view = new THREE.Vector3();
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (const corner of corners) {
+    view.copy(corner).applyMatrix4(camera.matrixWorldInverse);
+    minX = Math.min(minX, view.x);
+    maxX = Math.max(maxX, view.x);
+    minY = Math.min(minY, view.y);
+    maxY = Math.max(maxY, view.y);
+  }
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2) * FRAME_PADDING;
+
+  camera.left = cx - half;
+  camera.right = cx + half;
+  camera.top = cy + half;
+  camera.bottom = cy - half;
   camera.updateProjectionMatrix();
-  camera.lookAt(center.x, center.y - size.y * 0.04, center.z);
+}
+
+function cropCanvasToContent(sourceCanvas) {
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+  const scratch = document.createElement('canvas');
+  scratch.width = width;
+  scratch.height = height;
+  const ctx = scratch.getContext('2d');
+  ctx.drawImage(sourceCanvas, 0, 0);
+
+  const { data } = ctx.getImageData(0, 0, width, height);
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha > 12) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < minX) return sourceCanvas.toDataURL('image/png');
+
+  const span = Math.max(maxX - minX, maxY - minY);
+  const pad = Math.max(6, Math.round(span * 0.04));
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(width - 1, maxX + pad);
+  maxY = Math.min(height - 1, maxY + pad);
+
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+  const out = document.createElement('canvas');
+  out.width = cropW;
+  out.height = cropH;
+  out.getContext('2d').drawImage(scratch, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+  return out.toDataURL('image/png');
 }
 
 export function generateUnitThumbnails(classIds) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(THUMB_SIZE, THUMB_SIZE);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.3;
 
@@ -95,10 +157,10 @@ export function generateUnitThumbnails(classIds) {
     model.root.position.set(0, UNIT_BASE_Y + flightHeight, 0);
     model.body.rotation.y = PREVIEW_ROTATION_Y;
     scene.add(model.root);
-    fitCameraToModel(camera, model.root);
+    fitCameraToModel(camera, model.body);
 
     renderer.render(scene, camera);
-    thumbnails.set(classId, renderer.domElement.toDataURL('image/png'));
+    thumbnails.set(classId, cropCanvasToContent(renderer.domElement));
 
     scene.remove(model.root);
     disposeModel(model);

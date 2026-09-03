@@ -229,7 +229,10 @@ function scoreEliminationPressure(board, team, enemyReserve, killed) {
 function countAdjacentEnemies(board, row, col, team) {
   const size = board.length;
   let count = 0;
-  for (const [dr, dc] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+  for (const [dr, dc] of [
+    [0, 1], [0, -1], [1, 0], [-1, 0],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ]) {
     const r = row + dr;
     const c = col + dc;
     if (r >= 0 && r < size && c >= 0 && c < size) {

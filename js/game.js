@@ -17,10 +17,12 @@ import {
 import {
   getValidMoves,
   getValidAttackTargets,
+  getValidBlessTargets,
   getValidDeployCells,
   applyMove,
   applyDeploy,
   applyAttack,
+  applyBless,
   checkWin,
   isTeamEliminated,
 } from './rules.js';
@@ -191,6 +193,7 @@ export class Game {
       lastWinLine: this.lastWinLine,
       validMoves: this.getHighlightMoves(),
       validTargets: this.getHighlightTargets(),
+      validBless: this.getHighlightBless(),
       validDeploy: this.getHighlightDeploy(),
       animating: this.animating,
       actionsRemaining: this.actionsRemaining,
@@ -227,7 +230,7 @@ export class Game {
     if (this.is2v2()) {
       const label = formatSlotLabel(this.currentSlot);
       if (this.canHumanAct()) {
-        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
+        return `${label} 回合 · 你的回合：拖曳單位移動、攻擊或祝福，點後備區再點空格部署，點敵方單位查看資訊`;
       }
       return `${label} 回合 · AI 思考中`;
     }
@@ -235,7 +238,7 @@ export class Game {
     const team = TEAM[this.currentPlayer];
     const actionsPerTurn = mode.actionsPerTurn;
     if (this.currentPlayer === 'blue') {
-      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
+      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動、攻擊或祝福，點後備區再點空格部署，點敵方單位查看資訊`;
     }
     return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
   }
@@ -254,6 +257,7 @@ export class Game {
         if (this.actedUnitIds.has(unit.id)) continue;
         if (getValidMoves(this.board, unit).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
+        if (getValidBlessTargets(this.board, unit).length > 0) return true;
       }
     }
     return false;
@@ -276,6 +280,7 @@ export class Game {
         if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
         if (getValidMoves(this.board, unit).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
+        if (getValidBlessTargets(this.board, unit).length > 0) return true;
       }
     }
     return false;
@@ -389,7 +394,9 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.draggingUnitId = unitId;
-    this.message = '點選或拖曳至綠格移動、紅格攻擊';
+    this.message = unit.canBless
+      ? '點選或拖曳至綠格移動、紅格攻擊、紫格祝福'
+      : '點選或拖曳至綠格移動、紅格攻擊';
     this.notify();
   }
 
@@ -428,6 +435,11 @@ export class Game {
       } else {
         this.resetPlayerTurn();
       }
+      return;
+    }
+
+    if (this.tryBlessTarget(unitId, row, col)) {
+      this.draggingUnitId = null;
       return;
     }
 
@@ -476,6 +488,14 @@ export class Game {
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
     return getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
+  }
+
+  getHighlightBless() {
+    if (!this.draggingUnitId) return [];
+    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
+    const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
+    if (!unit) return [];
+    return getValidBlessTargets(this.board, unit).map((t) => [t.row, t.col]);
   }
 
   getHighlightDeploy() {
@@ -534,7 +554,7 @@ export class Game {
         killed: directKilledIds.has(h.id),
       })),
       team: unit.team,
-      type: unit.type,
+      type: unit.type === 'support' ? 'melee' : unit.type,
       damage: unit.atk,
       explosions: result.explosions ?? [],
     };
@@ -566,6 +586,24 @@ export class Game {
     if (!valid.some((t) => t.id === target.id)) return false;
 
     this.resolveAttack(unit, target, '攻擊');
+    return true;
+  }
+
+  tryBlessTarget(unitId, row, col) {
+    const unit = this.board.flat().find((u) => u?.id === unitId);
+    const target = this.board[row][col];
+    if (!unit || !target || target.team !== unit.team || target.id === unit.id) return false;
+    if (this.actedUnitIds.has(unitId)) return false;
+
+    const valid = getValidBlessTargets(this.board, unit);
+    if (!valid.some((candidate) => candidate.id === target.id)) return false;
+
+    const result = applyBless(this.board, unit, target);
+    this.board = result.board;
+    this.endAction(
+      `祝福 ${CLASSES[target.classId].name}（HP ${result.target.hp}/${result.target.maxHp} · ATK ${result.target.atk}）`,
+      unitId,
+    );
     return true;
   }
 
@@ -716,6 +754,15 @@ export class Game {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const target = this.board.flat().find((u) => u?.id === action.targetId);
       this.resolveAttack(unit, target, `${slotLabel} 攻擊`);
+      return;
+    }
+
+    if (action.type === 'bless') {
+      const unit = this.board.flat().find((u) => u?.id === action.unitId);
+      const target = this.board.flat().find((u) => u?.id === action.targetId);
+      const result = applyBless(this.board, unit, target);
+      this.board = result.board;
+      this.endAction(`${slotLabel} 祝福 ${CLASSES[target.classId].name}`, action.unitId);
     }
   }
 

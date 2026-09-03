@@ -111,6 +111,7 @@ function cloneUnit(unit, searchIndex) {
     jumpRange: unit.jumpRange ?? null,
     deathExplosion: unit.deathExplosion ?? 0,
     isFlying: unit.isFlying ?? false,
+    canBless: unit.canBless ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -227,6 +228,29 @@ function unitCellKey(ctx, unit, row, col) {
   return ctx.zobrist.cellUnit[cell][TEAM_INDEX[unit.team]][CLASS_INDEX.get(unit.classId)][hp];
 }
 
+function mix32(value) {
+  let mixed = value | 0;
+  mixed ^= mixed >>> 16;
+  mixed = Math.imul(mixed, 0x7feb352d);
+  mixed ^= mixed >>> 15;
+  mixed = Math.imul(mixed, 0x846ca68b);
+  mixed ^= mixed >>> 16;
+  return mixed | 0;
+}
+
+function unitAttackKey(ctx, unit, row, col) {
+  const cell = row * ctx.size + col;
+  const seed = Math.imul(cell + 1, 0x9e3779b9)
+    ^ Math.imul(TEAM_INDEX[unit.team] + 1, 0x85ebca6b)
+    ^ Math.imul(unit.atk + 1, 0xc2b2ae35);
+  return [mix32(seed), mix32(seed ^ 0x27d4eb2f)];
+}
+
+function xorUnitHash(ctx, unit, row, col) {
+  xorHash(ctx, unitCellKey(ctx, unit, row, col));
+  xorHash(ctx, unitAttackKey(ctx, unit, row, col));
+}
+
 function reserveCountKey(ctx, team, classId, count) {
   const table = ctx.zobrist.reserveCount[TEAM_INDEX[team]][CLASS_INDEX.get(classId)];
   return table[Math.min(table.length - 1, count)];
@@ -243,7 +267,7 @@ function registerOnBoard(ctx, unit) {
   const cell = unit.row * ctx.size + unit.col;
   for (const lineIdx of ctx.linesByCell[cell]) ctx.lineCount[unit.team][lineIdx]++;
   ctx.onBoard[unit.team]++;
-  xorHash(ctx, unitCellKey(ctx, unit, unit.row, unit.col));
+  xorUnitHash(ctx, unit, unit.row, unit.col);
 }
 
 function place(ctx, unit, row, col) {
@@ -255,7 +279,7 @@ function place(ctx, unit, row, col) {
 
 function lift(ctx, unit) {
   const { row, col } = unit;
-  xorHash(ctx, unitCellKey(ctx, unit, row, col));
+  xorUnitHash(ctx, unit, row, col);
   const cell = row * ctx.size + col;
   for (const lineIdx of ctx.linesByCell[cell]) ctx.lineCount[unit.team][lineIdx]--;
   ctx.onBoard[unit.team]--;
@@ -266,10 +290,10 @@ function lift(ctx, unit) {
 
 /** Applies damage in place, returning true when the unit died. */
 function damage(ctx, unit, amount) {
-  xorHash(ctx, unitCellKey(ctx, unit, unit.row, unit.col));
+  xorUnitHash(ctx, unit, unit.row, unit.col);
   unit.hp -= amount;
   if (unit.hp > 0) {
-    xorHash(ctx, unitCellKey(ctx, unit, unit.row, unit.col));
+    xorUnitHash(ctx, unit, unit.row, unit.col);
     return false;
   }
   // Re-xor with the pre-damage hp key already removed above; the unit is leaving the
@@ -295,12 +319,12 @@ function restoreDamaged(ctx, record) {
     const cell = row * ctx.size + col;
     for (const lineIdx of ctx.linesByCell[cell]) ctx.lineCount[unit.team][lineIdx]++;
     ctx.onBoard[unit.team]++;
-    xorHash(ctx, unitCellKey(ctx, unit, row, col));
+    xorUnitHash(ctx, unit, row, col);
     return;
   }
-  xorHash(ctx, unitCellKey(ctx, unit, row, col));
+  xorUnitHash(ctx, unit, row, col);
   unit.hp = prevHp;
-  xorHash(ctx, unitCellKey(ctx, unit, row, col));
+  xorUnitHash(ctx, unit, row, col);
 }
 
 function removeFromReserve(ctx, unit) {
@@ -373,6 +397,7 @@ export function makeAction(ctx, action) {
     fromRow: actor.row,
     fromCol: actor.col,
     damageRecords: [],
+    blessRecord: null,
     enemyKills: [],
     selfLosses: [],
   };
@@ -383,7 +408,7 @@ export function makeAction(ctx, action) {
   } else if (action.type === 'move') {
     lift(ctx, actor);
     place(ctx, actor, action.row, action.col);
-  } else {
+  } else if (action.type === 'attack') {
     const target = ctx.unitsById.get(action.targetId);
     const hits = actor.type === 'mage'
       ? getEnemiesOnLine(ctx.board, actor, target.row, target.col)
@@ -402,6 +427,13 @@ export function makeAction(ctx, action) {
     }
 
     resolveExplosions(ctx, directKills, undo.damageRecords, undo.selfLosses);
+  } else if (action.type === 'bless') {
+    const target = ctx.unitsById.get(action.targetId);
+    undo.blessRecord = { target, prevHp: target.hp, prevAtk: target.atk };
+    xorUnitHash(ctx, target, target.row, target.col);
+    target.hp = Math.min(target.maxHp, target.hp + 1);
+    target.atk += 1;
+    xorUnitHash(ctx, target, target.row, target.col);
   }
 
   if (!ctx.acted.has(actor.searchIndex)) {
@@ -520,6 +552,15 @@ export function unmakeAction(ctx, undo) {
   if (action.type === 'move') {
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
+    return;
+  }
+
+  if (action.type === 'bless') {
+    const { target, prevHp, prevAtk } = undo.blessRecord;
+    xorUnitHash(ctx, target, target.row, target.col);
+    target.hp = prevHp;
+    target.atk = prevAtk;
+    xorUnitHash(ctx, target, target.row, target.col);
     return;
   }
 

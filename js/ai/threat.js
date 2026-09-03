@@ -5,7 +5,7 @@
 // cell, the strongest single hit the given team could land on a unit standing there.
 //
 // Reach mirrors js/rules.js exactly:
-//   melee  - the four orthogonal neighbours (getAdjacentCells), never the diagonals
+//   melee/support - all eight neighbouring cells
 //   ranged - eight rays, up to `range` steps, stopping at the first occupied cell
 //   mage   - eight rays to the board edge, piercing everything (getEnemiesOnLine ignores
 //            both `range` and blockers)
@@ -18,7 +18,6 @@
 // only by ranged and mage. That is what makes an eagle correctly unclearable — and its
 // line therefore dead — for a team with no ranged or mage left.
 
-const ORTHOGONAL = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const ALL_DIRS = [
   [0, 1], [0, -1], [1, 0], [-1, 0],
   [1, 1], [1, -1], [-1, 1], [-1, -1],
@@ -75,8 +74,8 @@ export function buildThreatMap(ctx, attackerTeam) {
       const unit = row[c];
       if (!unit || unit.team !== attackerTeam) continue;
 
-      if (unit.type === 'melee') {
-        for (const [dr, dc] of ORTHOGONAL) {
+      if (unit.type === 'melee' || unit.type === 'support') {
+        for (const [dr, dc] of ALL_DIRS) {
           const nr = r + dr;
           const nc = c + dc;
           if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;

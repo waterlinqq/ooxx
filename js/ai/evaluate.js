@@ -21,6 +21,7 @@ const CLASS_BONUS = {
   assassin: 6,
   bomber: 6,
   eagle: 8,
+  priest: 8,
 };
 
 // A reserve unit is real material but contributes nothing to lines until it lands.

@@ -10,11 +10,13 @@ import {
   applyDeploy,
   applyMove,
   applyAttack,
+  applyBless,
   checkWin,
   isTeamEliminated,
   getValidDeployCells,
   getValidMoves,
   getValidAttackTargets,
+  getValidBlessTargets,
 } from '../../js/rules.js';
 
 export const MAX_TURNS = 800;
@@ -63,6 +65,7 @@ export function hasValidActionsForSlot(board, reserve, slot, actedUnitIds) {
       if (!ownedBySeat(unit, seat)) continue;
       if (getValidMoves(board, unit).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
+      if (getValidBlessTargets(board, unit).length > 0) return true;
     }
   }
   return false;
@@ -76,6 +79,7 @@ export function hasValidActions(board, reserve, team, actedUnitIds) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
       if (getValidMoves(board, unit).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
+      if (getValidBlessTargets(board, unit).length > 0) return true;
     }
   }
   return false;
@@ -131,6 +135,18 @@ function serializeAction(action, board, reserves) {
     };
   }
 
+  if (action.type === 'bless') {
+    const unit = byId.get(action.unitId);
+    const target = byId.get(action.targetId);
+    return {
+      type: 'bless',
+      classId: unit?.classId ?? null,
+      targetClassId: target?.classId ?? null,
+      from: unit ? { row: unit.row, col: unit.col } : null,
+      target: target ? { row: target.row, col: target.col } : null,
+    };
+  }
+
   return action;
 }
 
@@ -165,6 +181,13 @@ function applyAiAction(state, action, team) {
       kills: result.killed.length,
       selfLosses: result.explosionKilled?.length ?? 0,
     };
+  }
+
+  if (action.type === 'bless') {
+    const unit = state.board.flat().find((u) => u?.id === action.unitId);
+    const target = state.board.flat().find((u) => u?.id === action.targetId);
+    state.board = applyBless(state.board, unit, target).board;
+    return { label: 'bless', detail };
   }
 
   return null;

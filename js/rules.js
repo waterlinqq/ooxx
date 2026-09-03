@@ -166,8 +166,8 @@ export function getValidAttackTargets(board, unit) {
   const size = boardSize(board);
   const targets = [];
 
-  if (unit.type === 'melee') {
-    for (const [r, c] of getAdjacentCells(unit.row, unit.col, size)) {
+  if (unit.type === 'melee' || unit.type === 'support') {
+    for (const [r, c] of getAdjacentCells8(unit.row, unit.col, size)) {
       const target = board[r][c];
       if (target && canAttackTarget(unit, target)) targets.push(target);
     }
@@ -215,6 +215,17 @@ export function getValidAttackTargets(board, unit) {
   return targets;
 }
 
+export function getValidBlessTargets(board, unit) {
+  if (unit.row < 0 || !unit.canBless) return [];
+
+  const targets = [];
+  for (const [r, c] of getAdjacentCells(unit.row, unit.col, boardSize(board))) {
+    const target = board[r][c];
+    if (target && target.team === unit.team && target.id !== unit.id) targets.push(target);
+  }
+  return targets;
+}
+
 export function getValidDeployCells(board) {
   const size = boardSize(board);
   const cells = [];
@@ -255,6 +266,14 @@ export function applyDeploy(board, unit, row, col) {
   const deployed = { ...unit, row, col };
   next[row][col] = deployed;
   return { board: next, unit: deployed };
+}
+
+export function applyBless(board, priest, target) {
+  const next = cloneBoard(board);
+  const blessed = next[target.row][target.col];
+  blessed.hp = Math.min(blessed.maxHp, blessed.hp + 1);
+  blessed.atk += 1;
+  return { board: next, unit: next[priest.row][priest.col], target: blessed };
 }
 
 export function resolveDeathExplosions(board, killedUnits) {

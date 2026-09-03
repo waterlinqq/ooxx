@@ -673,6 +673,65 @@ function buildMage(mats) {
   };
 }
 
+function buildPriest(mats) {
+  const group = new THREE.Group();
+  const robe = part(
+    group,
+    cached('priest-robe', () => new THREE.CylinderGeometry(0.13, 0.25, 0.38, 16, 2, true)),
+    mats.cloth,
+    { pos: [0, 0.19, 0] }
+  );
+  part(group, cached('priest-robe-hem', () => new THREE.TorusGeometry(0.245, 0.014, 8, 26)), mats.gold, {
+    pos: [0, 0.014, 0],
+    rot: [-Math.PI / 2, 0, 0],
+  });
+  const torso = addTorso(group, mats, { width: 0.86, height: 0.22, y: 0.47, material: mats.cloth });
+  part(torso, cached('priest-cross-v', () => new THREE.BoxGeometry(0.025, 0.17, 0.018)), mats.gold, {
+    pos: [0, 0, 0.1],
+  });
+  part(torso, cached('priest-cross-h', () => new THREE.BoxGeometry(0.1, 0.024, 0.018)), mats.gold, {
+    pos: [0, 0.025, 0.102],
+  });
+
+  const armL = addArm(group, mats, -1, { shoulderX: 0.145, shoulderY: 0.56, sleeveMat: mats.cloth });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.145, shoulderY: 0.56, sleeveMat: mats.cloth });
+  const head = addHead(group, mats, { y: 0.72, radius: 0.105 });
+  const eyes = addEyes(head, mats, { y: -0.004, z: 0.095, size: 0.015 });
+  const hood = addHood(group, mats, { y: 0.72 });
+
+  const staff = new THREE.Group();
+  part(staff, cached('priest-staff-shaft', () => new THREE.CylinderGeometry(0.015, 0.02, 0.62, 9)), mats.wood, {
+    pos: [0, 0.08, 0],
+  });
+  part(staff, cached('priest-staff-cross-v', () => new THREE.BoxGeometry(0.025, 0.2, 0.025)), mats.gold, {
+    pos: [0, 0.43, 0],
+  });
+  part(staff, cached('priest-staff-cross-h', () => new THREE.BoxGeometry(0.14, 0.026, 0.026)), mats.gold, {
+    pos: [0, 0.46, 0],
+  });
+  const orb = part(staff, cached('priest-halo-orb', () => new THREE.SphereGeometry(0.035, 14, 12)), mats.arcane, {
+    pos: [0, 0.5, 0],
+    shadow: false,
+  });
+  staff.position.set(0.02, -0.13, 0.04);
+  staff.rotation.set(-0.1, 0, -0.28);
+  armR.hand.add(staff);
+  armR.pivot.rotation.set(-0.14, 0, 0.05);
+  armL.pivot.rotation.set(0.12, 0, -0.28);
+
+  return {
+    group,
+    torso,
+    head,
+    armL: armL.pivot,
+    armR: armR.pivot,
+    eyes,
+    robe,
+    hood,
+    orb,
+  };
+}
+
 function buildAssassin(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats, { spread: 0.07, legLength: 0.18, bootMat: mats.charcoal });
@@ -871,6 +930,7 @@ const BUILDERS = {
   assassin: buildAssassin,
   bomber: buildBomber,
   eagle: buildEagle,
+  priest: buildPriest,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -884,6 +944,7 @@ const SILHOUETTE = {
   assassin: [0.92, 1.03, 0.92],
   bomber: [1.06, 0.9, 1.06],
   eagle: [0.92, 0.92, 0.92],
+  priest: [0.94, 1, 0.94],
 };
 
 export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {
