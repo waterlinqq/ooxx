@@ -328,15 +328,16 @@ export function applyPriestBlessing(board, priest) {
 }
 
 /** Team-wide priest passives: each ally heals at most once per action, even if overlapping. */
-export function applyTeamPriestBlessings(board, team) {
+export function applyTeamPriestBlessings(board, team, excludePriestIds = []) {
   const next = cloneBoard(board);
+  const excluded = new Set(excludePriestIds);
   const priests = [];
   const blessedIds = new Set();
   const targets = [];
 
   for (const row of board) {
     for (const unit of row) {
-      if (unit?.team === team && unit.passiveBlessing && unit.row >= 0) {
+      if (unit?.team === team && unit.passiveBlessing && unit.row >= 0 && !excluded.has(unit.id)) {
         priests.push(unit);
       }
     }

@@ -444,7 +444,6 @@ export class Game {
       tutorial: this.getTutorialView(),
       tutorialSelectableClassIds: this.getTutorialSelectableClassIds(),
       tutorialActorCell: this.getTutorialActorCell(),
-      tutorialHintCells: this.getTutorialHintCells(),
       tutorialPointer: this.getTutorialPointer(),
     };
   }
@@ -615,20 +614,7 @@ export class Game {
     return { ...goal.from };
   }
 
-  /** Glowing "tap here next" cell: the deploy destination, or the unit that must act. */
-  getTutorialHintCells() {
-    const goal = this.getTutorialGoal();
-    if (!goal) return [];
-    if (goal.type === 'deploy') {
-      return this.selectedReserveId ? [] : [[goal.row, goal.col]];
-    }
-    return this.draggingUnitId ? [] : [[goal.from.row, goal.from.col]];
-  }
-
-  /**
-   * What the pointing finger sits on: the thing to tap *right now*, which is a step
-   * ahead of the glowing cell — first the reserve unit or the attacker, then the cell.
-   */
+  /** What the pointing finger sits on: reserve unit first, then the target cell. */
   getTutorialPointer() {
     const goal = this.getTutorialGoal();
     if (!goal) return null;
@@ -686,7 +672,7 @@ export class Game {
       const result = applyDeploy(this.board, unit, enemy.row, enemy.col);
       this.board = result.board;
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      this.endAction(enemy.label, unit.id);
+      this.endAction(enemy.label, unit.id, { isDeploy: true });
       return;
     }
 
@@ -940,13 +926,10 @@ export class Game {
     return this.narrowToTutorialGoal(getValidDeployCells(this.board), 'deploy');
   }
 
-  /** Outside the tutorial every legal cell lights up; inside, only the scripted one does. */
+  /** Tutorial uses the finger pointer instead of grid highlights. */
   narrowToTutorialGoal(cells, actionType) {
     if (!this.tutorial) return cells;
-    const goal = this.getTutorialGoal();
-    if (goal?.type !== actionType) return [];
-    const dest = actionType === 'deploy' ? goal : goal.to;
-    return cells.filter(([r, c]) => r === dest.row && c === dest.col);
+    return [];
   }
 
   clickCell(row, col) {
@@ -980,7 +963,7 @@ export class Game {
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
     }
 
-    this.endAction(`部署 ${CLASSES[unit.classId].name}`, unit.id);
+    this.endAction(`部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
   }
 
   tryMoveTo(unitId, row, col) {
@@ -1055,12 +1038,14 @@ export class Game {
     return true;
   }
 
-  async endAction(actionLabel, unitId) {
+  async endAction(actionLabel, unitId, { isDeploy = false } = {}) {
     const team = TEAM[this.currentPlayer];
     const enemy = this.currentPlayer === 'blue' ? 'red' : 'blue';
     const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
 
-    const blessing = applyTeamPriestBlessings(this.board, this.currentPlayer);
+    const actingUnit = this.board.flat().find((u) => u?.id === unitId);
+    const excludePriestIds = isDeploy && actingUnit?.passiveBlessing ? [unitId] : [];
+    const blessing = applyTeamPriestBlessings(this.board, this.currentPlayer, excludePriestIds);
     if (blessing.targets.length > 0) {
       actionLabel += ` · 祝福 ${blessing.targets.length} 名友軍`;
       if (this.playBlessFx) {
@@ -1215,7 +1200,7 @@ export class Game {
       } else {
         this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
       }
-      this.endAction(`${slotLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id);
+      this.endAction(`${slotLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
       return;
     }
 

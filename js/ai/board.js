@@ -376,11 +376,14 @@ function resolveExplosions(ctx, directKills, records, casualties) {
   }
 }
 
-function applyPassivePriestBlessings(ctx, team, records) {
+function applyPassivePriestBlessings(ctx, team, records, excludePriestIds = []) {
+  const excluded = new Set(excludePriestIds);
   const priests = [];
   for (const row of ctx.board) {
     for (const unit of row) {
-      if (unit?.team === team && unit.passiveBlessing) priests.push(unit);
+      if (unit?.team === team && unit.passiveBlessing && !excluded.has(unit.id)) {
+        priests.push(unit);
+      }
     }
   }
 
@@ -463,7 +466,8 @@ export function makeAction(ctx, action) {
     resolveExplosions(ctx, directKills, undo.damageRecords, undo.selfLosses);
   }
 
-  applyPassivePriestBlessings(ctx, team, undo.blessRecords);
+  const excludePriestIds = action.type === 'deploy' && actor.passiveBlessing ? [actor.id] : [];
+  applyPassivePriestBlessings(ctx, team, undo.blessRecords, excludePriestIds);
 
   if (!ctx.acted.has(actor.searchIndex)) {
     ctx.acted.add(actor.searchIndex);

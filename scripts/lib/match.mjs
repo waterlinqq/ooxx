@@ -135,8 +135,8 @@ function serializeAction(action, board, reserves) {
   return action;
 }
 
-function triggerPassiveBlessings(state, team) {
-  const blessing = applyTeamPriestBlessings(state.board, team);
+function triggerPassiveBlessings(state, team, excludePriestIds = []) {
+  const blessing = applyTeamPriestBlessings(state.board, team, excludePriestIds);
   state.board = blessing.board;
 }
 
@@ -151,7 +151,7 @@ function applyAiAction(state, action, team) {
     state.board = applyDeploy(state.board, unit, action.row, action.col).board;
     if (team === 'blue') state.blueReserve = state.blueReserve.filter((u) => u.id !== unit.id);
     else state.redReserve = state.redReserve.filter((u) => u.id !== unit.id);
-    triggerPassiveBlessings(state, team);
+    triggerPassiveBlessings(state, team, unit.passiveBlessing ? [unit.id] : []);
     return { label: 'deploy', detail, landedAt: { row: action.row, col: action.col } };
   }
 

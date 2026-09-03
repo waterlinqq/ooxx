@@ -7,7 +7,6 @@ const HIGHLIGHT = {
   deploy: { color: 0x3b82f6, opacity: 0.42, emissive: 0x1d4ed8 },
   win: { color: 0xfbbf24, opacity: 0.55, emissive: 0xb45309 },
   item: { color: 0xa855f7, opacity: 0.45, emissive: 0x6b21a8 },
-  hint: { color: 0xfde047, opacity: 0.5, emissive: 0xca8a04 },
 };
 
 function cellKey(r, c) {
@@ -32,7 +31,6 @@ export class HighlightSystem {
     const deploy = new Set(state.validDeploy.map(([r, c]) => cellKey(r, c)));
     const items = new Set((state.validItemTargets || []).map(([r, c]) => cellKey(r, c)));
     const win = new Set((state.lastWinLine || []).map(([r, c]) => cellKey(r, c)));
-    const hints = new Set((state.tutorialHintCells || []).map(([r, c]) => cellKey(r, c)));
 
     for (let r = 0; r < boardSize; r++) {
       for (let c = 0; c < boardSize; c++) {
@@ -43,7 +41,6 @@ export class HighlightSystem {
         else if (deploy.has(key)) type = 'deploy';
         else if (targets.has(key)) type = 'attack';
         else if (moves.has(key)) type = 'move';
-        else if (hints.has(key)) type = 'hint';
         if (type) desired.set(key, type);
       }
     }
