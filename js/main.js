@@ -538,7 +538,7 @@ function renderFormation(state) {
   const picked = state.blueRoster;
 
   formationHintEl.textContent = state.message;
-  formationCountEl.textContent = `${picked.length} / ${limit} 人 · 同職業上限 ${state.maxPerClass}`;
+  formationCountEl.textContent = `${picked.length} / ${limit} 人`;
 
   formationLineupEl.classList.toggle('full', picked.length === limit);
   formationLineupEl.innerHTML = '';
@@ -562,12 +562,12 @@ function renderFormation(state) {
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
-    const used = picked.filter((id) => id === cls.id).length;
-    const soldOut = used >= state.maxPerClass || picked.length >= limit;
+    const selected = picked.includes(cls.id);
+    const soldOut = !selected && picked.length >= limit;
 
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'class-card';
+    card.className = 'class-card' + (selected ? ' selected' : '');
     card.disabled = soldOut;
     const iconWrap = document.createElement('span');
     iconWrap.className = 'class-icon';
@@ -577,7 +577,7 @@ function renderFormation(state) {
     card.insertAdjacentHTML('beforeend', `
       <span class="class-name">${cls.name}</span>
       <span class="class-meta">HP ${cls.hp} · ATK ${cls.atk}</span>
-      <span class="class-count">${used} / ${state.maxPerClass}</span>
+      <span class="class-count">${selected ? '已選' : ''}</span>
     `);
     card.addEventListener('click', () => game.addToFormation(cls.id));
     formationPoolEl.appendChild(card);

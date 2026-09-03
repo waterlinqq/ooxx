@@ -176,7 +176,7 @@ export const BOARD_MODES = {
     // side of it: at five a side every game ends by attrition instead of a line, and
     // swapping the mage for the bomber deadlocks the board outright.
     rosterSize: 4,
-    maxPerClass: 2,
+    maxPerClass: 1,
     roster: ['swordsman', 'archer', 'shield', 'mage'],
   },
   '4x4': {
@@ -189,10 +189,10 @@ export const BOARD_MODES = {
     turnBonusMs: 5000,
     matchDurationMs: 8 * 60 * 1000,
     rosterSize: 10,
-    maxPerClass: 4,
+    maxPerClass: 1,
     roster: [
-      'swordsman', 'swordsman', 'archer', 'archer', 'shield',
-      'shield', 'mage', 'assassin', 'assassin', 'bomber',
+      'swordsman', 'archer', 'shield', 'mage', 'assassin',
+      'bomber', 'artillery', 'tower', 'priest', 'eagle',
     ],
   },
   '5x5': {
@@ -207,15 +207,16 @@ export const BOARD_MODES = {
     turnDurationMs: 18000,
     turnBonusMs: 5000,
     matchDurationMs: 10 * 60 * 1000,
-    rosterSize: 14,
-    maxPerClass: 5,
+    // Twelve unique classes is the roster cap once duplicates are disallowed.
+    rosterSize: 12,
+    maxPerClass: 1,
     // Longest distance is 4, so range-3 units no longer reach everywhere and mobility
-    // matters most — hence the extra assassins. Ordered so the alternating 2v2 seat
-    // split in createTeamReserve hands each player a comparable mix.
+    // matters most. Ordered so the alternating 2v2 seat split in createTeamReserve
+    // hands each player a comparable mix.
     roster: [
-      'swordsman', 'swordsman', 'swordsman', 'archer', 'archer',
-      'archer', 'shield', 'shield', 'mage', 'mage',
-      'assassin', 'assassin', 'assassin', 'bomber',
+      'swordsman', 'archer', 'shield', 'mage', 'assassin',
+      'bomber', 'artillery', 'tower', 'eagle', 'priest',
+      'ghost', 'viper',
     ],
   },
 };

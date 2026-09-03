@@ -150,7 +150,7 @@ export class Game {
     const limit = this.getRosterLimit();
     const picked = this.blueRoster.length;
     if (picked === 0) {
-      return `選擇 ${limit} 名單位組成你的編隊（同職業最多 ${this.getMaxPerClass()} 名）`;
+      return `選擇 ${limit} 名單位組成你的編隊`;
     }
     if (picked < limit) {
       return `已選 ${picked}/${limit} 人 — 還要 ${limit - picked} 名`;
@@ -180,11 +180,18 @@ export class Game {
 
   addToFormation(classId) {
     if (this.phase !== 'formation') return;
+    if (!CLASSES[classId]) return;
+
+    const existing = this.blueRoster.indexOf(classId);
+    if (existing >= 0) {
+      this.blueRoster = this.blueRoster.filter((id) => id !== classId);
+      this.message = this.getFormationMessage();
+      this.notify();
+      return;
+    }
+
     if (!canAddToRoster(this.blueRoster, classId, this.boardMode)) {
-      const name = CLASSES[classId]?.name ?? '該職業';
-      this.message = this.isFormationReady()
-        ? `編隊已滿 ${this.blueRoster.length}/${this.getRosterLimit()} 人`
-        : `${name}最多只能帶 ${this.getMaxPerClass()} 名`;
+      this.message = `編隊已滿 ${this.blueRoster.length}/${this.getRosterLimit()} 人`;
       this.notify();
       return;
     }
