@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { parseSlot } from '../units.js';
+import { getScreenGroundAxes, playerFacingYaw } from './CameraFacing.js';
 import { TILE_PITCH, TILE_SIZE } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
 
@@ -22,25 +23,8 @@ const ROW_SPACING = TILE_PITCH * 0.92;
 // Wide enough that the front row's floating labels clear the back row's heads.
 const ROW_STEP = TILE_PITCH * 1.55;
 
-// Keep in sync with BoardScene camera (0, 8.5, 8) → lookAt origin.
-const CAMERA_POS = new THREE.Vector3(0, 8.5, 8);
-const LOOK_AT = new THREE.Vector3(0, 0, 0);
-
-const TMP_RIGHT = new THREE.Vector3();
-const TMP_DOWN = new THREE.Vector3();
-const TMP_FORWARD = new THREE.Vector3();
 const TMP_BASE = new THREE.Vector3();
 const TMP_OFFSET = new THREE.Vector3();
-const WORLD_UP = new THREE.Vector3(0, 1, 0);
-
-function getScreenGroundAxes() {
-  TMP_FORWARD.copy(LOOK_AT).sub(CAMERA_POS).normalize();
-  TMP_RIGHT.crossVectors(WORLD_UP, TMP_FORWARD).normalize();
-  TMP_DOWN.crossVectors(TMP_FORWARD, TMP_RIGHT).normalize();
-  TMP_RIGHT.set(TMP_RIGHT.x, 0, TMP_RIGHT.z).normalize();
-  TMP_DOWN.set(TMP_DOWN.x, 0, TMP_DOWN.z).normalize();
-  return { right: TMP_RIGHT, down: TMP_DOWN };
-}
 
 function reserveBandDistance(boardSize) {
   const boardHalf = ((boardSize - 1) * TILE_PITCH) / 2;
@@ -96,14 +80,6 @@ export function reserveExtentPoints(boardSize, maxReserveUnits = DEFAULT_MAX_RES
     }
   }
   return points;
-}
-
-function reserveYaw(side) {
-  const { right } = getScreenGroundAxes();
-  if (side === 'blue') {
-    return Math.atan2(right.x, right.z);
-  }
-  return Math.atan2(-right.x, -right.z);
 }
 
 function createReserveLabel() {
@@ -209,7 +185,7 @@ export class ReserveZone3d {
     const pos = reservePosition(slot, this.boardSize, side);
     entry.root.position.set(pos.x, pos.y, pos.z);
     entry.root.rotation.set(0, 0, 0);
-    entry.body.rotation.y = reserveYaw(side);
+    entry.body.rotation.y = playerFacingYaw(side);
     entry.body.position.y = unit.isFlying ? FLYING_HEIGHT : 0;
     entry.label.position.y = entry.labelBaseY + (unit.isFlying ? FLYING_HEIGHT : 0);
     entry.root.scale.setScalar(RESERVE_SCALE);

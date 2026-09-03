@@ -733,6 +733,16 @@ export class Game {
     }
   }
 
+  surrender() {
+    if (this.phase !== 'battle' || this.animating) return;
+
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.inspectedUnitId = null;
+    this.lastWinLine = null;
+    this.handleRoundWin('red', `${TEAM.blue.name}投降`);
+  }
+
   handleRoundWin(winner, detail) {
     this.phase = 'gameEnd';
     this.message = `${detail} — ${TEAM[winner].name}獲勝！`;

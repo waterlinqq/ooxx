@@ -73,11 +73,18 @@
               <div class="board-container">
                 <div id="boardCanvas" class="board-canvas-host"></div>
                 <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+                <div class="win-condition-toast hidden" id="winConditionToast" aria-live="polite">
+                  <div class="win-condition-card">
+                    <div class="win-condition-title">🏆 勝利條件</div>
+                    <p class="win-condition-text" id="winConditionText"></p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
           <div class="battle-panels">
+            <button class="btn danger btn-block hidden" id="surrender" type="button">🏳️ 投降</button>
             <div class="panel end-panel hidden" id="endPanel">
               <div class="end-result" id="endResult"></div>
               <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>

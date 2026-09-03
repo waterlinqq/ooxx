@@ -129,7 +129,7 @@ export const BOARD_MODES = {
     label: '十六宮格',
     size: 4,
     matchFormat: '1v1',
-    actionsPerTurn: 2,
+    actionsPerTurn: 1,
     turnDurationMs: 15000,
     turnBonusMs: 5000,
     rosterSize: 10,

@@ -1,6 +1,7 @@
 import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
+import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -35,7 +36,10 @@ const endResultEl = document.getElementById('endResult');
 const modeButtonsEl = document.getElementById('modeButtons');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const restartBtn = document.getElementById('restart');
+const surrenderBtn = document.getElementById('surrender');
 const bottomNavEl = document.getElementById('bottomNav');
+const winConditionToastEl = document.getElementById('winConditionToast');
+const winConditionTextEl = document.getElementById('winConditionText');
 
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
@@ -158,6 +162,32 @@ function syncTurnTimer(state) {
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
 let lastPhase = 'lobby';
+let winConditionHideTimer = null;
+
+const WIN_CONDITION_SHOW_MS = 2800;
+const WIN_CONDITION_FADE_MS = 450;
+
+function clearWinConditionToast() {
+  if (winConditionHideTimer) {
+    clearTimeout(winConditionHideTimer);
+    winConditionHideTimer = null;
+  }
+  winConditionToastEl.classList.add('hidden');
+  winConditionToastEl.classList.remove('dismissing');
+}
+
+function showWinConditionToast(winCount) {
+  clearWinConditionToast();
+  winConditionTextEl.textContent = `連成 ${winCount} 子 · 或全滅對手`;
+  winConditionToastEl.classList.remove('hidden', 'dismissing');
+
+  winConditionHideTimer = setTimeout(() => {
+    winConditionToastEl.classList.add('dismissing');
+    winConditionHideTimer = setTimeout(() => {
+      clearWinConditionToast();
+    }, WIN_CONDITION_FADE_MS);
+  }, WIN_CONDITION_SHOW_MS);
+}
 
 const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
 
@@ -181,6 +211,13 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
 });
 
 const characterPreview = new CharacterPreviewScene(classPreviewHostEl);
+
+const unitThumbnails = generateUnitThumbnails(Object.keys(CLASSES));
+
+function setUnitIcon(container, classId) {
+  const cls = CLASSES[classId];
+  fillUnitIcon(container, classId, unitThumbnails, cls?.icon ?? '?', cls?.name ?? classId);
+}
 
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
 
@@ -251,8 +288,8 @@ function renderClassPicker() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'class-pick-btn' + (cls.id === selectedClassId ? ' active' : '');
-    btn.textContent = cls.icon;
     btn.title = cls.name;
+    setUnitIcon(btn, cls.id);
     btn.addEventListener('click', () => selectClass(cls.id));
     classPickerEl.appendChild(btn);
   }
@@ -280,8 +317,8 @@ function renderFormation(state) {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'roster-chip';
-      chip.textContent = CLASSES[classId].icon;
       chip.title = `移除 ${CLASSES[classId].name}`;
+      setUnitIcon(chip, classId);
       chip.addEventListener('click', () => game.removeFromFormation(index));
       formationLineupEl.appendChild(chip);
     });
@@ -296,12 +333,16 @@ function renderFormation(state) {
     card.type = 'button';
     card.className = 'class-card';
     card.disabled = soldOut;
-    card.innerHTML = `
-      <span class="class-icon">${cls.icon}</span>
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'class-icon';
+    setUnitIcon(iconWrap, cls.id);
+
+    card.append(iconWrap);
+    card.insertAdjacentHTML('beforeend', `
       <span class="class-name">${cls.name}</span>
       <span class="class-meta">HP ${cls.hp} · ATK ${cls.atk}</span>
       <span class="class-count">${used} / ${state.maxPerClass}</span>
-    `;
+    `);
     card.addEventListener('click', () => game.addToFormation(cls.id));
     formationPoolEl.appendChild(card);
   }
@@ -337,7 +378,11 @@ function renderLobbyFooter(state) {
 }
 
 function renderBattlePanels(state) {
+  const inBattle = state.phase === 'battle';
   const showEnd = state.phase === 'gameEnd';
+
+  surrenderBtn.classList.toggle('hidden', !inBattle);
+  surrenderBtn.disabled = !inBattle || state.animating;
 
   endPanelEl.classList.toggle('hidden', !showEnd);
   restartBtn.classList.toggle('hidden', !showEnd);
@@ -362,6 +407,11 @@ function render(state) {
 
   if (state.phase !== lastPhase && inBattleFlow) {
     switchNav('battle');
+  }
+  if (state.phase !== lastPhase && state.phase === 'battle') {
+    showWinConditionToast(state.winCount);
+  } else if (state.phase !== 'battle' && state.phase !== 'gameEnd') {
+    clearWinConditionToast();
   }
   lastPhase = state.phase;
 
@@ -402,6 +452,7 @@ formationBackBtn.addEventListener('click', () => game.backToLobby());
 startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => game.restartSeries());
 backToLobbyBtn.addEventListener('click', () => game.backToLobby());
+surrenderBtn.addEventListener('click', () => game.surrender());
 
 game.subscribe(render);
 render(game.getState());

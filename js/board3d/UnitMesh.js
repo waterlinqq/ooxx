@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
 
 const UNIT_BASE_Y = 0.072;
-const DEFAULT_YAW = 0;
 const FADED = new THREE.Color(0x64748b);
 
 const WALK_SPEED = 2.4;
@@ -81,24 +81,6 @@ function footDrop(thigh, shin, hip, bend) {
   return thigh * Math.cos(hip) + shin * Math.cos(hip - bend);
 }
 
-function facingYaw(board, row, col, unit) {
-  let best = null;
-  let bestDist = Infinity;
-  for (let r = 0; r < board.length; r++) {
-    for (let c = 0; c < board[r].length; c++) {
-      const other = board[r][c];
-      if (!other || other.team === unit.team) continue;
-      const dist = Math.abs(r - row) + Math.abs(c - col);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = { r, c };
-      }
-    }
-  }
-  if (!best) return DEFAULT_YAW;
-  return Math.atan2(best.c - col, best.r - row);
-}
-
 function shortestAngle(from, to) {
   let diff = (to - from) % (Math.PI * 2);
   if (diff > Math.PI) diff -= Math.PI * 2;
@@ -147,7 +129,7 @@ export class UnitMeshManager {
           acted: acted.has(unit.id),
           dragging: draggingId === unit.id,
           inspected: inspectedId === unit.id,
-          yaw: facingYaw(board, r, c, unit),
+          yaw: playerFacingYaw(unit.team),
         });
       }
     }
@@ -222,9 +204,9 @@ export class UnitMeshManager {
       labelFade: 1,
       labelFadeApplied: 1,
       fadeApplied: 1,
-      yaw: DEFAULT_YAW,
-      enemyYaw: DEFAULT_YAW,
-      moveYaw: DEFAULT_YAW,
+      yaw: playerFacingYaw(unit.team),
+      enemyYaw: playerFacingYaw(unit.team),
+      moveYaw: playerFacingYaw(unit.team),
       actedLook: null,
       placed: false,
       acted: false,
