@@ -21,8 +21,6 @@ const formationHintEl = document.getElementById('formationHint');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
 const formationPoolEl = document.getElementById('formationPool');
-const formationRandomBtn = document.getElementById('formationRandom');
-const formationClearBtn = document.getElementById('formationClear');
 const formationBackBtn = document.getElementById('formationBack');
 const startBattleBtn = document.getElementById('startBattle');
 const backToLobbyBtn = document.getElementById('backToLobby');
@@ -347,7 +345,6 @@ function renderFormation(state) {
     formationPoolEl.appendChild(card);
   }
 
-  formationClearBtn.disabled = picked.length === 0;
   startBattleBtn.disabled = !state.formationReady;
 }
 
@@ -446,8 +443,6 @@ bottomNavEl.addEventListener('click', (e) => {
 });
 
 confirmRosterBtn.addEventListener('click', () => game.openFormation());
-formationRandomBtn.addEventListener('click', () => game.randomizeFormation());
-formationClearBtn.addEventListener('click', () => game.clearFormation());
 formationBackBtn.addEventListener('click', () => game.backToLobby());
 startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => game.restartSeries());

@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildUnitModel } from './UnitModels.js';
 
-const THUMB_SIZE = 128;
+const THUMB_SIZE = 256;
 const UNIT_BASE_Y = 0.072;
 const EAGLE_FLIGHT_HEIGHT = 0.34;
 const PREVIEW_ROTATION_Y = 0.35;
+const FRAME_PADDING = 1.06;
 
 function disposeModel(model) {
   model.root.traverse((obj) => {
@@ -48,32 +49,28 @@ function setupScene(renderer) {
   rimLight.position.set(-4, 3, 5);
   scene.add(rimLight);
 
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(1.1, 32),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.95, metalness: 0.05 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.02;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
   return { scene, envMap, pmrem };
 }
 
 function setupCamera() {
-  const frustum = 2.4;
-  const aspect = 1;
-  const camera = new THREE.OrthographicCamera(
-    (-frustum * aspect) / 2,
-    (frustum * aspect) / 2,
-    frustum / 2,
-    -frustum / 2,
-    0.1,
-    100
-  );
+  const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 100);
   camera.position.set(0, 5.5, 5.2);
   camera.lookAt(0, 0.45, 0);
   return camera;
+}
+
+function fitCameraToModel(camera, object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const viewHeight = Math.max(size.y, size.x * 0.72, size.z * 0.72) * FRAME_PADDING;
+
+  camera.left = -viewHeight / 2;
+  camera.right = viewHeight / 2;
+  camera.top = viewHeight / 2;
+  camera.bottom = -viewHeight / 2;
+  camera.updateProjectionMatrix();
+  camera.lookAt(center.x, center.y - size.y * 0.04, center.z);
 }
 
 export function generateUnitThumbnails(classIds) {
@@ -92,11 +89,13 @@ export function generateUnitThumbnails(classIds) {
   for (const classId of classIds) {
     const model = buildUnitModel(classId, 'blue');
     if (model.ring) model.ring.visible = false;
+    if (model.shadow) model.shadow.visible = false;
 
     const flightHeight = classId === 'eagle' ? EAGLE_FLIGHT_HEIGHT : 0;
     model.root.position.set(0, UNIT_BASE_Y + flightHeight, 0);
     model.body.rotation.y = PREVIEW_ROTATION_Y;
     scene.add(model.root);
+    fitCameraToModel(camera, model.root);
 
     renderer.render(scene, camera);
     thumbnails.set(classId, renderer.domElement.toDataURL('image/png'));

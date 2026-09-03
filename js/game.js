@@ -161,20 +161,6 @@ export class Game {
     this.notify();
   }
 
-  randomizeFormation() {
-    if (this.phase !== 'formation') return;
-    this.blueRoster = createRandomRoster(this.boardMode);
-    this.message = this.getFormationMessage();
-    this.notify();
-  }
-
-  clearFormation() {
-    if (this.phase !== 'formation') return;
-    this.blueRoster = [];
-    this.message = this.getFormationMessage();
-    this.notify();
-  }
-
   getState() {
     const mode = this.getModeConfig();
     return {

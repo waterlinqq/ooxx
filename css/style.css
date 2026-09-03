@@ -1076,15 +1076,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--panel-2);
   cursor: pointer;
   transition: transform 0.12s, background 0.12s;
   overflow: hidden;
-  padding: 2px;
+  padding: 0;
 }
 
 .roster-chip:hover {
@@ -1106,15 +1106,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 60px;
+  height: 60px;
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--panel-2);
   cursor: pointer;
   transition: border-color 0.12s, transform 0.12s;
   overflow: hidden;
-  padding: 3px;
+  padding: 0;
 }
 
 .class-pick-btn:hover {
@@ -1278,8 +1278,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-height: 104px;
+  gap: 6px;
+  min-height: 128px;
   border: 2px solid transparent;
   border-radius: 12px;
   padding: 12px 8px;
@@ -1306,8 +1306,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 76px;
+  height: 76px;
   flex-shrink: 0;
 }
 
@@ -1338,12 +1338,6 @@ body {
   padding: 1px 8px;
   border-radius: 999px;
   background: rgba(251, 191, 36, 0.12);
-}
-
-.formation-tools {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 8px;
 }
 
 .formation-footer {
