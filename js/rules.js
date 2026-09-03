@@ -407,8 +407,8 @@ export function clearPoison(unit) {
   unit.atk = unit.baseAtk ?? unit.atk;
 }
 
-/** Resolves poison damage at a turn boundary. Skips the tick on the turn poison was applied. */
-export function applyPoisonTurnTicks(board) {
+/** Resolves poison damage when a team's turn ends. Skips the tick on the turn poison was applied. */
+export function applyPoisonTurnTicks(board, team) {
   const next = cloneBoard(board);
   const ticks = [];
   const killed = [];
@@ -416,7 +416,7 @@ export function applyPoisonTurnTicks(board) {
   for (let r = 0; r < next.length; r++) {
     for (let c = 0; c < next[r].length; c++) {
       const unit = next[r][c];
-      if (!unit?.poisoned) continue;
+      if (!unit?.poisoned || unit.team !== team) continue;
       if (unit.poisonFresh) {
         unit.poisonFresh = false;
         continue;

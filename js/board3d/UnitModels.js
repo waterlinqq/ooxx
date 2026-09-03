@@ -192,6 +192,21 @@ function bladeGeometry(length, width, thickness) {
   });
 }
 
+// A symmetric leaf profile, so a wing can be mirrored with a negative scale
+// without the feathers ending up back to front.
+function featherGeometry(length, width, thickness = 0.011) {
+  return cached(`feather-${length}-${width}-${thickness}`, () => {
+    const shape = new THREE.Shape();
+    const halfW = width / 2;
+    shape.moveTo(0, 0);
+    shape.quadraticCurveTo(length * 0.34, halfW, length * 0.84, halfW * 0.6);
+    shape.quadraticCurveTo(length, halfW * 0.32, length, 0);
+    shape.quadraticCurveTo(length, -halfW * 0.32, length * 0.84, -halfW * 0.6);
+    shape.quadraticCurveTo(length * 0.34, -halfW, 0, 0);
+    return extrude(shape, thickness, thickness * 0.35);
+  });
+}
+
 function shieldGeometry() {
   return cached('tower-shield', () => {
     const shape = new THREE.Shape();
@@ -299,21 +314,55 @@ function addHead(parent, mats, { y = 0.72, radius = 0.112, skin = mats.skin } = 
   return head;
 }
 
-function addEyes(head, mats, { z = 0.098, y = 0.012, spread = 0.044, size = 0.02 } = {}) {
+// A glowing dot on pale skin has almost no contrast at tile size, so each eye
+// gets a dark socket behind it to sit against.
+function addEyes(head, mats, { z = 0.098, y = 0.012, spread = 0.044, size = 0.02, socket = true } = {}) {
   const geo = cached(`eye-${size}`, () => new THREE.SphereGeometry(size, 8, 8));
+  const socketGeo = cached(`eye-socket-${size}`, () => new THREE.SphereGeometry(size * 1.75, 10, 8));
   const eyes = [];
   for (const side of [-1, 1]) {
+    if (socket) {
+      part(head, socketGeo, mats.charcoal, {
+        pos: [side * spread, y, z - size * 0.6],
+        scale: [1, 0.78, 0.5],
+        shadow: false,
+      });
+    }
     eyes.push(part(head, geo, mats.eye, { pos: [side * spread, y, z], shadow: false }));
   }
   return eyes;
 }
 
-function addPauldrons(parent, mats, { y = 0.575, x = 0.168, radius = 0.082, material = mats.trim } = {}) {
-  const geo = cached(`pauldron-${radius}`, () =>
-    new THREE.SphereGeometry(radius, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62)
+// Layered plate spaulders. A single hemisphere reads as a cotton ball at tile
+// size, so the cap is flattened and a second lame plus a rim edge give it the
+// horizontal banding that makes it scan as armour.
+function addPauldrons(
+  parent,
+  mats,
+  { y = 0.575, x = 0.168, radius = 0.082, material = mats.armor, rimMaterial = mats.trim } = {}
+) {
+  const capGeo = cached(`pauldron-cap-${radius}`, () =>
+    new THREE.SphereGeometry(radius, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)
   );
+  const lameGeo = cached(`pauldron-lame-${radius}`, () =>
+    new THREE.SphereGeometry(radius * 0.99, 16, 10, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.24)
+  );
+  const rimGeo = cached(`pauldron-rim-${radius}`, () =>
+    new THREE.TorusGeometry(radius * 0.86, radius * 0.1, 6, 20)
+  );
+
   for (const side of [-1, 1]) {
-    part(parent, geo, material, { pos: [side * x, y, 0], rot: [0, 0, side * -0.4], scale: [1, 0.9, 1] });
+    const pad = new THREE.Group();
+    pad.position.set(side * x, y, 0);
+    pad.rotation.z = side * -0.34;
+    part(pad, capGeo, material, { scale: [1, 0.66, 1] });
+    part(pad, lameGeo, material, { pos: [0, -radius * 0.1, 0], scale: [1.04, 0.8, 1.04] });
+    part(pad, rimGeo, rimMaterial, {
+      pos: [0, -radius * 0.32, 0],
+      rot: [-Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+    parent.add(pad);
   }
 }
 
@@ -336,20 +385,35 @@ function addCape(parent, mats, { y = 0.46, length = 0.34 } = {}) {
   return cape;
 }
 
-function addHood(parent, mats, { y = 0.7 } = {}) {
+// The cowl drapes down the back rather than spiking above the crown: the old
+// upward cone turned every hooded class into the same teardrop silhouette.
+function addHood(parent, mats, { y = 0.7, radius = 0.134, open = 0.95, trimMaterial = null } = {}) {
   const hood = new THREE.Group();
   hood.position.set(0, y, 0);
-  part(hood, cached('hood-shell', () => new THREE.SphereGeometry(0.135, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62)), mats.cloth, {
-    pos: [0, 0.01, -0.012],
-    scale: [1, 1.1, 1.08],
+
+  // Wraps everything but a wedge at the front; a closed shell just swallowed
+  // the face and left a featureless blue egg.
+  part(hood, cached(`hood-shell-${radius}-${open}`, () =>
+    new THREE.SphereGeometry(radius, 22, 14, Math.PI / 2 + open, Math.PI * 2 - open * 2, 0, Math.PI * 0.66)
+  ), mats.cloth, {
+    pos: [0, 0.014, -0.02],
+    scale: [1, 0.98, 1.12],
   });
-  part(hood, cached('hood-cone', () => new THREE.ConeGeometry(0.1, 0.16, 12, 1, true)), mats.cloth, {
-    pos: [0, 0.12, -0.05],
-    rot: [-0.55, 0, 0],
+  part(hood, cached('hood-drape', () => new THREE.SphereGeometry(0.118, 16, 12, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.46)), mats.cloth, {
+    pos: [0, -0.012, -0.072],
+    rot: [0.38, 0, 0],
+    scale: [1.06, 1.7, 0.86],
   });
-  part(hood, cached('hood-collar', () => new THREE.TorusGeometry(0.1, 0.028, 8, 18)), mats.cloth, {
-    pos: [0, -0.085, -0.01],
-    rot: [-Math.PI / 2 + 0.18, 0, 0],
+  // Brow arc frames the face opening so the eyes still read from the front.
+  part(hood, cached('hood-brow', () => new THREE.TorusGeometry(0.107, 0.026, 8, 22, Math.PI * 1.26)), trimMaterial ?? mats.cloth, {
+    pos: [0, 0.004, 0.03],
+    rot: [-0.3, 0, Math.PI * -0.13],
+    scale: [1, 1, 0.8],
+  });
+  part(hood, cached('hood-collar', () => new THREE.TorusGeometry(0.102, 0.03, 8, 20)), mats.cloth, {
+    pos: [0, -0.088, -0.014],
+    rot: [-Math.PI / 2 + 0.16, 0, 0],
+    scale: [1, 1.08, 1],
   });
   parent.add(hood);
   return hood;
@@ -377,18 +441,34 @@ function buildSword(mats, { length = 0.34 } = {}) {
   return sword;
 }
 
+// The stave sits in the XY plane so the whole D-shape faces the viewer. Held
+// edge-on, as it was, the bow vanished into a single vertical line.
 function buildBow(mats) {
   const bow = new THREE.Group();
-  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.18, 0.014, 6, 20, Math.PI * 1.1)), mats.wood, {
-    rot: [0, Math.PI / 2, -Math.PI * 0.55],
+  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.185, 0.015, 6, 24, Math.PI * 1.12)), mats.wood, {
+    rot: [0, 0, Math.PI * 0.44],
+  });
+  part(bow, cached('bow-grip', () => new THREE.CylinderGeometry(0.022, 0.022, 0.075, 8)), mats.leather, {
+    pos: [-0.183, 0, 0],
   });
   for (const side of [-1, 1]) {
-    part(bow, cached('bow-tip', () => new THREE.SphereGeometry(0.018, 8, 8)), mats.gold, {
-      pos: [0, side * 0.168, 0.06],
+    part(bow, cached('bow-tip', () => new THREE.SphereGeometry(0.019, 8, 8)), mats.gold, {
+      pos: [0.035, side * 0.182, 0],
+      shadow: false,
     });
   }
-  const string = part(bow, cached('bow-string', () => new THREE.CylinderGeometry(0.0035, 0.0035, 0.335, 4)), mats.trim, {
-    pos: [0, 0, 0.062],
+  const string = part(bow, cached('bow-string', () => new THREE.CylinderGeometry(0.004, 0.004, 0.362, 4)), mats.trim, {
+    pos: [0.035, 0, 0],
+    shadow: false,
+  });
+  part(bow, cached('bow-arrow', () => new THREE.CylinderGeometry(0.006, 0.006, 0.3, 6)), mats.wood, {
+    pos: [-0.05, 0.012, 0.012],
+    rot: [0, 0, Math.PI / 2],
+    shadow: false,
+  });
+  part(bow, cached('bow-arrow-head', () => new THREE.ConeGeometry(0.019, 0.055, 7)), mats.steel, {
+    pos: [-0.222, 0.012, 0.012],
+    rot: [0, 0, -Math.PI / 2],
     shadow: false,
   });
   return { group: bow, string };
@@ -502,10 +582,10 @@ function buildSwordsman(mats) {
   });
 
   const sword = buildSword(mats);
-  sword.position.set(0.01, 0.02, 0.05);
-  sword.rotation.set(-0.32, 0, -0.16);
+  sword.position.set(0.012, 0.025, 0.045);
+  sword.rotation.set(-0.24, 0, 0.34);
   armR.hand.add(sword);
-  armR.pivot.rotation.set(-0.24, 0, 0.05);
+  armR.pivot.rotation.set(-0.36, 0, 0.28);
   armL.pivot.rotation.set(0.1, 0, -0.12);
 
   return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, weapon: sword };
@@ -532,11 +612,11 @@ function buildArcher(mats) {
   group.add(quiver);
 
   const bow = buildBow(mats);
-  bow.group.position.set(0, -0.03, 0.06);
-  bow.group.rotation.set(0, 0, 0.18);
+  bow.group.position.set(-0.02, -0.02, 0.075);
+  bow.group.rotation.set(0.2, -0.34, 0.1);
   armL.hand.add(bow.group);
-  armL.pivot.rotation.set(-1.02, 0, -0.16);
-  armR.pivot.rotation.set(-0.66, 0, 0.5);
+  armL.pivot.rotation.set(-1.12, 0, -0.24);
+  armR.pivot.rotation.set(-0.72, 0, 0.42);
 
   return {
     group,
@@ -558,23 +638,40 @@ function buildShield(mats) {
   part(torso, cached('shield-plate', () => new THREE.BoxGeometry(0.2, 0.14, 0.035)), mats.steel, {
     pos: [0, 0.02, 0.1],
   });
-  addPauldrons(group, mats, { radius: 0.084, x: 0.178, y: 0.565, material: mats.steel });
+  addPauldrons(group, mats, { radius: 0.088, x: 0.182, y: 0.565, material: mats.armor, rimMaterial: mats.steel });
   addGorget(group, mats, 0.6);
   const armL = addArm(group, mats, -1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
   const armR = addArm(group, mats, 1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
   const head = addHead(group, mats, { y: 0.7, radius: 0.105 });
-  const eyes = addEyes(head, mats, { z: 0.1, y: 0.005, size: 0.014 });
-  part(head, cached('great-helm', () => new THREE.SphereGeometry(0.116, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.8)), mats.steel, {
-    pos: [0, 0.014, 0],
-    scale: [1, 1.04, 1],
+  const eyes = addEyes(head, mats, { z: 0.102, y: 0.008, size: 0.014 });
+  // Flat-topped great helm: a sphere just read as a shiny bald head under the
+  // shoulder plates.
+  part(head, cached('great-helm', () => new THREE.CylinderGeometry(0.114, 0.126, 0.19, 14)), mats.steel, {
+    pos: [0, 0.026, 0],
+    scale: [1, 1, 0.94],
   });
-  part(head, cached('helm-slit', () => new THREE.BoxGeometry(0.14, 0.024, 0.03)), mats.charcoal, {
-    pos: [0, 0.012, 0.098],
+  part(head, cached('great-helm-crown', () => new THREE.SphereGeometry(0.114, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mats.steel, {
+    pos: [0, 0.12, 0],
+    scale: [1, 0.5, 0.94],
   });
-  part(head, cached('helm-horn', () => new THREE.TorusGeometry(0.055, 0.012, 6, 14, Math.PI)), mats.gold, {
-    pos: [0, 0.075, -0.02],
-    rot: [0, Math.PI / 2, 0],
+  part(head, cached('great-helm-visor', () => new THREE.BoxGeometry(0.17, 0.028, 0.03)), mats.charcoal, {
+    pos: [0, 0.012, 0.102],
   });
+  part(head, cached('great-helm-nasal', () => new THREE.BoxGeometry(0.028, 0.12, 0.03)), mats.charcoal, {
+    pos: [0, -0.028, 0.104],
+  });
+  part(head, cached('great-helm-band', () => new THREE.TorusGeometry(0.118, 0.014, 8, 22)), mats.gold, {
+    pos: [0, 0.084, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [1, 0.94, 1],
+  });
+  const hornGeo = cached('great-helm-horn', () => new THREE.ConeGeometry(0.03, 0.11, 8));
+  for (const side of [-1, 1]) {
+    part(head, hornGeo, mats.gold, {
+      pos: [side * 0.11, 0.14, -0.01],
+      rot: [0, 0, side * 0.9],
+    });
+  }
 
   const shield = new THREE.Group();
   part(shield, shieldGeometry(), mats.armor);
@@ -582,11 +679,11 @@ function buildShield(mats) {
     pos: [0, 0, 0.032],
     scale: [1, 1, 0.6],
   });
-  part(shield, cached('shield-bar', () => new THREE.BoxGeometry(0.26, 0.022, 0.012)), mats.trim, {
-    pos: [0, 0.12, 0.03],
+  part(shield, cached('shield-cross-v', () => new THREE.BoxGeometry(0.045, 0.44, 0.014)), mats.trim, {
+    pos: [0, -0.005, 0.028],
   });
-  part(shield, cached('shield-bar2', () => new THREE.BoxGeometry(0.24, 0.022, 0.012)), mats.trim, {
-    pos: [0, -0.06, 0.03],
+  part(shield, cached('shield-cross-h', () => new THREE.BoxGeometry(0.28, 0.045, 0.014)), mats.trim, {
+    pos: [0, 0.06, 0.028],
   });
   shield.position.set(-0.02, -0.05, 0.08);
   shield.rotation.set(0, -0.2, 0.05);
@@ -594,16 +691,44 @@ function buildShield(mats) {
   armL.pivot.rotation.set(-0.5, 0, -0.18);
 
   const mace = new THREE.Group();
-  part(mace, cached('mace-shaft', () => new THREE.CylinderGeometry(0.018, 0.02, 0.24, 8)), mats.wood);
-  part(mace, cached('mace-head', () => new THREE.IcosahedronGeometry(0.056, 0)), mats.steel, {
-    pos: [0, 0.14, 0],
+  part(mace, cached('mace-shaft', () => new THREE.CylinderGeometry(0.018, 0.021, 0.26, 8)), mats.wood, {
+    pos: [0, -0.02, 0],
   });
-  mace.position.set(0, 0.02, 0.04);
-  mace.rotation.set(-0.3, 0, -0.1);
+  part(mace, cached('mace-pommel', () => new THREE.SphereGeometry(0.026, 10, 8)), mats.gold, {
+    pos: [0, -0.155, 0],
+  });
+  part(mace, cached('mace-collar', () => new THREE.CylinderGeometry(0.032, 0.028, 0.03, 10)), mats.gold, {
+    pos: [0, 0.098, 0],
+  });
+  part(mace, cached('mace-core', () => new THREE.CylinderGeometry(0.038, 0.038, 0.1, 10)), mats.steel, {
+    pos: [0, 0.155, 0],
+  });
+  // Flanges instead of a single lump: the profile has to survive being 40px tall.
+  const flangeGeo = cached('mace-flange', () => new THREE.BoxGeometry(0.026, 0.098, 0.06));
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2;
+    part(mace, flangeGeo, mats.steel, {
+      pos: [Math.sin(angle) * 0.05, 0.155, Math.cos(angle) * 0.05],
+      rot: [0, angle, 0],
+    });
+  }
+  part(mace, cached('mace-cap', () => new THREE.ConeGeometry(0.03, 0.055, 8)), mats.gold, {
+    pos: [0, 0.228, 0],
+  });
+  mace.position.set(0, 0.03, 0.035);
+  mace.rotation.set(-0.28, 0, 0.34);
   armR.hand.add(mace);
-  armR.pivot.rotation.set(-0.2, 0, 0.12);
+  armR.pivot.rotation.set(-0.34, 0, 0.24);
 
   return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, shield };
+}
+
+// Boot tips under the hem: without them a robe cone reads as a chess pawn.
+function addRobeFeet(parent, mats, { y = 0.032, x = 0.072, z = 0.185 } = {}) {
+  const bootGeo = cached('robe-boot', () => new THREE.BoxGeometry(0.075, 0.055, 0.11));
+  for (const side of [-1, 1]) {
+    part(parent, bootGeo, mats.leather, { pos: [side * x, y, z], rot: [0, side * -0.14, 0] });
+  }
 }
 
 function buildMage(mats) {
@@ -611,9 +736,15 @@ function buildMage(mats) {
   const robe = part(group, cached('robe', () => new THREE.CylinderGeometry(0.14, 0.28, 0.38, 16, 2, true)), mats.cloth, {
     pos: [0, 0.19, 0],
   });
+  addRobeFeet(group, mats, { z: 0.2 });
   part(group, cached('robe-hem', () => new THREE.TorusGeometry(0.275, 0.016, 8, 26)), mats.trim, {
     pos: [0, 0.014, 0],
     rot: [-Math.PI / 2, 0, 0],
+  });
+  part(group, cached('robe-hem-trim', () => new THREE.TorusGeometry(0.243, 0.012, 8, 26)), mats.gold, {
+    pos: [0, 0.075, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    shadow: false,
   });
   const torso = addTorso(group, mats, { width: 0.92, height: 0.22, y: 0.47, material: mats.cloth });
   part(torso, cached('mage-sash', () => new THREE.BoxGeometry(0.06, 0.26, 0.02)), mats.trim, {
@@ -681,9 +812,14 @@ function buildPriest(mats) {
     mats.cloth,
     { pos: [0, 0.19, 0] }
   );
+  addRobeFeet(group, mats, { x: 0.066, z: 0.172 });
   part(group, cached('priest-robe-hem', () => new THREE.TorusGeometry(0.245, 0.014, 8, 26)), mats.gold, {
     pos: [0, 0.014, 0],
     rot: [-Math.PI / 2, 0, 0],
+  });
+  part(group, cached('priest-robe-seam', () => new THREE.BoxGeometry(0.046, 0.36, 0.03)), mats.gold, {
+    pos: [0, 0.19, 0.196],
+    rot: [-0.16, 0, 0],
   });
   const torso = addTorso(group, mats, { width: 0.86, height: 0.22, y: 0.47, material: mats.cloth });
   part(torso, cached('priest-cross-v', () => new THREE.BoxGeometry(0.025, 0.17, 0.018)), mats.gold, {
@@ -774,56 +910,151 @@ function buildAssassin(mats) {
   return { group, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, hood, scarf };
 }
 
+function viperCoilGeometry() {
+  return cached('viper-coil', () => {
+    const points = [];
+    const turns = 2.15;
+    const steps = 64;
+    for (let i = 0; i <= steps; i++) {
+      const p = i / steps;
+      const angle = p * Math.PI * 2 * turns;
+      const radius = 0.215 - p * 0.09;
+      points.push(new THREE.Vector3(Math.cos(angle) * radius, 0.054 + p * 0.096, Math.sin(angle) * radius));
+    }
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 76, 0.055, 10, false);
+  });
+}
+
+function viperNeckGeometry() {
+  return cached('viper-neck', () => {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.073, 0, 0.101),
+      new THREE.Vector3(0.045, 0.1, 0.055),
+      new THREE.Vector3(-0.018, 0.21, -0.008),
+      new THREE.Vector3(-0.026, 0.34, -0.016),
+      new THREE.Vector3(0, 0.44, 0.028),
+      new THREE.Vector3(0, 0.5, 0.08),
+    ]);
+    return new THREE.TubeGeometry(curve, 56, 0.047, 10, false);
+  });
+}
+
+function viperHoodGeometry() {
+  return cached('viper-hood', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, -0.14);
+    shape.bezierCurveTo(0.13, -0.12, 0.185, 0.02, 0.115, 0.125);
+    shape.bezierCurveTo(0.07, 0.185, -0.07, 0.185, -0.115, 0.125);
+    shape.bezierCurveTo(-0.185, 0.02, -0.13, -0.12, 0, -0.14);
+    return extrude(shape, 0.026, 0.012);
+  });
+}
+
 function buildViper(mats) {
   const group = new THREE.Group();
-  const scaleMat = standard(0x4ade80, {
-    roughness: 0.48,
-    metalness: 0.18,
-    emissive: 0x14532d,
-    emissiveIntensity: 0.35,
+
+  // Snakes read as green, but a pure green model gives no clue which side owns
+  // it, so the scales are pulled part-way toward the team colour.
+  // Blending the team colour into the scales just turns them to mud, so the
+  // snake stays green and the hood plate carries the team colour instead.
+  const scaleMat = standard(0x2a9147, {
+    roughness: 0.5,
+    metalness: 0.1,
+    emissive: 0x0b3319,
+    emissiveIntensity: 0.28,
   });
-  const bellyMat = standard(0xfef08a, { roughness: 0.72, metalness: 0.04 });
-  const poisonMat = standard(0x22c55e, {
-    roughness: 0.32,
-    emissive: 0x15803d,
-    emissiveIntensity: 0.65,
-    transparent: true,
-    opacity: 0.92,
+  const scaleDeepMat = standard(0x15602f, { roughness: 0.58, metalness: 0.1 });
+  const bellyMat = standard(0xe8dfa2, { roughness: 0.72, metalness: 0.04 });
+  const poisonMat = standard(0x86efac, {
+    roughness: 0.3,
+    emissive: 0x22c55e,
+    emissiveIntensity: 1.1,
+  });
+  const extraMaterials = [scaleMat, scaleDeepMat, bellyMat, poisonMat];
+
+  part(group, viperCoilGeometry(), scaleMat);
+  part(group, cached('viper-tail', () => new THREE.ConeGeometry(0.052, 0.16, 10)), scaleDeepMat, {
+    pos: [0.255, 0.06, -0.055],
+    rot: [Math.PI / 2, 0, -0.9],
   });
 
   const torso = new THREE.Group();
-  torso.position.set(0, 0.24, 0);
+  torso.position.set(0, 0.15, 0);
   group.add(torso);
+  part(torso, viperNeckGeometry(), scaleMat);
 
-  const segmentGeo = cached('viper-segment', () => new THREE.SphereGeometry(0.075, 12, 10));
-  const coil = [
-    [0, 0, 0], [0.09, 0.015, 0.04], [0.13, 0.04, -0.02], [0.07, 0.035, -0.11],
-    [-0.05, 0.028, -0.13], [-0.11, 0.02, -0.05], [-0.07, 0.012, 0.05],
-  ];
-  for (const [x, y, z] of coil) {
-    part(torso, segmentGeo, scaleMat, { pos: [x, y, z], scale: [1, 0.82, 1] });
-  }
-  part(torso, segmentGeo, bellyMat, { pos: [0, -0.02, 0], scale: [0.85, 0.55, 0.85], shadow: false });
+  const head = new THREE.Group();
+  head.position.set(0, 0.525, 0.1);
+  head.rotation.x = 0.2;
+  torso.add(head);
 
-  const head = part(torso, cached('viper-head', () => new THREE.SphereGeometry(0.095, 14, 12)), scaleMat, {
-    pos: [0.15, 0.055, 0.055],
-    scale: [1.15, 0.88, 1.2],
+  // Flared cobra hood: the single silhouette cue that sells "snake" at tile size.
+  // It sits well behind the skull and rakes backwards so it frames the face
+  // instead of swallowing it.
+  part(head, viperHoodGeometry(), scaleDeepMat, {
+    pos: [0, 0.005, -0.082],
+    rot: [-0.5, 0, 0],
+    scale: [0.88, 0.92, 1],
   });
-  part(head, cached('viper-snout', () => new THREE.ConeGeometry(0.042, 0.11, 8)), scaleMat, {
-    pos: [0, -0.015, 0.09],
-    rot: [Math.PI / 2, 0, 0],
-  });
-  const eyes = addEyes(head, mats, { y: 0.015, z: 0.055, spread: 0.048, size: 0.013 });
-  const fangGeo = cached('viper-fang', () => new THREE.ConeGeometry(0.011, 0.045, 6));
-  part(head, fangGeo, mats.gold, { pos: [-0.022, -0.045, 0.088], rot: [0.35, 0, 0.18], shadow: false });
-  part(head, fangGeo, mats.gold, { pos: [0.022, -0.045, 0.088], rot: [0.35, 0, -0.18], shadow: false });
-  part(head, cached('viper-tongue', () => new THREE.BoxGeometry(0.007, 0.003, 0.055)), poisonMat, {
-    pos: [0, -0.035, 0.12],
-    rot: [0.25, 0, 0],
+  part(head, viperHoodGeometry(), mats.armor, {
+    pos: [0, 0.008, -0.072],
+    rot: [-0.5, 0, 0],
+    scale: [0.68, 0.72, 0.6],
     shadow: false,
   });
+  const markGeo = cached('viper-hood-mark', () => new THREE.RingGeometry(0.014, 0.028, 16));
+  for (const side of [-1, 1]) {
+    part(head, markGeo, poisonMat, {
+      pos: [side * 0.058, 0.056, -0.052],
+      rot: [-0.5, 0, 0],
+      shadow: false,
+    });
+  }
 
-  return { group, torso, head, eyes };
+  part(head, cached('viper-skull', () => new THREE.SphereGeometry(0.079, 16, 12)), scaleMat, {
+    scale: [1.18, 0.8, 1.34],
+  });
+  part(head, cached('viper-snout', () => new THREE.ConeGeometry(0.05, 0.115, 10)), scaleMat, {
+    pos: [0, -0.014, 0.094],
+    rot: [Math.PI / 2, 0, 0],
+    scale: [1.1, 1, 0.8],
+  });
+  part(head, cached('viper-jaw', () => new THREE.BoxGeometry(0.082, 0.028, 0.115)), bellyMat, {
+    pos: [0, -0.042, 0.062],
+    rot: [0.12, 0, 0],
+  });
+
+  const browGeo = cached('viper-brow', () => new THREE.BoxGeometry(0.05, 0.018, 0.055));
+  for (const side of [-1, 1]) {
+    part(head, browGeo, scaleDeepMat, { pos: [side * 0.05, 0.038, 0.042], rot: [0.2, 0, side * 0.24] });
+  }
+  const eyes = addEyes(head, mats, { y: 0.016, z: 0.072, spread: 0.053, size: 0.014 });
+
+  const fangGeo = cached('viper-fang', () => new THREE.ConeGeometry(0.013, 0.055, 6));
+  for (const side of [-1, 1]) {
+    part(head, fangGeo, bellyMat, {
+      pos: [side * 0.028, -0.062, 0.085],
+      rot: [0.3, 0, side * 0.16],
+      shadow: false,
+    });
+  }
+  const tongue = new THREE.Group();
+  tongue.position.set(0, -0.044, 0.122);
+  tongue.rotation.x = 0.3;
+  part(tongue, cached('viper-tongue', () => new THREE.BoxGeometry(0.008, 0.004, 0.05)), poisonMat, {
+    pos: [0, 0, 0.025],
+    shadow: false,
+  });
+  for (const side of [-1, 1]) {
+    part(tongue, cached('viper-tongue-tip', () => new THREE.BoxGeometry(0.006, 0.004, 0.03)), poisonMat, {
+      pos: [side * 0.011, 0, 0.062],
+      rot: [0, side * -0.42, 0],
+      shadow: false,
+    });
+  }
+  head.add(tongue);
+
+  return { group, torso, head, eyes, extraMaterials };
 }
 
 function buildBomber(mats) {
@@ -842,29 +1073,76 @@ function buildBomber(mats) {
   const pouch = cached('bomber-pouch', () => new THREE.SphereGeometry(0.038, 10, 8));
   part(torso, pouch, mats.charcoal, { pos: [-0.12, -0.07, 0.09] });
   part(torso, pouch, mats.charcoal, { pos: [0.13, -0.07, 0.06] });
+
+  // Bandolier of spare charges: the belly alone gave no hint of the class.
+  const bandolier = new THREE.Group();
+  bandolier.rotation.z = 0.6;
+  part(bandolier, cached('bomber-strap', () => new THREE.TorusGeometry(0.158, 0.019, 8, 24)), mats.leather, {
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [1, 1, 0.86],
+  });
+  const chargeGeo = cached('bomber-charge', () => new THREE.SphereGeometry(0.032, 12, 10));
+  const capGeo = cached('bomber-charge-cap', () => new THREE.CylinderGeometry(0.012, 0.014, 0.018, 8));
+  for (const angle of [0.75, 1.3, 1.85]) {
+    const x = Math.cos(angle) * 0.158;
+    const z = Math.sin(angle) * 0.158 * 0.86;
+    part(bandolier, chargeGeo, mats.charcoal, { pos: [x, 0, z] });
+    part(bandolier, capGeo, mats.gold, { pos: [x, 0.036, z], shadow: false });
+  }
+  torso.add(bandolier);
   group.add(torso);
 
   const armL = addArm(group, mats, -1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
   const armR = addArm(group, mats, 1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
   const head = addHead(group, mats, { y: 0.66, radius: 0.108 });
-  const eyes = addEyes(head, mats, { y: -0.02, z: 0.096, size: 0.013 });
-  part(head, cached('bomber-cap', () => new THREE.SphereGeometry(0.118, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5)), mats.leather, {
-    pos: [0, 0.016, 0],
+  const eyes = addEyes(head, mats, { y: -0.046, z: 0.094, spread: 0.042, size: 0.013 });
+
+  // Flight cap with ear flaps. The shell stops above the brow line so the
+  // goggles below it are not buried inside the leather.
+  part(head, cached('bomber-cap', () => new THREE.SphereGeometry(0.118, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.44)), mats.leather, {
+    pos: [0, 0.03, -0.004],
+    scale: [1, 1.05, 1],
   });
-  const goggleLens = cached('goggle-lens', () => new THREE.CylinderGeometry(0.036, 0.036, 0.022, 12));
-  const goggleRim = cached('goggle-rim', () => new THREE.TorusGeometry(0.038, 0.009, 6, 16));
+  const flapGeo = cached('bomber-earflap', () => new THREE.SphereGeometry(0.052, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62));
+  for (const side of [-1, 1]) {
+    part(head, flapGeo, mats.leather, {
+      pos: [side * 0.098, 0.006, -0.008],
+      rot: [0, 0, side * 1.85],
+      scale: [1, 1.35, 1],
+    });
+  }
+  part(head, cached('bomber-cap-seam', () => new THREE.TorusGeometry(0.113, 0.011, 6, 22)), mats.charcoal, {
+    pos: [0, 0.058, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [0.86, 0.86, 1],
+    shadow: false,
+  });
+
+  const goggleLens = cached('goggle-lens', () => new THREE.CylinderGeometry(0.034, 0.034, 0.024, 14));
+  const goggleRim = cached('goggle-rim', () => new THREE.TorusGeometry(0.037, 0.011, 6, 18));
   for (const side of [-1, 1]) {
     part(head, goggleLens, mats.ember, {
-      pos: [side * 0.046, 0.03, 0.084],
-      rot: [Math.PI / 2, 0, 0],
+      pos: [side * 0.043, 0.03, 0.094],
+      rot: [Math.PI / 2 - 0.14, 0, 0],
       shadow: false,
     });
-    part(head, goggleRim, mats.steel, { pos: [side * 0.046, 0.03, 0.086] });
+    part(head, goggleRim, mats.steel, { pos: [side * 0.043, 0.03, 0.098], rot: [0.14, 0, 0] });
   }
-  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.108, 0.011, 6, 20)), mats.charcoal, {
-    pos: [0, 0.03, 0],
-    rot: [Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.9],
+  part(head, cached('goggle-bridge', () => new THREE.BoxGeometry(0.03, 0.014, 0.02)), mats.steel, {
+    pos: [0, 0.03, 0.101],
+    shadow: false,
+  });
+  // Open at the front so the strap runs behind the head instead of across the
+  // lenses it is supposed to be holding on.
+  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.112, 0.013, 6, 22, Math.PI * 1.2)), mats.charcoal, {
+    pos: [0, 0.03, -0.004],
+    rot: [Math.PI / 2 - 0.14, 0, Math.PI * 0.7],
+    scale: [1, 1, 0.92],
+  });
+  part(head, cached('bomber-scarf', () => new THREE.TorusGeometry(0.085, 0.028, 8, 18)), mats.cloth, {
+    pos: [0, -0.086, -0.006],
+    rot: [-Math.PI / 2 + 0.12, 0, 0],
+    scale: [1, 1.1, 1],
   });
 
   const bomb = buildBomb(mats);
@@ -887,68 +1165,159 @@ function buildBomber(mats) {
   };
 }
 
+// Feathers are laid flat in the XZ plane and fanned by a parent pivot, so sweep
+// and droop compose in the order a wing actually needs them.
+function addWingFeather(wing, geometry, material, { yaw, droop = 0, x, y = 0, z = 0 }) {
+  const pivot = new THREE.Group();
+  pivot.rotation.set(0, yaw, droop);
+  part(pivot, geometry, material, { pos: [x, y, z], rot: [-Math.PI / 2, 0, 0], shadow: false });
+  wing.add(pivot);
+  return pivot;
+}
+
+// Built once reaching along +X; the left wing is the same group mirrored, which
+// keeps the flap animation exactly symmetric.
+function buildEagleWing(mats) {
+  const wing = new THREE.Group();
+
+  part(wing, cached('eagle-shoulder', () => new THREE.SphereGeometry(0.075, 14, 10)), mats.armor, {
+    pos: [0.055, 0, -0.01],
+    scale: [1.7, 0.62, 1.3],
+  });
+  part(wing, cached('eagle-radius', () => new THREE.CapsuleGeometry(0.026, 0.16, 5, 10)), mats.armorDeep, {
+    pos: [0.16, -0.004, 0.012],
+    rot: [0, 0, Math.PI / 2],
+  });
+
+  const primaries = 6;
+  for (let i = 0; i < primaries; i++) {
+    const p = i / (primaries - 1);
+    addWingFeather(wing, featherGeometry(0.26 - p * 0.055, 0.086, 0.016), i % 2 ? mats.armorDeep : mats.armor, {
+      yaw: 0.2 + p * 0.66,
+      droop: -0.06 - p * 0.16,
+      x: 0.16,
+      y: -0.006 - p * 0.005,
+    });
+  }
+
+  const secondaries = 5;
+  for (let i = 0; i < secondaries; i++) {
+    const p = i / (secondaries - 1);
+    addWingFeather(wing, featherGeometry(0.17 - p * 0.04, 0.08, 0.016), i % 2 ? mats.armor : mats.armorDeep, {
+      yaw: 0.92 + p * 0.36,
+      droop: -0.03,
+      x: 0.05 + p * 0.065,
+      y: -0.004,
+    });
+  }
+
+  const coverts = 5;
+  for (let i = 0; i < coverts; i++) {
+    const p = i / (coverts - 1);
+    addWingFeather(wing, featherGeometry(0.1 - p * 0.018, 0.062, 0.014), mats.trim, {
+      yaw: 0.36 + p * 0.52,
+      droop: 0.06,
+      x: 0.048 + p * 0.05,
+      y: 0.028,
+    });
+  }
+
+  return wing;
+}
+
 function buildEagle(mats) {
   const group = new THREE.Group();
 
   const torso = part(
     group,
-    cached('eagle-body', () => new THREE.SphereGeometry(0.2, 18, 14)),
+    cached('eagle-body', () => new THREE.SphereGeometry(0.19, 18, 14)),
     mats.armorDeep,
-    { pos: [0, 0.38, 0], scale: [0.82, 1.05, 1.45], rot: [0.16, 0, 0] }
+    { pos: [0, 0.38, -0.01], scale: [0.74, 0.98, 1.5], rot: [0.2, 0, 0] }
   );
 
   const chest = part(
     group,
     cached('eagle-chest', () => new THREE.SphereGeometry(0.14, 16, 12)),
     mats.armor,
-    { pos: [0, 0.4, 0.16], scale: [0.82, 1.2, 0.65] }
+    { pos: [0, 0.4, 0.15], scale: [0.84, 1.18, 0.68] }
   );
+  // Ruff where the white head meets the dark body, the way a bald eagle reads.
+  const ruffGeo = cached('eagle-ruff', () => featherGeometry(0.075, 0.05, 0.009));
+  for (let i = 0; i < 7; i++) {
+    const angle = -0.95 + (i / 6) * 1.9;
+    part(group, ruffGeo, mats.trim, {
+      pos: [Math.sin(angle) * 0.115, 0.5, 0.11 + Math.cos(angle) * 0.055],
+      rot: [-Math.PI / 2 + 1.15, angle, 0],
+      shadow: false,
+    });
+  }
 
   const head = new THREE.Group();
-  head.position.set(0, 0.58, 0.24);
-  part(head, cached('eagle-head', () => new THREE.SphereGeometry(0.12, 16, 12)), mats.steel, {
-    scale: [0.9, 1, 1.08],
+  head.position.set(0, 0.57, 0.22);
+  part(head, cached('eagle-head', () => new THREE.SphereGeometry(0.108, 18, 14)), mats.trim, {
+    scale: [0.94, 1, 1.1],
   });
-  part(head, cached('eagle-brow', () => new THREE.BoxGeometry(0.15, 0.025, 0.035)), mats.steel, {
-    pos: [0, 0.025, 0.105],
+  // Heavy brow shading the eyes is what makes a raptor look like a raptor.
+  part(head, cached('eagle-brow', () => new THREE.BoxGeometry(0.165, 0.03, 0.06)), mats.steel, {
+    pos: [0, 0.042, 0.072],
+    rot: [0.34, 0, 0],
   });
-  part(head, cached('eagle-beak', () => new THREE.ConeGeometry(0.055, 0.17, 8)), mats.gold, {
-    pos: [0, -0.015, 0.16],
-    rot: [Math.PI / 2, 0, 0],
+  part(head, cached('eagle-cere', () => new THREE.SphereGeometry(0.05, 12, 10)), mats.gold, {
+    pos: [0, 0.006, 0.086],
+    scale: [1, 0.85, 0.7],
   });
-  const eyes = addEyes(head, mats, { z: 0.105, y: 0.012, spread: 0.05, size: 0.015 });
+  part(head, cached('eagle-beak', () => new THREE.ConeGeometry(0.045, 0.15, 10)), mats.gold, {
+    pos: [0, -0.012, 0.145],
+    rot: [Math.PI / 2 - 0.22, 0, 0],
+    scale: [1, 1, 0.72],
+  });
+  part(head, cached('eagle-beak-hook', () => new THREE.ConeGeometry(0.022, 0.055, 8)), mats.gold, {
+    pos: [0, -0.014, 0.202],
+    rot: [-1.05, 0, 0],
+    shadow: false,
+  });
+  const eyes = addEyes(head, mats, { z: 0.088, y: 0.014, spread: 0.055, size: 0.016 });
   group.add(head);
 
-  const wingGeo = cached('eagle-wing-feather', () => new THREE.CapsuleGeometry(0.045, 0.34, 5, 10));
   const wings = {};
   for (const side of [-1, 1]) {
-    const wing = new THREE.Group();
-    wing.position.set(side * 0.12, 0.46, 0);
-    for (let i = 0; i < 4; i++) {
-      part(wing, wingGeo, i === 0 ? mats.armor : mats.armorDeep, {
-        pos: [side * (0.15 + i * 0.055), -i * 0.025, -0.035 - i * 0.025],
-        rot: [0.08 + i * 0.04, 0, side * (Math.PI / 2 - 0.16 - i * 0.05)],
-        scale: [1 - i * 0.08, 1, 0.72],
-      });
-    }
+    const wing = buildEagleWing(mats);
+    wing.position.set(side * 0.1, 0.45, 0);
+    // Dihedral: flat wings read as an aeroplane from the front.
+    wing.rotation.z = side * 0.3;
+    wing.scale.x = side;
     group.add(wing);
     wings[side < 0 ? 'left' : 'right'] = wing;
   }
 
-  const tailGeo = cached('eagle-tail-feather', () => new THREE.CapsuleGeometry(0.035, 0.22, 5, 8));
-  for (const side of [-1, 0, 1]) {
-    part(group, tailGeo, mats.steel, {
-      pos: [side * 0.055, 0.33, -0.25],
-      rot: [Math.PI / 2.8, 0, side * 0.16],
-      scale: [1, 1, 0.7],
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.27, -0.28);
+  tail.rotation.x = 0.16;
+  for (let i = 0; i < 5; i++) {
+    const spread = (i / 4 - 0.5) * 0.85;
+    const pivot = new THREE.Group();
+    // Ry of +PI/2 aims the feather down -Z; spread fans it out from there.
+    pivot.rotation.set(0, Math.PI / 2 + spread, -0.16);
+    part(pivot, featherGeometry(0.24 - Math.abs(spread) * 0.07, 0.08, 0.014), i % 2 ? mats.trim : mats.steel, {
+      pos: [0.02, 0, 0],
+      rot: [-Math.PI / 2, 0, 0],
+      shadow: false,
     });
+    tail.add(pivot);
   }
+  group.add(tail);
 
+  const toeGeo = cached('eagle-toe', () => new THREE.ConeGeometry(0.015, 0.075, 6));
   for (const side of [-1, 1]) {
-    part(group, cached('eagle-talon', () => new THREE.TorusGeometry(0.045, 0.012, 6, 12, Math.PI)), mats.gold, {
-      pos: [side * 0.075, 0.18, 0.08],
-      rot: [Math.PI / 2, 0, side * 0.25],
+    const foot = new THREE.Group();
+    foot.position.set(side * 0.07, 0.21, 0.05);
+    part(foot, cached('eagle-shank', () => new THREE.CylinderGeometry(0.022, 0.026, 0.075, 8)), mats.gold, {
+      pos: [0, 0.03, 0],
     });
+    for (const [tx, tz, tilt] of [[0.03, 0.05, 0.7], [-0.03, 0.05, 0.7], [0, -0.045, -0.8]]) {
+      part(foot, toeGeo, mats.gold, { pos: [tx, -0.02, tz], rot: [tilt, 0, 0] });
+    }
+    group.add(foot);
   }
 
   return {
@@ -962,28 +1331,65 @@ function buildEagle(mats) {
   };
 }
 
-function buildCannon(mats) {
+// A wheeled field gun disappears next to a 0.7-tall soldier, so the artillery
+// class carries a shoulder bombard instead: the barrel doubles as its
+// silhouette and it aims with the right arm.
+function buildBombard(mats) {
   const cannon = new THREE.Group();
-  part(cannon, cached('cannon-wheel', () => new THREE.TorusGeometry(0.08, 0.022, 8, 16)), mats.charcoal, {
-    pos: [-0.12, -0.04, 0],
-    rot: [Math.PI / 2, 0, 0],
+
+  part(cannon, cached('bombard-tube', () => new THREE.CylinderGeometry(0.058, 0.048, 0.34, 14)), mats.steel, {
+    pos: [0, 0.07, 0],
   });
-  part(cannon, cached('cannon-wheel2', () => new THREE.TorusGeometry(0.08, 0.022, 8, 16)), mats.charcoal, {
-    pos: [0.12, -0.04, 0],
-    rot: [Math.PI / 2, 0, 0],
+  part(cannon, cached('bombard-mouth', () => new THREE.CylinderGeometry(0.076, 0.06, 0.06, 14)), mats.gold, {
+    pos: [0, 0.265, 0],
   });
-  part(cannon, cached('cannon-carriage', () => new THREE.BoxGeometry(0.28, 0.06, 0.14)), mats.wood, {
-    pos: [0, 0, 0],
+  part(cannon, cached('bombard-bore', () => new THREE.CylinderGeometry(0.05, 0.05, 0.03, 12)), mats.charcoal, {
+    pos: [0, 0.285, 0],
+    shadow: false,
   });
-  part(cannon, cached('cannon-barrel', () => new THREE.CylinderGeometry(0.045, 0.055, 0.34, 10)), mats.steel, {
-    pos: [0, 0.05, 0.12],
-    rot: [Math.PI / 2, 0, 0],
+  const bandGeo = cached('bombard-band', () => new THREE.TorusGeometry(0.06, 0.013, 8, 18));
+  part(cannon, bandGeo, mats.gold, { pos: [0, 0.16, 0], rot: [-Math.PI / 2, 0, 0] });
+  part(cannon, bandGeo, mats.gold, { pos: [0, 0.02, 0], rot: [-Math.PI / 2, 0, 0] });
+  part(cannon, cached('bombard-breech', () => new THREE.SphereGeometry(0.062, 14, 12)), mats.charcoal, {
+    pos: [0, -0.11, 0],
+    scale: [1, 1.15, 1],
   });
-  part(cannon, cached('cannon-muzzle', () => new THREE.TorusGeometry(0.05, 0.012, 8, 14)), mats.gold, {
-    pos: [0, 0.05, 0.29],
-    rot: [Math.PI / 2, 0, 0],
+  part(cannon, cached('bombard-touchhole', () => new THREE.CylinderGeometry(0.014, 0.014, 0.05, 8)), mats.gold, {
+    pos: [0, -0.075, -0.055],
+    rot: [-0.5, 0, 0],
+    shadow: false,
   });
+
+  // Timber stock and fore-grip: gives the hands somewhere believable to sit.
+  part(cannon, cached('bombard-stock', () => new THREE.BoxGeometry(0.07, 0.22, 0.06)), mats.wood, {
+    pos: [0, -0.15, -0.008],
+    rot: [0.22, 0, 0],
+  });
+  part(cannon, cached('bombard-grip', () => new THREE.CylinderGeometry(0.019, 0.019, 0.11, 8)), mats.wood, {
+    pos: [0, 0.03, 0.075],
+    rot: [0, 0, Math.PI / 2],
+  });
+
   return cannon;
+}
+
+function buildShellPouch(mats) {
+  const pouch = new THREE.Group();
+  part(pouch, cached('shell-pouch', () => new THREE.CylinderGeometry(0.06, 0.052, 0.11, 12)), mats.leather);
+  part(pouch, cached('shell-pouch-lip', () => new THREE.TorusGeometry(0.06, 0.01, 6, 16)), mats.gold, {
+    pos: [0, 0.052, 0],
+    rot: [-Math.PI / 2, 0, 0],
+  });
+  const shellGeo = cached('shell-ball', () => new THREE.SphereGeometry(0.03, 12, 10));
+  const spots = [
+    [0.025, 0.072, 0.014],
+    [-0.024, 0.068, -0.012],
+    [0.004, 0.078, -0.03],
+  ];
+  for (const [x, y, z] of spots) {
+    part(pouch, shellGeo, mats.charcoal, { pos: [x, y, z] });
+  }
+  return pouch;
 }
 
 function buildArtillery(mats) {
@@ -1007,13 +1413,20 @@ function buildArtillery(mats) {
     rot: [-Math.PI / 2, 0, 0],
   });
 
-  const cannon = buildCannon(mats);
-  cannon.position.set(0.04, -0.08, 0.1);
-  cannon.rotation.set(-0.15, 0.22, 0);
-  group.add(cannon);
+  const cannon = buildBombard(mats);
+  // Braced against the right shoulder and canted up-forward, so the charge
+  // animation on armR reads as raising the barrel to fire.
+  cannon.position.set(0.012, 0.02, 0.05);
+  cannon.rotation.set(1.96, -0.2, -0.06);
+  cannon.scale.setScalar(1.1);
+  armR.hand.add(cannon);
+  armR.pivot.rotation.set(-0.8, 0.04, 0.24);
+  armL.pivot.rotation.set(-1.2, 0, 0.34);
 
-  armL.pivot.rotation.set(-0.42, 0, -0.28);
-  armR.pivot.rotation.set(-0.38, 0, 0.22);
+  const pouch = buildShellPouch(mats);
+  pouch.position.set(-0.145, 0.36, -0.04);
+  pouch.rotation.set(0.12, 0, 0.24);
+  group.add(pouch);
 
   return {
     group,
@@ -1027,88 +1440,243 @@ function buildArtillery(mats) {
   };
 }
 
+// One bolt thrower, aimed down +Z; four of these on the deck replace the old
+// bolts that speared straight through the middle of the tower.
+function buildBallista(mats) {
+  const ballista = new THREE.Group();
+
+  part(ballista, cached('ballista-mount', () => new THREE.BoxGeometry(0.1, 0.045, 0.1)), mats.armorDeep, {
+    pos: [0, 0.022, 0],
+  });
+  part(ballista, cached('ballista-stock', () => new THREE.BoxGeometry(0.05, 0.042, 0.2)), mats.wood, {
+    pos: [0, 0.066, 0.045],
+    rot: [-0.16, 0, 0],
+  });
+  const limbGeo = cached('ballista-limb', () => new THREE.BoxGeometry(0.13, 0.024, 0.024));
+  for (const side of [-1, 1]) {
+    part(ballista, limbGeo, mats.wood, {
+      pos: [side * 0.068, 0.08, 0.085],
+      rot: [0, side * -0.3, side * -0.18],
+    });
+    part(ballista, cached('ballista-nut', () => new THREE.SphereGeometry(0.016, 8, 8)), mats.gold, {
+      pos: [side * 0.128, 0.086, 0.06],
+      shadow: false,
+    });
+  }
+  part(ballista, cached('ballista-string', () => new THREE.BoxGeometry(0.25, 0.008, 0.008)), mats.trim, {
+    pos: [0, 0.086, 0.058],
+    shadow: false,
+  });
+  part(ballista, cached('ballista-bolt', () => new THREE.CylinderGeometry(0.011, 0.011, 0.17, 7)), mats.wood, {
+    pos: [0, 0.088, 0.115],
+    rot: [Math.PI / 2 - 0.14, 0, 0],
+  });
+  part(ballista, cached('ballista-tip', () => new THREE.ConeGeometry(0.026, 0.065, 7)), mats.steel, {
+    pos: [0, 0.104, 0.228],
+    rot: [Math.PI / 2 - 0.14, 0, 0],
+  });
+
+  return ballista;
+}
+
 function buildTower(mats) {
   const group = new THREE.Group();
 
-  part(group, cached('arrow-tower-foot', () => new THREE.BoxGeometry(0.58, 0.12, 0.58)), mats.armorDeep, {
-    pos: [0, 0.06, 0],
+  part(group, cached('arrow-tower-foot', () => new THREE.BoxGeometry(0.6, 0.09, 0.6)), mats.armorDeep, {
+    pos: [0, 0.045, 0],
   });
-  part(group, cached('arrow-tower-body', () => new THREE.BoxGeometry(0.44, 0.52, 0.44)), mats.armor, {
-    pos: [0, 0.36, 0],
+  part(group, cached('arrow-tower-plinth', () => new THREE.BoxGeometry(0.52, 0.07, 0.52)), mats.armor, {
+    pos: [0, 0.125, 0],
   });
-  part(group, cached('arrow-tower-band', () => new THREE.BoxGeometry(0.5, 0.07, 0.5)), mats.trim, {
-    pos: [0, 0.25, 0],
-  });
-  part(group, cached('arrow-tower-deck', () => new THREE.BoxGeometry(0.62, 0.1, 0.62)), mats.armorDeep, {
-    pos: [0, 0.67, 0],
+  part(group, cached('arrow-tower-shaft', () => new THREE.BoxGeometry(0.4, 0.42, 0.4)), mats.armor, {
+    pos: [0, 0.37, 0],
   });
 
-  const merlonGeo = cached('arrow-tower-merlon', () => new THREE.BoxGeometry(0.14, 0.18, 0.14));
+  // Corner pilasters and a mid band break up what used to be one flat block.
+  const pilasterGeo = cached('arrow-tower-pilaster', () => new THREE.BoxGeometry(0.09, 0.42, 0.09));
+  for (const x of [-0.2, 0.2]) {
+    for (const z of [-0.2, 0.2]) {
+      part(group, pilasterGeo, mats.armorDeep, { pos: [x, 0.37, z] });
+    }
+  }
+  part(group, cached('arrow-tower-band', () => new THREE.BoxGeometry(0.44, 0.045, 0.44)), mats.trim, {
+    pos: [0, 0.3, 0],
+  });
+
+  const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.06, 0.17, 0.02));
+  const archGeo = cached('arrow-tower-slit-arch', () => new THREE.CylinderGeometry(0.03, 0.03, 0.02, 10, 1, false, 0, Math.PI));
+  for (let i = 0; i < 4; i++) {
+    const yaw = (i / 4) * Math.PI * 2;
+    const nx = Math.sin(yaw);
+    const nz = Math.cos(yaw);
+    part(group, slitGeo, mats.charcoal, { pos: [nx * 0.209, 0.45, nz * 0.209], rot: [0, yaw, 0] });
+    part(group, archGeo, mats.charcoal, {
+      pos: [nx * 0.209, 0.535, nz * 0.209],
+      rot: [Math.PI / 2, 0, yaw],
+      shadow: false,
+    });
+  }
+
+  part(group, cached('arrow-tower-corbel', () => new THREE.BoxGeometry(0.54, 0.055, 0.54)), mats.armorDeep, {
+    pos: [0, 0.605, 0],
+  });
+  part(group, cached('arrow-tower-deck', () => new THREE.BoxGeometry(0.6, 0.05, 0.6)), mats.armor, {
+    pos: [0, 0.657, 0],
+  });
+
+  const merlonGeo = cached('arrow-tower-merlon', () => new THREE.BoxGeometry(0.13, 0.15, 0.13));
   for (const x of [-0.23, 0.23]) {
     for (const z of [-0.23, 0.23]) {
-      part(group, merlonGeo, mats.armor, { pos: [x, 0.79, z] });
+      part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.757, z] });
     }
   }
 
-  const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.075, 0.16, 0.018));
-  part(group, slitGeo, mats.charcoal, { pos: [0, 0.43, 0.229] });
-  part(group, slitGeo, mats.charcoal, { pos: [0, 0.43, -0.229] });
-  part(group, slitGeo, mats.charcoal, {
-    pos: [0.229, 0.43, 0],
-    rot: [0, Math.PI / 2, 0],
-  });
-  part(group, slitGeo, mats.charcoal, {
-    pos: [-0.229, 0.43, 0],
-    rot: [0, Math.PI / 2, 0],
-  });
-
   const turret = new THREE.Group();
-  turret.position.y = 0.74;
-  const shaftGeo = cached('arrow-tower-bolt-shaft', () => new THREE.CylinderGeometry(0.012, 0.012, 0.42, 7));
-  const headGeo = cached('arrow-tower-bolt-head', () => new THREE.ConeGeometry(0.035, 0.09, 7));
-  const launchers = [
-    { shaft: [0.2, 0, 0], head: [0.44, 0, 0], rot: [0, 0, -Math.PI / 2] },
-    { shaft: [-0.2, 0, 0], head: [-0.44, 0, 0], rot: [0, 0, Math.PI / 2] },
-    { shaft: [0, 0, 0.2], head: [0, 0, 0.44], rot: [Math.PI / 2, 0, 0] },
-    { shaft: [0, 0, -0.2], head: [0, 0, -0.44], rot: [-Math.PI / 2, 0, 0] },
-  ];
-  for (const launcher of launchers) {
-    part(turret, shaftGeo, mats.wood, { pos: launcher.shaft, rot: launcher.rot });
-    part(turret, headGeo, mats.steel, { pos: launcher.head, rot: launcher.rot });
+  turret.position.y = 0.682;
+  for (let i = 0; i < 4; i++) {
+    const yaw = (i / 4) * Math.PI * 2;
+    const ballista = buildBallista(mats);
+    ballista.position.set(Math.sin(yaw) * 0.19, 0, Math.cos(yaw) * 0.19);
+    ballista.rotation.y = yaw;
+    turret.add(ballista);
   }
-  part(turret, cached('arrow-tower-cap', () => new THREE.CylinderGeometry(0.1, 0.14, 0.11, 12)), mats.gold);
   group.add(turret);
+
+  // Mast and pennant: the only large flat surface that can carry the team
+  // colour, which a grey keep otherwise has nowhere to show.
+  part(group, cached('arrow-tower-mast', () => new THREE.CylinderGeometry(0.014, 0.016, 0.36, 8)), mats.wood, {
+    pos: [0, 0.86, 0],
+  });
+  part(group, cached('arrow-tower-finial', () => new THREE.OctahedronGeometry(0.034, 0)), mats.gold, {
+    pos: [0, 1.055, 0],
+    shadow: false,
+  });
+  part(group, cached('arrow-tower-pennant', () => new THREE.BoxGeometry(0.006, 0.14, 0.23)), mats.ring, {
+    pos: [0, 0.955, 0.118],
+    shadow: false,
+  });
 
   return { group, turret };
 }
 
+// Shoulders that flare out and then draw back into a trailing wisp, so the
+// silhouette tapers instead of sitting on the tile like an egg.
+function ghostShroudGeometry() {
+  return cached('ghost-shroud', () => {
+    const profile = [
+      new THREE.Vector2(0.002, 0.3),
+      new THREE.Vector2(0.075, 0.295),
+      new THREE.Vector2(0.12, 0.275),
+      new THREE.Vector2(0.148, 0.235),
+      new THREE.Vector2(0.166, 0.18),
+      new THREE.Vector2(0.175, 0.115),
+      new THREE.Vector2(0.178, 0.055),
+      new THREE.Vector2(0.165, 0.005),
+      new THREE.Vector2(0.128, -0.04),
+      new THREE.Vector2(0.075, -0.085),
+      new THREE.Vector2(0.028, -0.13),
+      new THREE.Vector2(0.0, -0.16),
+    ];
+    return new THREE.LatheGeometry(profile, 26);
+  });
+}
+
 function buildGhost(mats) {
   const group = new THREE.Group();
-  const sheet = part(
+
+  const base = mats.armor.userData.baseColor.clone();
+  const gauze = standard(base.clone().lerp(new THREE.Color(0xffffff), 0.12), {
+    roughness: 0.9,
+    metalness: 0,
+    emissive: base,
+    emissiveIntensity: 0.22,
+    transparent: true,
+    opacity: 0.78,
+    side: THREE.DoubleSide,
+  });
+  const gauzeDeep = standard(base.clone().lerp(new THREE.Color(0x0b1220), 0.42), {
+    roughness: 0.92,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+  });
+  const voidMat = standard(0x050a14, {
+    roughness: 0.98,
+    metalness: 0,
+  });
+  const extraMaterials = [gauze, gauzeDeep, voidMat];
+
+  // The wraith floats, so the shroud starts well clear of the tile and the
+  // torn hem tapers into the air rather than clipping through the ground.
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.3, 0);
+  group.add(torso);
+  part(torso, ghostShroudGeometry(), gauze, { shadow: false });
+
+  // Torn strips hanging off the hem; without them the tapered lathe reads as a
+  // smooth teardrop rather than something that has been rotting for a century.
+  const tatterGeo = cached('ghost-tatter', () => new THREE.ConeGeometry(0.05, 0.22, 6));
+  const tatters = [
+    [0.0, 0.8], [0.78, 0.5], [1.57, 0.9], [2.36, 0.6],
+    [3.14, 0.85], [3.93, 0.45], [4.71, 0.75], [5.5, 0.55],
+  ];
+  for (const [angle, length] of tatters) {
+    const r = 0.155;
+    part(torso, tatterGeo, gauzeDeep, {
+      // Flattened tangentially so each one reads as a hanging strip of cloth.
+      pos: [Math.cos(angle) * r, 0.01 - 0.11 * length, Math.sin(angle) * r],
+      rot: [Math.sin(angle) * 0.26, -angle, -Math.cos(angle) * 0.26],
+      scale: [1.75, length, 0.4],
+      shadow: false,
+    });
+  }
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.58, 0);
+  group.add(head);
+  part(head, cached('ghost-skull', () => new THREE.SphereGeometry(0.115, 18, 14)), gauze, {
+    scale: [1, 1.06, 0.96],
+    shadow: false,
+  });
+  // Hollow face so the glow has something to sit in.
+  // Pushed proud of the veil: behind it, the translucent skull washes the
+  // hollow out to the same milky grey as the rest of the shroud.
+  part(head, cached('ghost-void', () => new THREE.SphereGeometry(0.1, 16, 12)), voidMat, {
+    pos: [0, -0.006, 0.052],
+    scale: [0.9, 0.96, 0.8],
+    shadow: false,
+  });
+  const eyes = addEyes(head, mats, { y: 0.024, z: 0.116, spread: 0.046, size: 0.024, socket: false });
+  part(head, cached('ghost-mouth', () => new THREE.SphereGeometry(0.03, 12, 10)), mats.eye, {
+    pos: [0, -0.05, 0.108],
+    scale: [0.66, 1.15, 0.5],
+    shadow: false,
+  });
+
+  // Wispy arms reaching forward; pivots so the shared idle sway still applies.
+  const armGeo = cached('ghost-arm', () => new THREE.CapsuleGeometry(0.032, 0.16, 5, 10));
+  const clawGeo = cached('ghost-claw', () => new THREE.ConeGeometry(0.03, 0.09, 7));
+  const arms = {};
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.128, 0.5, 0.015);
+    pivot.rotation.set(-1.0, 0, side * 0.34);
+    part(pivot, armGeo, gauze, { pos: [0, -0.09, 0], scale: [1, 1, 1], shadow: false });
+    part(pivot, clawGeo, gauzeDeep, { pos: [0, -0.2, 0.012], rot: [0.5, 0, 0], shadow: false });
+    group.add(pivot);
+    arms[side < 0 ? 'left' : 'right'] = pivot;
+  }
+
+  return {
     group,
-    cached('ghost-sheet', () => new THREE.SphereGeometry(0.22, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.72)),
-    mats.cloth,
-    { pos: [0, 0.38, 0], scale: [1, 1.15, 0.85] }
-  );
-  sheet.material = sheet.material.clone();
-  sheet.material.transparent = true;
-  sheet.material.opacity = 0.72;
-
-  const head = part(group, cached('ghost-head', () => new THREE.SphereGeometry(0.12, 14, 12)), mats.cloth, {
-    pos: [0, 0.62, 0],
-    scale: [1.05, 0.95, 1],
-  });
-  head.material = head.material.clone();
-  head.material.transparent = true;
-  head.material.opacity = 0.78;
-
-  const eyes = addEyes(head, mats, { y: -0.01, z: 0.1, spread: 0.055, size: 0.018 });
-  part(group, cached('ghost-tail', () => new THREE.ConeGeometry(0.1, 0.22, 8)), mats.cloth, {
-    pos: [0, 0.12, 0],
-    scale: [1, 0.8, 0.7],
-  });
-
-  return { group, torso: sheet, head, eyes };
+    torso,
+    head,
+    armL: arms.left,
+    armR: arms.right,
+    eyes,
+    extraMaterials,
+  };
 }
 
 function buildFallback(mats) {
@@ -1150,10 +1718,10 @@ const SILHOUETTE = {
   mage: [0.96, 1.02, 0.96],
   assassin: [0.92, 1.03, 0.92],
   bomber: [1.06, 0.9, 1.06],
-  eagle: [0.92, 0.92, 0.92],
+  eagle: [1, 1, 1],
   priest: [0.94, 1, 0.94],
   ghost: [0.9, 1.08, 0.9],
-  viper: [0.92, 0.78, 0.92],
+  viper: [0.98, 1.04, 0.98],
 };
 
 export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {
@@ -1183,6 +1751,8 @@ export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = 
     shadow,
     ring,
     height: bounds.max.y,
-    materials: Object.values(mats),
+    // Builders that mix their own materials (snake scales, ghost gauze) have to
+    // hand them back, or the acted-this-turn tint would skip right over them.
+    materials: [...Object.values(mats), ...(rig.extraMaterials ?? [])],
   };
 }

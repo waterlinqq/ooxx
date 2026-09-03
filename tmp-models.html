@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>unit model sheet</title>
+    <style>
+      body { margin: 0; background: #0b1120; color: #e2e8f0; font-family: system-ui, sans-serif; }
+      #grid { display: grid; grid-template-columns: repeat(4, 300px); gap: 4px; padding: 4px; }
+      .cell { position: relative; width: 300px; height: 300px; background: #111a2e; }
+      .cell canvas { display: block; }
+      .label { position: absolute; left: 8px; top: 6px; font-size: 15px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 1px 3px #000; }
+    </style>
+  </head>
+  <body>
+    <div id="grid"></div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+      const bust = `?v=${Date.now()}`;
+      const { buildUnitModel } = await import(/* @vite-ignore */ `./js/board3d/UnitModels.js${bust}`);
+      const { CLASS_IDS, CLASSES } = await import(/* @vite-ignore */ `./js/units.js${bust}`);
+
+      const params = new URLSearchParams(location.search);
+      const YAW = Number(params.get('yaw') ?? 0.6);
+      const ONLY = params.get('only');
+
+      const grid = document.getElementById('grid');
+      const ids = ONLY ? ONLY.split(',') : CLASS_IDS;
+      console.log('ids', ids.join(','));
+
+      const shared = new THREE.WebGLRenderer({ antialias: true });
+      shared.setPixelRatio(2);
+      shared.setSize(300, 300);
+      shared.shadowMap.enabled = true;
+      shared.shadowMap.type = THREE.PCFSoftShadowMap;
+      shared.toneMapping = THREE.ACESFilmicToneMapping;
+      shared.toneMappingExposure = 1.25;
+      const pmrem = new THREE.PMREMGenerator(shared);
+      const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+      for (const id of ids) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = `${id} ${CLASSES[id]?.name ?? ''}`;
+        cell.appendChild(label);
+        grid.appendChild(cell);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111a2e);
+        scene.environment = envMap;
+        scene.environmentIntensity = 0.55;
+        scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+        scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
+        const key = new THREE.DirectionalLight(0xfff6e6, 1.9);
+        key.position.set(4, 8, 4);
+        key.castShadow = true;
+        key.shadow.mapSize.set(1024, 1024);
+        key.shadow.camera.left = -2; key.shadow.camera.right = 2;
+        key.shadow.camera.top = 2; key.shadow.camera.bottom = -2;
+        scene.add(key);
+        const fill = new THREE.DirectionalLight(0x93c5fd, 0.45);
+        fill.position.set(-3, 5, -4);
+        scene.add(fill);
+        const rim = new THREE.DirectionalLight(0xe0e7ff, 0.65);
+        rim.position.set(-4, 3, 5);
+        scene.add(rim);
+
+        const ground = new THREE.Mesh(
+          new THREE.BoxGeometry(1.5, 0.06, 1.5),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 })
+        );
+        ground.position.y = -0.03;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const model = buildUnitModel(id, 'blue');
+        model.body.rotation.y = YAW;
+        scene.add(model.root);
+
+        const frustum = 1.35;
+        const cam = new THREE.OrthographicCamera(-frustum / 2, frustum / 2, frustum / 2, -frustum / 2, 0.1, 100);
+        if (params.get('board') === '1') {
+          cam.position.set(0, 2.55, 2.4);
+          cam.lookAt(0, 0.3, 0);
+        } else {
+          cam.position.set(0, 1.35, 2.6);
+          cam.lookAt(0, 0.42, 0);
+        }
+
+        shared.render(scene, cam);
+        const snap = document.createElement('canvas');
+        snap.width = 600; snap.height = 600;
+        snap.style.width = '300px';
+        snap.style.height = '300px';
+        snap.getContext('2d').drawImage(shared.domElement, 0, 0);
+        cell.appendChild(snap);
+      }
+
+      window.__ready = true;
+    </script>
+  </body>
+</html>

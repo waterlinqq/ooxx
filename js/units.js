@@ -128,7 +128,7 @@ export const CLASSES = {
     range: 1,
     type: 'melee',
     poisonOnHit: true,
-    desc: '上下左右近戰；命中使敵人中毒（攻擊-1，每回合結束扣 1 血，不可疊加）',
+    desc: '上下左右近戰；命中使敵人中毒（攻擊-1，敵方行動結束後每回合扣 1 血，不可疊加）',
   },
 };
 

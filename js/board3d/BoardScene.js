@@ -9,6 +9,7 @@ import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
 import { TutorialPointer } from './TutorialPointer.js';
+import { attachDevRendererStats } from './DevRendererStats.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
@@ -130,6 +131,7 @@ export class BoardScene {
     this.boardSize = 0;
     this.maxReserveUnits = 0;
     this.visible = true;
+    this.devStats = import.meta.env.DEV ? attachDevRendererStats(this.renderer) : null;
 
     this.onResize = this.onResize.bind(this);
     window.addEventListener('resize', this.onResize);
@@ -295,7 +297,9 @@ export class BoardScene {
     const elapsed = this.clock.elapsedTime;
     if (this.visible) {
       this.unitManager.tick(delta, elapsed);
+      this.devStats?.begin();
       this.renderer.render(this.scene, this.camera);
+      this.devStats?.end();
       this.labelRenderer.render(this.scene, this.camera);
     }
   }
@@ -311,6 +315,7 @@ export class BoardScene {
     this.tutorialPointer.dispose();
     this.tileGrid.clear();
     this.highlightSystem.clear();
+    this.devStats?.dispose();
     this.renderer.dispose();
     this.container.removeChild(this.renderer.domElement);
     this.container.removeChild(this.labelRenderer.domElement);

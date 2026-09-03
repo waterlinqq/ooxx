@@ -393,17 +393,19 @@ export class Game {
     this.lastCoinReward = 0;
   }
 
-  applyTurnBoundaryEffects() {
+  applyTurnBoundaryEffects(endedTeam) {
     if (this.resolvePendingBombs()) return true;
-    if (this.resolvePoisonTicks()) return true;
+    if (this.resolvePoisonTicks(endedTeam)) return true;
     return false;
   }
 
-  resolvePoisonTicks() {
-    const hasPoisoned = this.board.some((row) => row.some((unit) => unit?.poisoned));
+  resolvePoisonTicks(endedTeam) {
+    const hasPoisoned = this.board.some((row) =>
+      row.some((unit) => unit?.poisoned && unit.team === endedTeam),
+    );
     if (!hasPoisoned) return false;
 
-    const result = applyPoisonTurnTicks(this.board);
+    const result = applyPoisonTurnTicks(this.board, endedTeam);
     this.board = result.board;
 
     const labels = result.ticks.map(({ unit }) => {
@@ -1147,6 +1149,7 @@ export class Game {
   advanceSlot() {
     const order = this.slotOrder;
     const startIdx = order.indexOf(this.currentSlot);
+    const { team: endedTeam } = parseSlot(this.currentSlot);
 
     for (let i = 1; i <= order.length; i++) {
       const nextSlot = order[(startIdx + i) % order.length];
@@ -1155,7 +1158,7 @@ export class Game {
       this.syncCurrentPlayerFromSlot();
       this.resetTurnActions();
 
-      if (this.applyTurnBoundaryEffects()) return;
+      if (this.applyTurnBoundaryEffects(endedTeam)) return;
 
       if (this.hasValidActionsForSlot(nextSlot)) {
         this.message = this.getPlayerTurnMessage();
@@ -1171,10 +1174,11 @@ export class Game {
   }
 
   switchPlayer() {
+    const endedTeam = this.currentPlayer;
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
     this.resetTurnActions();
 
-    if (this.applyTurnBoundaryEffects()) return;
+    if (this.applyTurnBoundaryEffects(endedTeam)) return;
 
     this.message = this.getPlayerTurnMessage();
     this.notify();

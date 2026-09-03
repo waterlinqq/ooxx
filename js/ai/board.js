@@ -347,6 +347,18 @@ function restoreDamaged(ctx, record) {
   xorUnitHash(ctx, unit, row, col);
 }
 
+/** Reverses poison ticks (and any chained blasts) applied when the turn ended. */
+function restoreEndOfTurnEffects(ctx, undo) {
+  for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
+    restoreDamaged(ctx, undo.damageRecords[i]);
+  }
+  for (const rec of undo.poisonSkipRecords) {
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.poisonFresh = true;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+}
+
 function removeFromReserve(ctx, unit) {
   const list = ctx.reserves[unit.team];
   const index = list.indexOf(unit);
@@ -401,7 +413,7 @@ function applyPoisonTicksInPlace(ctx, damageRecords, selfLosses, skipRecords) {
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       const unit = board[r][c];
-      if (!unit?.poisoned) continue;
+      if (!unit?.poisoned || unit.team !== ctx.turn) continue;
       if (unit.poisonFresh) {
         xorUnitHash(ctx, unit, r, c);
         unit.poisonFresh = false;
@@ -697,12 +709,14 @@ export function unmakeAction(ctx, undo) {
   }
 
   if (action.type === 'deploy') {
+    restoreEndOfTurnEffects(ctx, undo);
     lift(ctx, actor);
     insertIntoReserve(ctx, actor, undo.reserveIndex);
     return;
   }
 
   if (action.type === 'move') {
+    restoreEndOfTurnEffects(ctx, undo);
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
     return;
@@ -714,15 +728,7 @@ export function unmakeAction(ctx, undo) {
     place(ctx, actor, undo.possessUndo.fromRow, undo.possessUndo.fromCol);
   }
 
-  for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
-    restoreDamaged(ctx, undo.damageRecords[i]);
-  }
-
-  for (const rec of undo.poisonSkipRecords) {
-    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
-    rec.unit.poisonFresh = true;
-    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
-  }
+  restoreEndOfTurnEffects(ctx, undo);
 }
 
 /** Folds the two hash lanes into one 53-bit-safe integer usable as a Map key. */
