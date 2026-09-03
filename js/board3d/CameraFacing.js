@@ -18,10 +18,8 @@ export function getScreenGroundAxes() {
   return { right: TMP_RIGHT, down: TMP_DOWN };
 }
 
-export function playerFacingYaw(team) {
-  const { right } = getScreenGroundAxes();
-  if (team === 'blue') {
-    return Math.atan2(right.x, right.z);
-  }
-  return Math.atan2(-right.x, -right.z);
+// Idle yaw so unit models (+Z front) face the camera on the ground plane.
+export function playerFacingYaw(_team) {
+  const { down } = getScreenGroundAxes();
+  return Math.atan2(-down.x, -down.z);
 }

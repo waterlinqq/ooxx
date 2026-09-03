@@ -389,8 +389,11 @@ body {
   max-height: var(--board-max-height);
 }
 
+/* Spans the whole board, so the end panel's top: 50% centres on the board instead of
+   on the collapsed height of the bottom bar. */
 .battle-panels {
   position: absolute;
+  top: 0;
   bottom: max(8px, env(safe-area-inset-bottom));
   left: 8px;
   right: 8px;
@@ -443,6 +446,138 @@ body {
   min-width: 0;
   max-width: min(100%, 280px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ── 新手教學 ── */
+
+.tutorial-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.16), rgba(59, 130, 246, 0.16));
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.tutorial-cta-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.tutorial-cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tutorial-cta-title {
+  font-weight: 800;
+}
+
+.tutorial-cta-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.battle-panels .tutorial-panel {
+  flex: 1 0 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tutorial-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fde68a;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.tutorial-panel-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.tutorial-skip {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.tutorial-panel-text {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.tutorial-panel-note {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.3);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #fca5a5;
+}
+
+.tutorial-panel.waiting .tutorial-panel-text {
+  color: var(--muted);
+}
+
+.reserve-label.tutorial-focus {
+  animation: tutorialFocusPulse 1.3s ease-in-out infinite;
+}
+
+/* CSS2DRenderer rewrites the root element's transform each frame, so the tap animation
+   has to live on this inner span. */
+.tutorial-pointer-hand {
+  display: block;
+  font-size: 2.2rem;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.8));
+  animation: tutorialPointerTap 1.1s ease-in-out infinite;
+}
+
+@keyframes tutorialPointerTap {
+  0%,
+  100% {
+    transform: translateY(7px) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.1);
+  }
+}
+
+@keyframes tutorialFocusPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(250, 204, 21, 1));
+  }
 }
 
 .bottom-nav {

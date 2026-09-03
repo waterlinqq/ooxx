@@ -7,6 +7,12 @@ import { buildUnitModel } from './UnitModels.js';
 
 const SEAT_CLASSES = ['seat-blue-0', 'seat-blue-1', 'seat-red-0', 'seat-red-1'];
 
+/** The tutorial narrows the bench to the one class the current step asks for. */
+function tutorialAllows(state, unit) {
+  const allowed = state.tutorialSelectableClassIds;
+  return !allowed || allowed.includes(unit.classId);
+}
+
 function applySeatClass(wrap, unit, matchFormat) {
   wrap.classList.remove(...SEAT_CLASSES);
   if (matchFormat === '2v2' && unit.ownerSeat != null) {
@@ -137,7 +143,7 @@ export class ReserveZone3d {
           side: 'blue',
           role: 'own',
           slot: { row: 0, col: i, colsInRow: ownUnits.length },
-          selectable: state.isHumanTurn,
+          selectable: state.isHumanTurn && tutorialAllows(state, unit),
         });
       });
 
@@ -157,7 +163,7 @@ export class ReserveZone3d {
           side: 'blue',
           role: 'own',
           slot: reserveGridSlot(i, state.blueReserve.length),
-          selectable: state.isHumanTurn,
+          selectable: state.isHumanTurn && tutorialAllows(state, unit),
         });
       });
     }
@@ -218,10 +224,25 @@ export class ReserveZone3d {
       statsEl.textContent = '';
     }
 
+    // While the tutorial locks the bench, fade the models the player can't pick so the
+    // one they need is unmistakable — the DOM label alone is too small to read as a cue.
+    if (side === 'blue' && state.tutorialSelectableClassIds != null) {
+      const fade = selectable ? 1 : 0.3;
+      for (const material of entry.materials) {
+        if (material.userData.skipTint) continue;
+        material.transparent = true;
+        material.opacity = (material.userData.baseOpacity ?? 1) * fade;
+      }
+    }
+
     applySeatClass(entry.wrap, unit, state.matchFormat);
 
     entry.wrap.classList.toggle('selected', selected);
     entry.wrap.classList.toggle('inspected', inspected);
+    entry.wrap.classList.toggle(
+      'tutorial-focus',
+      side === 'blue' && selectable && !selected && state.tutorialSelectableClassIds != null,
+    );
     entry.wrap.classList.toggle('enemy', side === 'red' && state.matchFormat !== '2v2');
     entry.wrap.classList.toggle('disabled', side === 'blue' && !selectable);
 
@@ -259,6 +280,14 @@ export class ReserveZone3d {
       labelBaseY: model.height * RESERVE_SCALE + 0.18,
       materials: model.materials,
     };
+  }
+
+  /** Ground-plane spot of a benched unit, for the tutorial finger to hover over. */
+  getUnitAnchor(unitId) {
+    const entry = this.units.get(unitId);
+    if (!entry) return null;
+    const { x, z } = entry.root.position;
+    return { x, z };
   }
 
   getPickTargets() {

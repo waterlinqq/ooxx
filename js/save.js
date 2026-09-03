@@ -2,7 +2,7 @@ import { ITEM_IDS, SHOP_PRICES, STARTING_COINS } from './items.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
-/** @typedef {{ coins: number, inventory: Record<string, number> }} SaveData */
+/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean }} SaveData */
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
@@ -11,6 +11,7 @@ function createDefaultInventory() {
 const DEFAULT_SAVE = {
   coins: STARTING_COINS,
   inventory: createDefaultInventory(),
+  tutorialDone: false,
 };
 
 /** @type {SaveData | null} */
@@ -20,6 +21,7 @@ function normalizeSave(raw) {
   const save = {
     coins: typeof raw?.coins === 'number' ? Math.max(0, raw.coins) : DEFAULT_SAVE.coins,
     inventory: createDefaultInventory(),
+    tutorialDone: raw?.tutorialDone === true,
   };
 
   for (const id of ITEM_IDS) {
@@ -53,7 +55,19 @@ export function getSaveSnapshot() {
   return {
     coins: save.coins,
     inventory: { ...save.inventory },
+    tutorialDone: save.tutorialDone,
   };
+}
+
+export function isTutorialDone() {
+  return loadSave().tutorialDone;
+}
+
+export function markTutorialDone() {
+  const save = loadSave();
+  if (save.tutorialDone) return;
+  save.tutorialDone = true;
+  persistSave();
 }
 
 export function persistSave() {

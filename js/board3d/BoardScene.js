@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { TileGrid, TILE_PITCH } from './TileGrid.js';
+import { TileGrid, TILE_PITCH, tileWorldPosition } from './TileGrid.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
+import { TutorialPointer } from './TutorialPointer.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
@@ -106,6 +107,7 @@ export class BoardScene {
     this.reserveZone = new ReserveZone3d(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
+    this.tutorialPointer = new TutorialPointer(this.scene);
     this.attackFx = new AttackFx3d({
       scene: this.scene,
       camera: this.camera,
@@ -221,6 +223,26 @@ export class BoardScene {
     this.skyLight.color.setHex(blueTurn ? 0xbfdbfe : redTurn ? 0xfecdd3 : 0xc7d2fe);
   }
 
+  syncTutorialPointer(state) {
+    const target = state.tutorialPointer;
+    if (!target) {
+      this.tutorialPointer.hide();
+      return;
+    }
+
+    if (target.kind === 'cell') {
+      this.tutorialPointer.pointAt(tileWorldPosition(target.row, target.col, state.boardSize));
+      return;
+    }
+
+    const anchor = this.reserveZone.getUnitAnchor(target.unitId);
+    if (anchor) {
+      this.tutorialPointer.pointAt(anchor);
+    } else {
+      this.tutorialPointer.hide();
+    }
+  }
+
   sync(state) {
     if (state.animating) return;
 
@@ -234,6 +256,8 @@ export class BoardScene {
     this.bombMarkers.sync(state.pendingBombs ?? []);
     this.unitManager.syncBoard(state.board, state);
     this.reserveZone.sync(state);
+    // After reserveZone.sync, so a freshly benched unit already has a position to anchor to.
+    this.syncTutorialPointer(state);
     this.input.setState(state);
     this.updateTurnAmbience(state);
 
@@ -262,6 +286,7 @@ export class BoardScene {
     this.unitManager.syncBoard([], { actedUnitIds: [], draggingUnitId: null });
     this.highlightSystem.clear();
     this.bombMarkers.clear();
+    this.tutorialPointer.hide();
   }
 
   animate() {
@@ -283,6 +308,7 @@ export class BoardScene {
     this.input.dispose();
     this.unitManager.dispose();
     this.reserveZone.dispose();
+    this.tutorialPointer.dispose();
     this.tileGrid.clear();
     this.highlightSystem.clear();
     this.renderer.dispose();

@@ -3,7 +3,7 @@ import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
 import { ITEMS, SHOP_PRICES } from './items.js';
-import { loadSave, buyItem, canAfford } from './save.js';
+import { loadSave, buyItem, canAfford, isTutorialDone } from './save.js';
 
 loadSave();
 
@@ -58,6 +58,13 @@ const itemBattleIconEl = document.getElementById('itemBattleIcon');
 const itemBattleNameEl = document.getElementById('itemBattleName');
 const useItemBtn = document.getElementById('useItemBtn');
 const cancelItemBtn = document.getElementById('cancelItemBtn');
+const startTutorialBtn = document.getElementById('startTutorial');
+const tutorialPanelEl = document.getElementById('tutorialPanel');
+const tutorialStepEl = document.getElementById('tutorialStep');
+const tutorialTitleEl = document.getElementById('tutorialTitle');
+const tutorialTextEl = document.getElementById('tutorialText');
+const tutorialNoteEl = document.getElementById('tutorialNote');
+const tutorialSkipBtn = document.getElementById('tutorialSkip');
 
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
@@ -137,7 +144,8 @@ function startMatchTimer(durationMs) {
 }
 
 function syncMatchTimer(state) {
-  if (state.phase !== 'battle') {
+  // The tutorial follows a script, so neither clock may cut a step short.
+  if (state.phase !== 'battle' || state.tutorial) {
     matchTimerEl.classList.add('hidden');
     matchTimerEl.setAttribute('aria-hidden', 'true');
     clearMatchTimer();
@@ -217,7 +225,7 @@ function startTurnTimer(
 }
 
 function syncTurnTimer(state) {
-  const active = state.phase === 'battle' && state.isHumanTurn;
+  const active = state.phase === 'battle' && state.isHumanTurn && !state.tutorial;
 
   if (!active) {
     turnTimerEl.classList.add('hidden');
@@ -285,6 +293,10 @@ function canControlUnit(state, unit) {
   if (unit.team !== 'blue') return false;
   if (state.actedUnitIds.includes(unit.id)) return false;
   if (!state.isHumanTurn) return false;
+  if (state.tutorial) {
+    const actor = state.tutorialActorCell;
+    return Boolean(actor) && actor.row === unit.row && actor.col === unit.col;
+  }
   if (state.matchFormat === '2v2') return unit.ownerSeat === 0;
   return true;
 }
@@ -445,7 +457,9 @@ function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
   statusMessageEl.textContent = state.message ?? '';
 
-  const inBattle = state.phase === 'battle';
+  // In the tutorial the step panel already carries the instruction, so the pill would
+  // just repeat it over the board.
+  const inBattle = state.phase === 'battle' && !state.tutorial;
   battleStatusPillEl.classList.toggle('hidden', !inBattle);
   if (inBattle) {
     battleStatusTextEl.textContent = state.message ?? '';
@@ -592,21 +606,41 @@ function renderModePicker(state) {
 function renderLobbyFooter(state) {
   const inLobby = state.phase === 'lobby';
   confirmRosterBtn.classList.toggle('hidden', !inLobby);
+  startTutorialBtn.classList.toggle('hidden', !inLobby);
   if (inLobby) {
     confirmRosterBtn.textContent = state.startButtonLabel;
   }
 }
 
+function renderTutorialPanel(state) {
+  const tutorial = state.tutorial;
+  const show = Boolean(tutorial) && state.phase === 'battle';
+  tutorialPanelEl.classList.toggle('hidden', !show);
+  if (!show) return;
+
+  tutorialStepEl.textContent = `${tutorial.stepNumber} / ${tutorial.totalSteps}`;
+  tutorialTitleEl.textContent = tutorial.title;
+  tutorialTextEl.textContent = tutorial.waitingForEnemy ? '紅隊行動中…' : tutorial.text;
+  tutorialPanelEl.classList.toggle('waiting', tutorial.waitingForEnemy);
+
+  tutorialNoteEl.classList.toggle('hidden', !tutorial.note);
+  tutorialNoteEl.textContent = tutorial.note ?? '';
+}
+
 function renderBattlePanels(state) {
   const inBattle = state.phase === 'battle';
   const showEnd = state.phase === 'gameEnd';
+  const inTutorial = Boolean(state.tutorial);
 
-  surrenderBtn.classList.toggle('hidden', !inBattle);
+  surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
   surrenderBtn.disabled = !inBattle || state.animating;
 
   endPanelEl.classList.toggle('hidden', !showEnd);
   restartBtn.classList.toggle('hidden', !showEnd);
   backToLobbyBtn.classList.toggle('hidden', !showEnd);
+
+  restartBtn.textContent = inTutorial ? '再看一次教學' : '再來一局';
+  backToLobbyBtn.textContent = inTutorial ? '開始遊戲' : '換模式';
 
   if (showEnd) {
     const coinLine = state.lastCoinReward > 0
@@ -638,7 +672,7 @@ function render(state) {
   if (state.phase !== lastPhase && inBattleFlow) {
     switchNav('battle');
   }
-  if (state.phase !== lastPhase && state.phase === 'battle') {
+  if (state.phase !== lastPhase && state.phase === 'battle' && !state.tutorial) {
     showWinConditionToast(state.winCount);
   } else if (state.phase !== 'battle' && state.phase !== 'gameEnd') {
     clearWinConditionToast();
@@ -646,6 +680,7 @@ function render(state) {
   lastPhase = state.phase;
 
   renderBattlePanels(state);
+  renderTutorialPanel(state);
   renderLobbyFooter(state);
   renderCoinBalance(state);
   if (inFormation) {
@@ -694,6 +729,13 @@ backToLobbyBtn.addEventListener('click', () => game.backToLobby());
 surrenderBtn.addEventListener('click', () => game.surrender());
 useItemBtn.addEventListener('click', () => game.beginUseItem());
 cancelItemBtn.addEventListener('click', () => game.cancelItemTargeting());
+startTutorialBtn.addEventListener('click', () => game.startTutorial());
+tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 
 game.subscribe(render);
 render(game.getState());
+
+// First-time players land straight in the scripted tutorial instead of the mode picker.
+if (!isTutorialDone()) {
+  game.startTutorial();
+}

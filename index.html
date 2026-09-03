@@ -32,6 +32,13 @@
           </div>
           <div class="mode-buttons" id="modeButtons"></div>
           <button class="btn primary btn-lg" id="confirmRoster" type="button">下一步：選擇編隊</button>
+          <button class="btn tutorial-cta" id="startTutorial" type="button">
+            <span class="tutorial-cta-icon">🎓</span>
+            <span class="tutorial-cta-body">
+              <span class="tutorial-cta-title">新手教學</span>
+              <span class="tutorial-cta-sub">九宮格 · 4 步學會部署、攻擊與連線</span>
+            </span>
+          </button>
         </div>
 
         <div class="screen-scroll hidden" id="formationContent">
@@ -102,6 +109,15 @@
                   </div>
                 </div>
                 <div class="battle-panels">
+                  <div class="tutorial-panel hidden" id="tutorialPanel" aria-live="polite">
+                    <div class="tutorial-panel-head">
+                      <span class="tutorial-badge" id="tutorialStep"></span>
+                      <span class="tutorial-panel-title" id="tutorialTitle"></span>
+                      <button class="btn tutorial-skip" id="tutorialSkip" type="button">跳過</button>
+                    </div>
+                    <p class="tutorial-panel-text" id="tutorialText"></p>
+                    <p class="tutorial-panel-note hidden" id="tutorialNote"></p>
+                  </div>
                   <button class="btn danger battle-fab hidden" id="surrender" type="button" title="投降">🏳️</button>
                   <div class="item-battle-bar hidden" id="itemBattleBar">
                     <div class="item-battle-info">

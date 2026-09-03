@@ -35,7 +35,21 @@ import { chooseAiAction } from './ai.js';
 import { createSearchContext } from './ai/board.js';
 import { evaluate } from './ai/evaluate.js';
 import { getItem, getCoinReward } from './items.js';
-import { getSaveSnapshot, addCoins, getInventoryCount, consumeItem } from './save.js';
+import {
+  getSaveSnapshot,
+  addCoins,
+  getInventoryCount,
+  consumeItem,
+  markTutorialDone,
+} from './save.js';
+import {
+  TUTORIAL_BOARD_MODE,
+  TUTORIAL_BLUE_ROSTER,
+  TUTORIAL_RED_ROSTER,
+  TUTORIAL_STEP_COUNT,
+  getTutorialStep,
+  matchesTutorialGoal,
+} from './tutorial.js';
 
 export class Game {
   constructor() {
@@ -68,6 +82,8 @@ export class Game {
     this.itemTargeting = null;
     this.pendingBombs = [];
     this.lastCoinReward = 0;
+    /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done', lastNote: string|null } | null} */
+    this.tutorial = null;
   }
 
   subscribe(fn) {
@@ -150,6 +166,7 @@ export class Game {
 
   backToLobby() {
     if (this.phase === 'battle') return;
+    this.tutorial = null;
     this.phase = 'lobby';
     this.board = createEmptyBoard(this.getModeConfig().size);
     this.lastWinLine = null;
@@ -424,6 +441,11 @@ export class Game {
       lastCoinReward: this.lastCoinReward,
       canUseItem: this.canUseItem(),
       itemDef: equippedItem ? getItem(equippedItem) : null,
+      tutorial: this.getTutorialView(),
+      tutorialSelectableClassIds: this.getTutorialSelectableClassIds(),
+      tutorialActorCell: this.getTutorialActorCell(),
+      tutorialHintCells: this.getTutorialHintCells(),
+      tutorialPointer: this.getTutorialPointer(),
     };
   }
 
@@ -451,6 +473,12 @@ export class Game {
 
   getPlayerTurnMessage() {
     const mode = this.getModeConfig();
+    if (this.tutorial) {
+      if (this.tutorial.stage === 'enemy') return '紅隊行動中…';
+      const step = this.getTutorialStepDef();
+      if (!step) return '教學完成';
+      return `步驟 ${this.tutorial.stepIndex + 1}／${TUTORIAL_STEP_COUNT} · ${step.title}：${step.text}`;
+    }
     if (this.is2v2()) {
       const label = formatSlotLabel(this.currentSlot);
       if (this.canHumanAct()) {
@@ -508,6 +536,174 @@ export class Game {
     return false;
   }
 
+  // ── 新手教學 ──────────────────────────────────────────────────────────────
+  // The tutorial replays a fixed script (js/tutorial.js) instead of consulting the AI.
+  // Player input is narrowed to the one action the current step asks for, so a first-time
+  // player cannot wander off the rails.
+
+  startTutorial() {
+    if (this.phase === 'battle' && !this.tutorial) return;
+
+    this.boardMode = TUTORIAL_BOARD_MODE;
+    this.blueRoster = [...TUTORIAL_BLUE_ROSTER];
+    this.redRoster = [...TUTORIAL_RED_ROSTER];
+    this.equippedItem = null;
+    this.animating = false;
+    this.tutorial = { stepIndex: 0, stage: 'player', lastNote: null };
+    this.startRound();
+  }
+
+  exitTutorial(message) {
+    markTutorialDone();
+    this.tutorial = null;
+    this.phase = 'lobby';
+    this.animating = false;
+    this.board = createEmptyBoard(this.getModeConfig().size);
+    this.blueRoster = [];
+    this.redRoster = [];
+    this.blueReserve = [];
+    this.redReserve = [];
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.inspectedUnitId = null;
+    this.lastWinLine = null;
+    this.endReason = null;
+    this.finalScores = null;
+    this.message = message;
+    this.notify();
+  }
+
+  skipTutorial() {
+    if (!this.tutorial) return;
+    this.exitTutorial('已跳過教學 — 請選擇棋盤模式');
+  }
+
+  getTutorialStepDef() {
+    if (!this.tutorial) return null;
+    return getTutorialStep(this.tutorial.stepIndex);
+  }
+
+  /** The action the player still owes this step, or null when it's red's turn to reply. */
+  getTutorialGoal() {
+    if (!this.tutorial || this.tutorial.stage !== 'player') return null;
+    return this.getTutorialStepDef()?.goal ?? null;
+  }
+
+  isTutorialActionAllowed(action) {
+    if (!this.tutorial) return true;
+    return matchesTutorialGoal(this.getTutorialGoal(), action);
+  }
+
+  rejectTutorialAction() {
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.message = `照著教學做：${this.getTutorialStepDef()?.text ?? ''}`;
+    this.notify();
+  }
+
+  /** Reserve classes the player may pick up right now; [] locks the whole bench. */
+  getTutorialSelectableClassIds() {
+    if (!this.tutorial) return null;
+    const goal = this.getTutorialGoal();
+    return goal?.type === 'deploy' ? [goal.classId] : [];
+  }
+
+  /** The only board unit the player may act with this step. */
+  getTutorialActorCell() {
+    const goal = this.getTutorialGoal();
+    if (!goal || goal.type === 'deploy') return null;
+    return { ...goal.from };
+  }
+
+  /** Glowing "tap here next" cell: the deploy destination, or the unit that must act. */
+  getTutorialHintCells() {
+    const goal = this.getTutorialGoal();
+    if (!goal) return [];
+    if (goal.type === 'deploy') {
+      return this.selectedReserveId ? [] : [[goal.row, goal.col]];
+    }
+    return this.draggingUnitId ? [] : [[goal.from.row, goal.from.col]];
+  }
+
+  /**
+   * What the pointing finger sits on: the thing to tap *right now*, which is a step
+   * ahead of the glowing cell — first the reserve unit or the attacker, then the cell.
+   */
+  getTutorialPointer() {
+    const goal = this.getTutorialGoal();
+    if (!goal) return null;
+
+    if (goal.type === 'deploy') {
+      if (this.selectedReserveId) return { kind: 'cell', row: goal.row, col: goal.col };
+      const unit = this.getCurrentReserve().find((u) => u.classId === goal.classId);
+      return unit ? { kind: 'reserve', unitId: unit.id } : null;
+    }
+
+    const cell = this.draggingUnitId ? goal.to : goal.from;
+    return { kind: 'cell', row: cell.row, col: cell.col };
+  }
+
+  getTutorialView() {
+    if (!this.tutorial) return null;
+    const done = this.tutorial.stage === 'done';
+    const step = this.getTutorialStepDef();
+    return {
+      stepNumber: Math.min(this.tutorial.stepIndex + 1, TUTORIAL_STEP_COUNT),
+      totalSteps: TUTORIAL_STEP_COUNT,
+      title: done ? '教學完成' : step?.title ?? '',
+      text: done ? '你已經學會部署、攻擊與連線，去挑戰 AI 吧！' : step?.text ?? '',
+      note: this.tutorial.lastNote,
+      waitingForEnemy: this.tutorial.stage === 'enemy',
+      done,
+    };
+  }
+
+  advanceTutorial() {
+    if (this.currentPlayer === 'blue') {
+      this.tutorial.stage = 'enemy';
+      return;
+    }
+    this.tutorial.lastNote = this.getTutorialStepDef()?.enemy?.note ?? null;
+    this.tutorial.stepIndex += 1;
+    this.tutorial.stage = 'player';
+  }
+
+  runTutorialEnemyTurn() {
+    if (!this.tutorial || this.phase !== 'battle' || this.animating) return;
+    if (this.currentPlayer !== 'red') return;
+
+    const enemy = this.getTutorialStepDef()?.enemy;
+    if (!enemy) {
+      // Defensive: a step with no scripted reply would otherwise stall on red's turn.
+      this.advanceTutorial();
+      this.switchPlayer();
+      return;
+    }
+
+    if (enemy.type === 'deploy') {
+      const unit = this.redReserve.find((u) => u.classId === enemy.classId);
+      if (!unit) return;
+      const result = applyDeploy(this.board, unit, enemy.row, enemy.col);
+      this.board = result.board;
+      this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
+      this.endAction(enemy.label, unit.id);
+      return;
+    }
+
+    const attacker = this.board[enemy.from.row]?.[enemy.from.col];
+    const target = this.board[enemy.to.row]?.[enemy.to.col];
+    if (!attacker || !target) return;
+
+    if (enemy.type === 'move') {
+      const result = applyMove(this.board, attacker, enemy.to.row, enemy.to.col);
+      this.board = result.board;
+      this.endAction(enemy.label, attacker.id);
+      return;
+    }
+
+    this.resolveAttack(attacker, target, enemy.label);
+  }
+
   startBattle() {
     if (this.phase !== 'formation') return;
     if (!this.isFormationReady()) {
@@ -515,6 +711,7 @@ export class Game {
       this.notify();
       return;
     }
+    this.tutorial = null;
     this.validateEquippedItemForBattle();
     this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
@@ -547,7 +744,9 @@ export class Game {
     this.resetTurnActions();
     this.resetBattleItemState();
 
-    if (this.is2v2()) {
+    if (this.tutorial) {
+      this.message = this.getPlayerTurnMessage();
+    } else if (this.is2v2()) {
       this.message = `2v2 單局 — ${formatSlotLabel(this.currentSlot)} 先攻：藍1 為你，其餘由 AI 代打`;
     } else {
       const first = TEAM[this.currentPlayer].name;
@@ -567,6 +766,12 @@ export class Game {
 
   scheduleAiIfNeeded() {
     if (this.phase !== 'battle' || this.animating) return;
+    if (this.tutorial) {
+      if (this.currentPlayer === 'red') {
+        setTimeout(() => this.runTutorialEnemyTurn(), 800);
+      }
+      return;
+    }
     if (this.is2v2()) {
       if (this.currentSlot !== this.humanSlot) {
         setTimeout(() => this.runAiTurn(), 500);
@@ -583,6 +788,11 @@ export class Game {
     if (this.itemTargeting) return;
     const unit = this.getCurrentReserve().find((u) => u.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
+    const selectable = this.getTutorialSelectableClassIds();
+    if (selectable && !selectable.includes(unit.classId)) {
+      this.rejectTutorialAction();
+      return;
+    }
     this.draggingUnitId = null;
     this.inspectedUnitId = null;
     this.selectedReserveId = unitId;
@@ -622,6 +832,13 @@ export class Game {
     if (this.actedUnitIds.has(unitId)) return;
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
+    if (this.tutorial) {
+      const actor = this.getTutorialActorCell();
+      if (!actor || actor.row !== unit.row || actor.col !== unit.col) {
+        this.rejectTutorialAction();
+        return;
+      }
+    }
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.draggingUnitId = unitId;
@@ -678,6 +895,8 @@ export class Game {
 
   endTurnEarly() {
     if (!this.canHumanAct()) return;
+    // The script has no notion of a skipped turn, and the tutorial runs without a clock.
+    if (this.tutorial) return;
     if (this.itemTargeting) this.cancelItemTargeting();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
@@ -704,7 +923,7 @@ export class Game {
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return getValidMoves(this.board, unit);
+    return this.narrowToTutorialGoal(getValidMoves(this.board, unit), 'move');
   }
 
   getHighlightTargets() {
@@ -712,14 +931,22 @@ export class Game {
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
+    const targets = getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
+    return this.narrowToTutorialGoal(targets, 'attack');
   }
 
   getHighlightDeploy() {
-    if (this.selectedReserveId) {
-      return getValidDeployCells(this.board);
-    }
-    return [];
+    if (!this.selectedReserveId) return [];
+    return this.narrowToTutorialGoal(getValidDeployCells(this.board), 'deploy');
+  }
+
+  /** Outside the tutorial every legal cell lights up; inside, only the scripted one does. */
+  narrowToTutorialGoal(cells, actionType) {
+    if (!this.tutorial) return cells;
+    const goal = this.getTutorialGoal();
+    if (goal?.type !== actionType) return [];
+    const dest = actionType === 'deploy' ? goal : goal.to;
+    return cells.filter(([r, c]) => r === dest.row && c === dest.col);
   }
 
   clickCell(row, col) {
@@ -740,6 +967,10 @@ export class Game {
     const reserve = this.getCurrentReserve();
     const unit = reserve.find((u) => u.id === this.selectedReserveId);
     if (!unit || this.board[row][col]) return;
+    if (!this.isTutorialActionAllowed({ type: 'deploy', classId: unit.classId, row, col })) {
+      this.rejectTutorialAction();
+      return;
+    }
 
     const result = applyDeploy(this.board, unit, row, col);
     this.board = result.board;
@@ -758,6 +989,8 @@ export class Game {
     if (this.actedUnitIds.has(unitId)) return false;
     const valid = getValidMoves(this.board, unit);
     if (!valid.some(([r, c]) => r === row && c === col)) return false;
+    const move = { type: 'move', from: { row: unit.row, col: unit.col }, to: { row, col } };
+    if (!this.isTutorialActionAllowed(move)) return false;
 
     const result = applyMove(this.board, unit, row, col);
     this.board = result.board;
@@ -815,6 +1048,8 @@ export class Game {
 
     const valid = getValidAttackTargets(this.board, unit);
     if (!valid.some((t) => t.id === target.id)) return false;
+    const attack = { type: 'attack', from: { row: unit.row, col: unit.col }, to: { row, col } };
+    if (!this.isTutorialActionAllowed(attack)) return false;
 
     this.resolveAttack(unit, target, '攻擊');
     return true;
@@ -846,6 +1081,8 @@ export class Game {
     this.actionsRemaining--;
     this.draggingUnitId = null;
     this.selectedReserveId = null;
+
+    if (this.tutorial) this.advanceTutorial();
 
     const winLine = checkWin(this.board, this.currentPlayer);
 
@@ -933,6 +1170,10 @@ export class Game {
 
   runAiTurn() {
     if (this.phase !== 'battle' || this.animating) return;
+    if (this.tutorial) {
+      this.runTutorialEnemyTurn();
+      return;
+    }
 
     if (this.is2v2() && this.currentSlot === this.humanSlot) return;
     if (!this.is2v2() && this.currentPlayer !== 'red') return;
@@ -997,6 +1238,7 @@ export class Game {
 
   surrender() {
     if (this.phase !== 'battle' || this.animating) return;
+    if (this.tutorial) return;
 
     this.draggingUnitId = null;
     this.selectedReserveId = null;
@@ -1007,6 +1249,7 @@ export class Game {
 
   endMatchByTime() {
     if (this.phase !== 'battle') return;
+    if (this.tutorial) return;
 
     const mode = this.getModeConfig();
     const ownerSeat = this.is2v2() ? parseSlot(this.currentSlot).seat : null;
@@ -1045,6 +1288,18 @@ export class Game {
     this.phase = 'gameEnd';
     this.endReason = reason;
 
+    if (this.tutorial) {
+      // No coin payout: the tutorial is a fixed script and would otherwise be farmable.
+      this.tutorial.stage = 'done';
+      this.lastCoinReward = 0;
+      markTutorialDone();
+      this.message = winner === 'blue'
+        ? '🎉 教學完成！你已經學會部署、攻擊與連線'
+        : detail;
+      this.notify();
+      return;
+    }
+
     const didWin = winner === 'blue';
     const isDraw = winner === null;
     const reward = isDraw
@@ -1062,6 +1317,10 @@ export class Game {
   }
 
   restartSeries() {
+    if (this.tutorial) {
+      this.startTutorial();
+      return;
+    }
     // Back to formation rather than the mode picker: the lineup is the interesting
     // thing to retune between games, and it survives so a rematch is one tap away.
     this.phase = 'formation';
