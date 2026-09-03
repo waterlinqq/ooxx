@@ -306,6 +306,7 @@ function setUnitIcon(container, classId) {
 }
 
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
+game.playBlessFx = (fx) => board3d.playBlessFx(fx);
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
@@ -385,37 +386,55 @@ function renderClassPicker() {
   renderClassDetail(selectedClassId);
 }
 
-function createItemCard(item, { count, price, equipped, readonly, onSelect, onBuy }) {
-  const card = document.createElement('button');
-  card.type = 'button';
-  card.className = 'item-card';
-  if (equipped) card.classList.add('item-equipped');
+function createItemChip(item, { count, equipped, onSelect }) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'item-chip';
+  if (equipped) chip.classList.add('item-equipped');
 
   const owned = count ?? 0;
+  if (item.id !== null && owned <= 0) chip.disabled = true;
+  chip.title = item.desc ?? item.name ?? '';
+
+  const label = item.id === null ? '無' : item.name;
+  const badge = item.id !== null && owned > 0 ? `<span class="item-chip-badge">${owned}</span>` : '';
+
+  chip.innerHTML = `
+    <span class="item-chip-icon">${item.icon ?? '➖'}</span>
+    <span class="item-chip-label">${label}</span>
+    ${badge}
+  `;
+  chip.addEventListener('click', () => onSelect(item.id));
+  return chip;
+}
+
+function createItemRow(item, { count, price, onBuy }) {
+  const row = document.createElement('div');
+  row.className = 'item-row';
+
   const canBuy = price != null && canAfford(item.id);
-
-  if (onBuy) {
-    card.disabled = !canBuy;
-    if (!canBuy) card.title = '金幣不足';
-  } else if (onSelect && item.id !== null && owned <= 0) {
-    card.disabled = true;
-  }
-
-  card.innerHTML = `
-    <span class="item-icon">${item.icon ?? '📦'}</span>
-    <span class="item-name">${item.name ?? '不帶道具'}</span>
-    <span class="item-desc">${item.desc ?? '本場不攜帶任何道具'}</span>
-    ${price != null ? `<span class="item-price">💰 ${price}</span>` : ''}
-    ${count != null && item.id ? `<span class="item-count">×${owned}</span>` : ''}
-    ${onBuy ? '<span class="item-action">購買</span>' : ''}
+  row.innerHTML = `
+    <span class="item-row-icon">${item.icon}</span>
+    <div class="item-row-body">
+      <span class="item-row-name">${item.name}</span>
+      <span class="item-row-desc">${item.desc}</span>
+    </div>
+    ${count != null ? `<span class="item-row-meta">×${count}</span>` : ''}
+    ${price != null ? `<span class="item-row-meta">💰 ${price}</span>` : ''}
   `;
 
-  if (onSelect) card.addEventListener('click', () => onSelect(item.id));
-  if (onBuy) card.addEventListener('click', () => onBuy(item.id));
+  if (onBuy) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn item-row-btn';
+    btn.textContent = '購買';
+    btn.disabled = !canBuy;
+    if (!canBuy) btn.title = '金幣不足';
+    btn.addEventListener('click', () => onBuy(item.id));
+    row.appendChild(btn);
+  }
 
-  if (readonly) card.disabled = false;
-
-  return card;
+  return row;
 }
 
 function renderCoinBalance(state) {
@@ -426,21 +445,18 @@ function renderCoinBalance(state) {
 function renderFormationItems(state) {
   formationItemsEl.innerHTML = '';
 
-  const noneItem = { id: null, name: '不帶道具', icon: '➖', desc: '本場不攜帶任何道具' };
-  const noneCard = createItemCard(noneItem, {
+  const noneItem = { id: null, name: '無', icon: '➖', desc: '不帶道具' };
+  formationItemsEl.appendChild(createItemChip(noneItem, {
     equipped: state.equippedItem === null,
     onSelect: (id) => game.selectEquippedItem(id),
-  });
-  formationItemsEl.appendChild(noneCard);
+  }));
 
   for (const item of Object.values(ITEMS)) {
-    const count = state.inventory[item.id] ?? 0;
-    const card = createItemCard(item, {
-      count,
+    formationItemsEl.appendChild(createItemChip(item, {
+      count: state.inventory[item.id] ?? 0,
       equipped: state.equippedItem === item.id,
       onSelect: (id) => game.selectEquippedItem(id),
-    });
-    formationItemsEl.appendChild(card);
+    }));
   }
 }
 
@@ -448,10 +464,9 @@ function renderBag(state) {
   bagGridEl.innerHTML = '';
 
   for (const item of Object.values(ITEMS)) {
-    const count = state.inventory[item.id] ?? 0;
-    const card = createItemCard(item, { count, readonly: true });
-    card.disabled = false;
-    bagGridEl.appendChild(card);
+    bagGridEl.appendChild(createItemRow(item, {
+      count: state.inventory[item.id] ?? 0,
+    }));
   }
 }
 
@@ -459,16 +474,13 @@ function renderShop(state) {
   shopGridEl.innerHTML = '';
 
   for (const item of Object.values(ITEMS)) {
-    const card = createItemCard(item, {
+    shopGridEl.appendChild(createItemRow(item, {
       price: SHOP_PRICES[item.id],
       onBuy: (id) => {
         const result = buyItem(id);
-        if (result.ok) {
-          game.notify();
-        }
+        if (result.ok) game.notify();
       },
-    });
-    shopGridEl.appendChild(card);
+    }));
   }
 }
 

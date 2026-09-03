@@ -384,14 +384,17 @@ function applyPassivePriestBlessings(ctx, team, records) {
     }
   }
 
+  const blessedIds = new Set();
   for (const priest of priests) {
     for (const [r, c] of getAdjacentCells(priest.row, priest.col, ctx.size)) {
       const target = ctx.board[r][c];
       if (!target || target.team !== priest.team || target.id === priest.id) continue;
+      if (blessedIds.has(target.id)) continue;
 
       const nextHp = Math.min(target.maxHp, target.hp + 1);
       if (nextHp === target.hp) continue;
 
+      blessedIds.add(target.id);
       records.push({ target, prevHp: target.hp });
       xorUnitHash(ctx, target, r, c);
       target.hp = nextHp;

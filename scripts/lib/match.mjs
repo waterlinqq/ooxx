@@ -10,7 +10,7 @@ import {
   applyDeploy,
   applyMove,
   applyAttack,
-  applyPriestBlessing,
+  applyTeamPriestBlessings,
   checkWin,
   isTeamEliminated,
   getValidDeployCells,
@@ -136,14 +136,8 @@ function serializeAction(action, board, reserves) {
 }
 
 function triggerPassiveBlessings(state, team) {
-  const priestIds = state.board.flat()
-    .filter((unit) => unit?.team === team && unit.passiveBlessing)
-    .map((unit) => unit.id);
-  for (const priestId of priestIds) {
-    const priest = state.board.flat().find((unit) => unit?.id === priestId);
-    if (!priest) continue;
-    state.board = applyPriestBlessing(state.board, priest).board;
-  }
+  const blessing = applyTeamPriestBlessings(state.board, team);
+  state.board = blessing.board;
 }
 
 function applyAiAction(state, action, team) {

@@ -22,7 +22,7 @@ import {
   applyMove,
   applyDeploy,
   applyAttack,
-  applyPriestBlessing,
+  applyTeamPriestBlessings,
   checkWin,
   isTeamEliminated,
   getValidPotionTargets,
@@ -61,6 +61,7 @@ export class Game {
     this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
     this.playAttackFx = null;
+    this.playBlessFx = null;
     this.listeners = [];
     this.equippedItem = null;
     this.itemUsed = false;
@@ -803,7 +804,7 @@ export class Game {
       detail += `，自爆波及 ${blastHits} 人`;
     }
     detail += '）';
-    this.endAction(detail, unit.id);
+    await this.endAction(detail, unit.id);
   }
 
   tryAttackTarget(unitId, row, col) {
@@ -819,24 +820,26 @@ export class Game {
     return true;
   }
 
-  endAction(actionLabel, unitId) {
+  async endAction(actionLabel, unitId) {
     const team = TEAM[this.currentPlayer];
     const enemy = this.currentPlayer === 'blue' ? 'red' : 'blue';
     const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
 
-    const blessedUnitIds = new Set();
-    const priestIds = this.board.flat()
-      .filter((unit) => unit?.team === this.currentPlayer && unit.passiveBlessing)
-      .map((unit) => unit.id);
-    for (const priestId of priestIds) {
-      const priest = this.board.flat().find((unit) => unit?.id === priestId);
-      if (!priest) continue;
-      const blessing = applyPriestBlessing(this.board, priest);
+    const blessing = applyTeamPriestBlessings(this.board, this.currentPlayer);
+    if (blessing.targets.length > 0) {
+      actionLabel += ` · 祝福 ${blessing.targets.length} 名友軍`;
+      if (this.playBlessFx) {
+        this.animating = true;
+        await this.playBlessFx({
+          targets: blessing.targets.map((target) => ({
+            row: target.row,
+            col: target.col,
+            amount: 1,
+          })),
+        });
+        this.animating = false;
+      }
       this.board = blessing.board;
-      for (const target of blessing.targets) blessedUnitIds.add(target.id);
-    }
-    if (blessedUnitIds.size > 0) {
-      actionLabel += ` · 祝福 ${blessedUnitIds.size} 名友軍`;
     }
 
     this.actedUnitIds.add(unitId);

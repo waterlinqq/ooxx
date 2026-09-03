@@ -327,6 +327,38 @@ export function applyPriestBlessing(board, priest) {
   return { board: next, unit: next[priest.row]?.[priest.col] ?? null, targets };
 }
 
+/** Team-wide priest passives: each ally heals at most once per action, even if overlapping. */
+export function applyTeamPriestBlessings(board, team) {
+  const next = cloneBoard(board);
+  const priests = [];
+  const blessedIds = new Set();
+  const targets = [];
+
+  for (const row of board) {
+    for (const unit of row) {
+      if (unit?.team === team && unit.passiveBlessing && unit.row >= 0) {
+        priests.push(unit);
+      }
+    }
+  }
+
+  for (const priest of priests) {
+    for (const target of getPriestBlessingTargets(board, priest)) {
+      if (blessedIds.has(target.id)) continue;
+
+      const blessed = next[target.row][target.col];
+      const prevHp = blessed.hp;
+      blessed.hp = Math.min(blessed.maxHp, blessed.hp + 1);
+      if (blessed.hp <= prevHp) continue;
+
+      blessedIds.add(target.id);
+      targets.push({ ...blessed });
+    }
+  }
+
+  return { board: next, targets };
+}
+
 export function resolveDeathExplosions(board, killedUnits) {
   const bombers = killedUnits.filter((u) => (u.deathExplosion ?? 0) > 0);
   if (bombers.length === 0) {

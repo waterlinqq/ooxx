@@ -246,6 +246,10 @@ export class BoardScene {
     return this.attackFx.play(fx);
   }
 
+  playBlessFx(fx) {
+    return this.attackFx.playBlessing(fx);
+  }
+
   setVisible(show) {
     this.visible = show;
     this.container.classList.toggle('hidden', !show);

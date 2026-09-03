@@ -6,6 +6,7 @@ const MELEE_HIT_DELAY = 250;
 const CAST_DELAY = 210;
 const PROJECTILE_FLIGHT = 320;
 const DAMAGE_LINGER = 380;
+const BLESS_HEAL_LINGER = 520;
 const EXPLOSION_DURATION = 480;
 
 function getLineCells(from, target) {
@@ -33,6 +34,16 @@ function spawnDamageNumber(fxLayer, pos, amount, killed) {
   const el = document.createElement('div');
   el.className = `damage-number${killed ? ' killed' : ''}`;
   el.textContent = killed ? 'KO!' : `-${amount}`;
+  el.style.left = `${pos.x}px`;
+  el.style.top = `${pos.y}px`;
+  fxLayer.appendChild(el);
+  return el;
+}
+
+function spawnHealNumber(fxLayer, pos, amount) {
+  const el = document.createElement('div');
+  el.className = 'heal-number';
+  el.textContent = `+${amount}`;
   el.style.left = `${pos.x}px`;
   el.style.top = `${pos.y}px`;
   fxLayer.appendChild(el);
@@ -328,5 +339,21 @@ export class AttackFx3d {
   findUnitIdAt(row, col) {
     const entry = this.unitManager.getUnitAt(row, col);
     return entry ? entry.root.userData.unitId : null;
+  }
+
+  async playBlessing(fx) {
+    const targets = fx.targets ?? [];
+    if (targets.length === 0) return;
+
+    const healEls = [];
+    for (const target of targets) {
+      this.flashTile(target.row, target.col, 0x86efac, 340);
+      const c = this.cellCenter(target.row, target.col);
+      const center = this.worldToScreen(c.x, c.y, c.z);
+      healEls.push(spawnHealNumber(this.fxLayer, center, target.amount ?? 1));
+    }
+
+    await wait(BLESS_HEAL_LINGER);
+    healEls.forEach((el) => el.remove());
   }
 }
