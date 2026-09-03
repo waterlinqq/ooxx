@@ -910,6 +910,61 @@ function buildEagle(mats) {
   };
 }
 
+function buildTower(mats) {
+  const group = new THREE.Group();
+
+  part(group, cached('arrow-tower-foot', () => new THREE.BoxGeometry(0.58, 0.12, 0.58)), mats.armorDeep, {
+    pos: [0, 0.06, 0],
+  });
+  part(group, cached('arrow-tower-body', () => new THREE.BoxGeometry(0.44, 0.52, 0.44)), mats.armor, {
+    pos: [0, 0.36, 0],
+  });
+  part(group, cached('arrow-tower-band', () => new THREE.BoxGeometry(0.5, 0.07, 0.5)), mats.trim, {
+    pos: [0, 0.25, 0],
+  });
+  part(group, cached('arrow-tower-deck', () => new THREE.BoxGeometry(0.62, 0.1, 0.62)), mats.armorDeep, {
+    pos: [0, 0.67, 0],
+  });
+
+  const merlonGeo = cached('arrow-tower-merlon', () => new THREE.BoxGeometry(0.14, 0.18, 0.14));
+  for (const x of [-0.23, 0.23]) {
+    for (const z of [-0.23, 0.23]) {
+      part(group, merlonGeo, mats.armor, { pos: [x, 0.79, z] });
+    }
+  }
+
+  const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.075, 0.16, 0.018));
+  part(group, slitGeo, mats.charcoal, { pos: [0, 0.43, 0.229] });
+  part(group, slitGeo, mats.charcoal, { pos: [0, 0.43, -0.229] });
+  part(group, slitGeo, mats.charcoal, {
+    pos: [0.229, 0.43, 0],
+    rot: [0, Math.PI / 2, 0],
+  });
+  part(group, slitGeo, mats.charcoal, {
+    pos: [-0.229, 0.43, 0],
+    rot: [0, Math.PI / 2, 0],
+  });
+
+  const turret = new THREE.Group();
+  turret.position.y = 0.74;
+  const shaftGeo = cached('arrow-tower-bolt-shaft', () => new THREE.CylinderGeometry(0.012, 0.012, 0.42, 7));
+  const headGeo = cached('arrow-tower-bolt-head', () => new THREE.ConeGeometry(0.035, 0.09, 7));
+  const launchers = [
+    { shaft: [0.2, 0, 0], head: [0.44, 0, 0], rot: [0, 0, -Math.PI / 2] },
+    { shaft: [-0.2, 0, 0], head: [-0.44, 0, 0], rot: [0, 0, Math.PI / 2] },
+    { shaft: [0, 0, 0.2], head: [0, 0, 0.44], rot: [Math.PI / 2, 0, 0] },
+    { shaft: [0, 0, -0.2], head: [0, 0, -0.44], rot: [-Math.PI / 2, 0, 0] },
+  ];
+  for (const launcher of launchers) {
+    part(turret, shaftGeo, mats.wood, { pos: launcher.shaft, rot: launcher.rot });
+    part(turret, headGeo, mats.steel, { pos: launcher.head, rot: launcher.rot });
+  }
+  part(turret, cached('arrow-tower-cap', () => new THREE.CylinderGeometry(0.1, 0.14, 0.11, 12)), mats.gold);
+  group.add(turret);
+
+  return { group, turret };
+}
+
 function buildFallback(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);
@@ -925,6 +980,7 @@ function buildFallback(mats) {
 const BUILDERS = {
   swordsman: buildSwordsman,
   archer: buildArcher,
+  tower: buildTower,
   shield: buildShield,
   mage: buildMage,
   assassin: buildAssassin,
@@ -939,6 +995,7 @@ const GLOBAL_SCALE = 0.88;
 const SILHOUETTE = {
   swordsman: [1, 1, 1],
   archer: [0.94, 1.04, 0.94],
+  tower: [0.92, 0.92, 0.92],
   shield: [1.1, 0.94, 1.08],
   mage: [0.96, 1.02, 0.96],
   assassin: [0.92, 1.03, 0.92],

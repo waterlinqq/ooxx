@@ -247,17 +247,12 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
-  if (cls.canBless) return '八向近戰 · 祝福相鄰隊友生命與攻擊各 +1';
-  if (cls.isFlying) return '浮空八向近戰 · 只能被弓箭手與魔法師攻擊';
-  if (cls.deathExplosion) return `八向近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
-  if (cls.jumpMove) {
-    return cls.jumpRange
-      ? `八向近戰 · 可跳躍至周遭 ${cls.jumpRange} 格`
-      : '八向近戰 · 可跳躍至任意空格';
-  }
+  if (cls.isFlying) return '浮空 · 只能被弓箭手與魔法師攻擊';
+  if (cls.deathExplosion) return `近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
+  if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
   if (cls.type === 'mage') return '八方向光束穿透攻擊';
   if (cls.type === 'ranged') return `八方向射線 · 射程 ${cls.range}`;
-  return '八向近戰';
+  return '近戰';
 }
 
 function renderClassDetail(classId) {

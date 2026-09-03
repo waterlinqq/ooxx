@@ -7,6 +7,7 @@
 // Reach mirrors js/rules.js exactly:
 //   melee/support - all eight neighbouring cells
 //   ranged - eight rays, up to `range` steps, stopping at the first occupied cell
+//   tower  - four orthogonal rays, up to `range` steps, stopping at the first occupied cell
 //   mage   - eight rays to the board edge, piercing everything (getEnemiesOnLine ignores
 //            both `range` and blockers)
 //
@@ -22,6 +23,8 @@ const ALL_DIRS = [
   [0, 1], [0, -1], [1, 0], [-1, 0],
   [1, 1], [1, -1], [-1, 1], [-1, -1],
 ];
+
+const ORTHOGONAL_DIRS = ALL_DIRS.slice(0, 4);
 
 function createMap(cells) {
   return {
@@ -84,9 +87,10 @@ export function buildThreatMap(ctx, attackerTeam) {
         continue;
       }
 
-      if (unit.type === 'ranged') {
+      if (unit.type === 'ranged' || unit.type === 'tower') {
         const reach = unit.range ?? size;
-        for (const [dr, dc] of ALL_DIRS) {
+        const directions = unit.type === 'tower' ? ORTHOGONAL_DIRS : ALL_DIRS;
+        for (const [dr, dc] of directions) {
           let nr = r + dr;
           let nc = c + dc;
           for (let step = 0; step < reach; step++) {

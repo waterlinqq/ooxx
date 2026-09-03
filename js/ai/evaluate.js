@@ -17,6 +17,7 @@ const CLASS_BONUS = {
   shield: 6,
   swordsman: 0,
   archer: 8,
+  tower: 6,
   mage: 10,
   assassin: 6,
   bomber: 6,

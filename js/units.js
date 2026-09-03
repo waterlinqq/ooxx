@@ -9,6 +9,17 @@ export const CLASSES = {
     type: 'ranged',
     desc: '八方向射線，首個敵方，不可繞過',
   },
+  tower: {
+    id: 'tower',
+    name: '箭塔',
+    icon: '🏰',
+    hp: 2,
+    atk: 2,
+    range: 3,
+    moveRange: 0,
+    type: 'tower',
+    desc: '無法移動；攻擊時同時向上下左右射箭，各命中首個敵方',
+  },
   shield: {
     id: 'shield',
     name: '盾牌手',

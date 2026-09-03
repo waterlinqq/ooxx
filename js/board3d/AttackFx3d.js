@@ -168,13 +168,42 @@ export class AttackFx3d {
 
   spawnProjectile(from, to, team, kind) {
     const color = kind === 'mage' ? 0xa855f7 : team === 'blue' ? 0x60a5fa : 0xf87171;
-    const geo = new THREE.SphereGeometry(kind === 'mage' ? 0.1 : 0.08, 8, 8);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.8,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
+    const geometries = [];
+    const materials = [];
+    let mesh;
+
+    if (kind === 'tower') {
+      mesh = new THREE.Group();
+      const shaftGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.28, 7);
+      const headGeo = new THREE.ConeGeometry(0.055, 0.12, 7);
+      const shaftMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
+      const headMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.65,
+        metalness: 0.55,
+      });
+      const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+      shaft.rotation.x = Math.PI / 2;
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.z = 0.2;
+      head.rotation.x = Math.PI / 2;
+      mesh.add(shaft, head);
+      mesh.rotation.y = Math.atan2(to.x - from.x, to.z - from.z);
+      geometries.push(shaftGeo, headGeo);
+      materials.push(shaftMat, headMat);
+    } else {
+      const geo = new THREE.SphereGeometry(kind === 'mage' ? 0.1 : 0.08, 8, 8);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.8,
+      });
+      mesh = new THREE.Mesh(geo, mat);
+      geometries.push(geo);
+      materials.push(mat);
+    }
+
     mesh.position.set(from.x, from.y, from.z);
     this.fxGroup.add(mesh);
 
@@ -189,8 +218,8 @@ export class AttackFx3d {
         );
         if (t >= 1) {
           this.fxGroup.remove(mesh);
-          geo.dispose();
-          mat.dispose();
+          geometries.forEach((geometry) => geometry.dispose());
+          materials.forEach((material) => material.dispose());
           resolve();
           return;
         }
@@ -239,6 +268,11 @@ export class AttackFx3d {
           this.flashTile(r, c, 0xa855f7, 400);
         }
         this.spawnBeam(fx.from, endTarget);
+      } else if (fx.type === 'tower') {
+        for (const [row, col] of fx.volleyEndpoints ?? []) {
+          const toCenter = this.cellCenter(row, col);
+          this.spawnProjectile(fromCenter, toCenter, fx.team, fx.type);
+        }
       } else {
         for (const target of fx.targets) {
           const toCenter = this.cellCenter(target.row, target.col);

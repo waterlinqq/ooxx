@@ -24,6 +24,7 @@ function easeOutBack(x) {
 const CROUCH_DEPTH = {
   swordsman: 1,
   archer: 1,
+  tower: 0,
   shield: 0.85,
   mage: 0.5,
   assassin: 1.2,

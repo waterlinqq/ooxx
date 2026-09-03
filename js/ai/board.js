@@ -11,6 +11,7 @@ import {
   getWinLines,
   getAdjacentCells8,
   getEnemiesOnLine,
+  getTowerTargets,
   canAttackTarget,
 } from '../rules.js';
 
@@ -410,9 +411,14 @@ export function makeAction(ctx, action) {
     place(ctx, actor, action.row, action.col);
   } else if (action.type === 'attack') {
     const target = ctx.unitsById.get(action.targetId);
-    const hits = actor.type === 'mage'
-      ? getEnemiesOnLine(ctx.board, actor, target.row, target.col)
-      : canAttackTarget(actor, target) ? [target] : [];
+    let hits;
+    if (actor.type === 'mage') {
+      hits = getEnemiesOnLine(ctx.board, actor, target.row, target.col);
+    } else if (actor.type === 'tower') {
+      hits = getTowerTargets(ctx.board, actor);
+    } else {
+      hits = canAttackTarget(actor, target) ? [target] : [];
+    }
 
     const directKills = [];
     for (const hit of hits) {

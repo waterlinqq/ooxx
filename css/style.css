@@ -1076,10 +1076,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
   border: none;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--panel-2);
   cursor: pointer;
   transition: transform 0.12s, background 0.12s;
@@ -1106,10 +1106,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 76px;
-  height: 76px;
+  width: 60px;
+  height: 60px;
   border: 2px solid transparent;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--panel-2);
   cursor: pointer;
   transition: border-color 0.12s, transform 0.12s;
@@ -1269,8 +1269,8 @@ body {
 
 .class-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
 }
 
 .class-card {
@@ -1279,7 +1279,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 148px;
+  min-height: 128px;
   border: 2px solid transparent;
   border-radius: 12px;
   padding: 12px 8px;
@@ -1306,19 +1306,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 96px;
+  width: 76px;
+  height: 76px;
   flex-shrink: 0;
 }
 
 .unit-thumb {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   pointer-events: none;
   user-select: none;
-  transform: scale(1.1);
 }
 
 .class-name {

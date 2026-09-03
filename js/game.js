@@ -19,6 +19,7 @@ import {
   getValidAttackTargets,
   getValidBlessTargets,
   getValidDeployCells,
+  getTowerVolleyEndpoints,
   applyMove,
   applyDeploy,
   applyAttack,
@@ -544,6 +545,9 @@ export class Game {
   }
 
   async resolveAttack(unit, target, label) {
+    const volleyEndpoints = unit.type === 'tower'
+      ? getTowerVolleyEndpoints(this.board, unit)
+      : [];
     const result = applyAttack(this.board, unit, target);
     const directKilledIds = new Set(result.killed.map((k) => k.id));
     const fx = {
@@ -556,6 +560,7 @@ export class Game {
       team: unit.team,
       type: unit.type === 'support' ? 'melee' : unit.type,
       damage: unit.atk,
+      volleyEndpoints,
       explosions: result.explosions ?? [],
     };
 

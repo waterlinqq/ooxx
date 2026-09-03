@@ -39,6 +39,10 @@ const MAGE_DIRS = [
   [1, 1], [1, -1], [-1, 1], [-1, -1],
 ];
 
+const ORTHOGONAL_DIRS = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+];
+
 export function chebyshev(r1, c1, r2, c2) {
   return Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
 }
@@ -60,7 +64,9 @@ export function getUnitAt(board, row, col) {
 export function canAttackTarget(attacker, target) {
   if (!attacker || !target || attacker.team === target.team) return false;
   if (!target.isFlying) return true;
-  return attacker.type === 'ranged' || attacker.type === 'mage';
+  return attacker.type === 'ranged'
+    || attacker.type === 'mage'
+    || attacker.type === 'tower';
 }
 
 export function getAdjacentCells(row, col, size = 3) {
@@ -160,6 +166,48 @@ export function getEnemiesOnLine(board, unit, targetRow, targetCol) {
   return enemies;
 }
 
+/**
+ * The last cell reached by each of the tower's four arrows. An occupied cell blocks
+ * the ray, including a friendly unit; otherwise the arrow travels up to tower range.
+ */
+export function getTowerVolleyEndpoints(board, unit) {
+  if (unit.row < 0) return [];
+
+  const size = boardSize(board);
+  const reach = unit.range ?? size;
+  const endpoints = [];
+
+  for (const [dr, dc] of ORTHOGONAL_DIRS) {
+    let r = unit.row;
+    let c = unit.col;
+    let end = null;
+
+    for (let step = 0; step < reach; step++) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (!isInBounds(nr, nc, size)) break;
+      r = nr;
+      c = nc;
+      end = [r, c];
+      if (board[r][c]) break;
+    }
+
+    if (end) endpoints.push(end);
+  }
+
+  return endpoints;
+}
+
+/** First attackable unit on each of the tower's four blocked rays. */
+export function getTowerTargets(board, unit) {
+  const targets = [];
+  for (const [r, c] of getTowerVolleyEndpoints(board, unit)) {
+    const target = board[r][c];
+    if (target && canAttackTarget(unit, target)) targets.push(target);
+  }
+  return targets;
+}
+
 export function getValidAttackTargets(board, unit) {
   if (unit.row < 0) return [];
 
@@ -195,6 +243,10 @@ export function getValidAttackTargets(board, unit) {
       }
     }
     return targets;
+  }
+
+  if (unit.type === 'tower') {
+    return getTowerTargets(board, unit);
   }
 
   if (unit.type === 'mage') {
@@ -320,9 +372,14 @@ export function resolveDeathExplosions(board, killedUnits) {
 
 export function applyAttack(board, attacker, target) {
   const next = cloneBoard(board);
-  const hits = attacker.type === 'mage'
-    ? getEnemiesOnLine(board, attacker, target.row, target.col)
-    : canAttackTarget(attacker, target) ? [target] : [];
+  let hits;
+  if (attacker.type === 'mage') {
+    hits = getEnemiesOnLine(board, attacker, target.row, target.col);
+  } else if (attacker.type === 'tower') {
+    hits = getTowerTargets(board, attacker);
+  } else {
+    hits = canAttackTarget(attacker, target) ? [target] : [];
+  }
 
   const killed = [];
   for (const hit of hits) {

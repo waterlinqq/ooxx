@@ -24,6 +24,7 @@ import {
   getValidBlessTargets,
   getValidDeployCells,
   getEnemiesOnLine,
+  getTowerTargets,
 } from '../rules.js';
 
 const EXACT = 0;
@@ -96,7 +97,12 @@ function generateActions(ctx) {
       for (const [row, col] of getValidMoves(board, unit)) {
         actions.push({ type: 'move', unitId: unit.id, row, col });
       }
-      for (const target of getValidAttackTargets(board, unit)) {
+      const attackTargets = getValidAttackTargets(board, unit);
+      // Every tower target triggers the same four-way volley, so one search action is enough.
+      const uniqueAttackTargets = unit.type === 'tower'
+        ? attackTargets.slice(0, 1)
+        : attackTargets;
+      for (const target of uniqueAttackTargets) {
         actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
       }
       for (const target of getValidBlessTargets(board, unit)) {
@@ -120,9 +126,14 @@ function scoreAttackOrder(ctx, action, team) {
   if (!attacker || !target) return -Infinity;
 
   let score = 500;
-  const hits = attacker.type === 'mage'
-    ? getEnemiesOnLine(ctx.board, attacker, target.row, target.col)
-    : [target];
+  let hits;
+  if (attacker.type === 'mage') {
+    hits = getEnemiesOnLine(ctx.board, attacker, target.row, target.col);
+  } else if (attacker.type === 'tower') {
+    hits = getTowerTargets(ctx.board, attacker);
+  } else {
+    hits = [target];
+  }
 
   for (const hit of hits) {
     if (hit.hp <= attacker.atk) {
