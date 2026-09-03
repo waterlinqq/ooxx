@@ -25,13 +25,26 @@ const ROW_STEP = TILE_PITCH * 1.55;
 const TMP_BASE = new THREE.Vector3();
 const TMP_OFFSET = new THREE.Vector3();
 
+// Small rosters (e.g. 3×3's four-a-side) fit one row and keep the camera closer.
+const SINGLE_ROW_MAX = 4;
+
 function reserveBandDistance(boardSize) {
   const boardHalf = ((boardSize - 1) * TILE_PITCH) / 2;
-  const gap = TILE_PITCH * 1.2;
+  const gap = boardSize <= 3 ? TILE_PITCH * 0.75 : TILE_PITCH * 1.2;
   return boardHalf + gap + TILE_SIZE * 0.45;
 }
 
+function reserveRowLayout(total) {
+  if (total <= SINGLE_ROW_MAX) {
+    return { rows: 1, frontRowCount: total };
+  }
+  return { rows: 2, frontRowCount: Math.ceil(total / 2) };
+}
+
 function reserveGridSlot(index, total) {
+  if (total <= SINGLE_ROW_MAX) {
+    return { row: 0, col: index, colsInRow: total };
+  }
   const frontRowCount = Math.ceil(total / 2);
   if (index < frontRowCount) {
     return { row: 0, col: index, colsInRow: frontRowCount };
@@ -60,11 +73,11 @@ function reservePosition({ row, col, colsInRow }, boardSize, side) {
 // units deploy out of reserve.
 export function reserveExtentPoints(boardSize, maxReserveUnits = DEFAULT_MAX_RESERVE_UNITS) {
   const { right, down } = getScreenGroundAxes();
-  const frontRowCount = Math.ceil(maxReserveUnits / 2);
+  const { rows, frontRowCount } = reserveRowLayout(maxReserveUnits);
   // The extra margin covers the model's base ring and its floating name label, which both
   // reach past the slot centre and would otherwise be clipped on narrow viewports.
   const lateral = ((frontRowCount - 1) / 2) * ROW_SPACING + TILE_SIZE * 0.95;
-  const depth = reserveBandDistance(boardSize) + ROW_STEP + TILE_SIZE * 0.6;
+  const depth = reserveBandDistance(boardSize) + (rows === 1 ? 0 : ROW_STEP) + TILE_SIZE * 0.6;
 
   const points = [];
   for (const depthSign of [-1, 1]) {

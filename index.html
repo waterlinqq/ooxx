@@ -73,22 +73,26 @@
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
           <section class="board-wrap">
-            <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
-              <div class="match-timer-label">
-                <span>整局剩餘時間</span>
-                <time id="matchTimerText">00:00</time>
-              </div>
-              <div class="match-timer-track">
-                <div class="match-timer-fill" id="matchTimerFill"></div>
-              </div>
-            </div>
-            <div class="turn-timer hidden" id="turnTimer" aria-hidden="true">
-              <div class="turn-timer-track">
-                <div class="turn-timer-fill" id="turnTimerFill"></div>
-              </div>
-            </div>
             <div class="board-area">
               <div class="board-container">
+                <div class="board-hud" id="boardHud">
+                  <div class="battle-status-pill hidden" id="battleStatusPill" aria-live="polite">
+                    <span id="battleStatusText"></span>
+                  </div>
+                  <div class="board-timers">
+                    <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
+                      <time class="match-timer-time" id="matchTimerText">00:00</time>
+                      <div class="match-timer-track">
+                        <div class="match-timer-fill" id="matchTimerFill"></div>
+                      </div>
+                    </div>
+                    <div class="turn-timer hidden" id="turnTimer" aria-hidden="true">
+                      <div class="turn-timer-track">
+                        <div class="turn-timer-fill" id="turnTimerFill"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div id="boardCanvas" class="board-canvas-host"></div>
                 <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
                 <div class="win-condition-toast hidden" id="winConditionToast" aria-live="polite">
@@ -97,26 +101,25 @@
                     <p class="win-condition-text" id="winConditionText"></p>
                   </div>
                 </div>
+                <div class="battle-panels">
+                  <button class="btn danger battle-fab hidden" id="surrender" type="button" title="投降">🏳️</button>
+                  <div class="item-battle-bar hidden" id="itemBattleBar">
+                    <div class="item-battle-info">
+                      <span class="item-battle-icon" id="itemBattleIcon"></span>
+                      <span class="item-battle-name" id="itemBattleName"></span>
+                    </div>
+                    <button class="btn item-use-btn" id="useItemBtn" type="button">使用</button>
+                    <button class="btn hidden" id="cancelItemBtn" type="button">取消</button>
+                  </div>
+                  <div class="panel end-panel hidden" id="endPanel">
+                    <div class="end-result" id="endResult"></div>
+                    <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
+                    <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
-
-          <div class="battle-panels">
-            <div class="item-battle-bar hidden" id="itemBattleBar">
-              <div class="item-battle-info">
-                <span class="item-battle-icon" id="itemBattleIcon"></span>
-                <span class="item-battle-name" id="itemBattleName"></span>
-              </div>
-              <button class="btn item-use-btn" id="useItemBtn" type="button">使用道具</button>
-              <button class="btn hidden" id="cancelItemBtn" type="button">取消選取</button>
-            </div>
-            <button class="btn danger btn-block hidden" id="surrender" type="button">🏳️ 投降</button>
-            <div class="panel end-panel hidden" id="endPanel">
-              <div class="end-result" id="endResult"></div>
-              <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
-              <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
-            </div>
-          </div>
         </div>
       </section>
 

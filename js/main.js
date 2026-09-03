@@ -15,6 +15,7 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 const game = new Game();
 
+const appEl = document.querySelector('.app');
 const boardCanvasHost = document.getElementById('boardCanvas');
 const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
@@ -46,6 +47,8 @@ const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
 const winConditionTextEl = document.getElementById('winConditionText');
 const statusMessageEl = document.getElementById('statusMessage');
+const battleStatusPillEl = document.getElementById('battleStatusPill');
+const battleStatusTextEl = document.getElementById('battleStatusText');
 const coinBalanceEl = document.getElementById('coinBalance');
 const formationItemsEl = document.getElementById('formationItems');
 const bagGridEl = document.getElementById('bagGrid');
@@ -247,6 +250,7 @@ function syncTurnTimer(state) {
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
 let lastPhase = 'lobby';
+let lastInCombat = false;
 let winConditionHideTimer = null;
 
 const WIN_CONDITION_SHOW_MS = 2800;
@@ -440,6 +444,12 @@ function createItemRow(item, { count, price, onBuy }) {
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
   statusMessageEl.textContent = state.message ?? '';
+
+  const inBattle = state.phase === 'battle';
+  battleStatusPillEl.classList.toggle('hidden', !inBattle);
+  if (inBattle) {
+    battleStatusTextEl.textContent = state.message ?? '';
+  }
 }
 
 function renderFormationItems(state) {
@@ -614,7 +624,13 @@ function render(state) {
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
 
   const inFormation = state.phase === 'formation';
+  const inBattle = state.phase === 'battle';
   const inBattleFlow = BATTLE_PHASES.has(state.phase);
+  const inCombat = inBattle && activeNav === 'battle';
+
+  appEl.classList.toggle('in-combat', inCombat);
+  battleContentEl.classList.toggle('in-combat', inCombat);
+  battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
   lobbyContentEl.classList.toggle('hidden', state.phase !== 'lobby');
   formationContentEl.classList.toggle('hidden', !inFormation);
   battleContentEl.classList.toggle('hidden', !inBattleFlow);
@@ -645,9 +661,13 @@ function render(state) {
 
   if (showBoard) {
     board3d.sync(state);
+    if (inCombat !== lastInCombat) {
+      board3d.scheduleResize();
+    }
   } else if (!inBattleFlow) {
     board3d.clear();
   }
+  lastInCombat = inCombat;
 
   renderModePicker(state);
   renderClassPicker();

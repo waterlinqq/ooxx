@@ -11,7 +11,7 @@ import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
-const FRAME_PADDING = 0.12;
+const FRAME_PADDING = 0.08;
 const TMP_VIEW = new THREE.Vector3();
 
 export class BoardScene {
