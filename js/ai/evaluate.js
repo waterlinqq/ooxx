@@ -140,10 +140,10 @@ function scoreLines(ctx, team, myThreat, theirThreat) {
         lastEmptyCell = cell;
       } else if (unit.team === team) {
         mine++;
-        theirClearCost += clearCost(unit.hp, damageAt(theirThreat, cell, unit.isFlying));
+        theirClearCost += clearCost(unit.hp, damageAt(theirThreat, cell));
       } else {
         theirs++;
-        myClearCost += clearCost(unit.hp, damageAt(myThreat, cell, unit.isFlying));
+        myClearCost += clearCost(unit.hp, damageAt(myThreat, cell));
       }
     }
 
@@ -196,12 +196,12 @@ function scoreUnits(ctx, team, myThreat, theirThreat) {
       let contribution = value + weight[cell] * POSITION_WEIGHT;
 
       const hostile = own ? theirThreat : myThreat;
-      if (isLethalAt(hostile, cell, unit.hp, unit.isFlying)) {
+      if (isLethalAt(hostile, cell, unit.hp)) {
         // Its own side moving next can retreat, block, or trade first.
         const discount = ctx.turn === unit.team ? OWN_TURN_DISCOUNT : 1;
         contribution -= value * LETHAL_FRACTION * discount;
-      } else if (coverageAt(hostile, cell, unit.isFlying) > 0) {
-        contribution -= damageAt(hostile, cell, unit.isFlying) * CHIP_WEIGHT;
+      } else if (coverageAt(hostile, cell) > 0) {
+        contribution -= damageAt(hostile, cell) * CHIP_WEIGHT;
       }
 
       score += sign * contribution;

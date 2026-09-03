@@ -5,20 +5,15 @@
 // cell, the strongest single hit the given team could land on a unit standing there.
 //
 // Reach mirrors js/rules.js exactly:
-//   melee/support - all eight neighbouring cells
-//   ranged - eight rays, up to `range` steps, stopping at the first occupied cell
+//   melee/support - four neighbouring cells; the bomber keeps all eight
+//   ranged - four rays, up to `range` steps, stopping at the first occupied cell
 //   tower  - four orthogonal rays, up to `range` steps, stopping at the first occupied cell
-//   mage   - eight rays to the board edge, piercing everything (getEnemiesOnLine ignores
+//   mage   - four rays to the board edge, piercing everything (getEnemiesOnLine ignores
 //            both `range` and blockers)
 //
 // An empty cell counts as covered when a unit standing there *would* be reachable, which
 // is why ranged rays mark the blocking cell itself and then stop.
 //
-// Flying units (canAttackTarget in js/rules.js) can only be hit by ranged and mage, so
-// coverage is tracked twice: the plain lanes for grounded units and the flying lanes fed
-// only by ranged and mage. That is what makes an eagle correctly unclearable — and its
-// line therefore dead — for a team with no ranged or mage left.
-
 const ALL_DIRS = [
   [0, 1], [0, -1], [1, 0], [-1, 0],
   [1, 1], [1, -1], [-1, 1], [-1, -1],
@@ -31,8 +26,6 @@ function createMap(cells) {
     damage: new Int8Array(cells),
     count: new Int8Array(cells),
     pierce: new Int8Array(cells),
-    flyingDamage: new Int8Array(cells),
-    flyingCount: new Int8Array(cells),
   };
 }
 
@@ -47,19 +40,13 @@ function getScratch(ctx, team) {
   map.damage.fill(0);
   map.count.fill(0);
   map.pierce.fill(0);
-  map.flyingDamage.fill(0);
-  map.flyingCount.fill(0);
   return map;
 }
 
-function mark(map, cell, atk, piercing, canHitFlying = false) {
+function mark(map, cell, atk, piercing) {
   if (atk > map.damage[cell]) map.damage[cell] = atk;
   if (map.count[cell] < 127) map.count[cell]++;
   if (piercing) map.pierce[cell] = 1;
-  if (canHitFlying) {
-    if (atk > map.flyingDamage[cell]) map.flyingDamage[cell] = atk;
-    if (map.flyingCount[cell] < 127) map.flyingCount[cell]++;
-  }
 }
 
 /**
@@ -78,7 +65,8 @@ export function buildThreatMap(ctx, attackerTeam) {
       if (!unit || unit.team !== attackerTeam) continue;
 
       if (unit.type === 'melee' || unit.type === 'support') {
-        for (const [dr, dc] of ALL_DIRS) {
+        const directions = unit.classId === 'bomber' ? ALL_DIRS : ORTHOGONAL_DIRS;
+        for (const [dr, dc] of directions) {
           const nr = r + dr;
           const nc = c + dc;
           if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
@@ -89,14 +77,14 @@ export function buildThreatMap(ctx, attackerTeam) {
 
       if (unit.type === 'ranged' || unit.type === 'tower') {
         const reach = unit.range ?? size;
-        const directions = unit.type === 'tower' ? ORTHOGONAL_DIRS : ALL_DIRS;
+        const directions = ORTHOGONAL_DIRS;
         for (const [dr, dc] of directions) {
           let nr = r + dr;
           let nc = c + dc;
           for (let step = 0; step < reach; step++) {
             if (nr < 0 || nr >= size || nc < 0 || nc >= size) break;
             const cell = nr * size + nc;
-            mark(map, cell, unit.atk, false, true);
+            mark(map, cell, unit.atk, false);
             if (board[nr][nc]) break;
             nr += dr;
             nc += dc;
@@ -106,11 +94,11 @@ export function buildThreatMap(ctx, attackerTeam) {
       }
 
       if (unit.type === 'mage') {
-        for (const [dr, dc] of ALL_DIRS) {
+        for (const [dr, dc] of ORTHOGONAL_DIRS) {
           let nr = r + dr;
           let nc = c + dc;
           while (nr >= 0 && nr < size && nc >= 0 && nc < size) {
-            mark(map, nr * size + nc, unit.atk, true, true);
+            mark(map, nr * size + nc, unit.atk, true);
             nr += dr;
             nc += dc;
           }
@@ -123,16 +111,14 @@ export function buildThreatMap(ctx, attackerTeam) {
 }
 
 /** Would a unit of this profile die to the single strongest hit aimed at that cell? */
-export function isLethalAt(map, cell, hp, isFlying = false) {
-  const count = isFlying ? map.flyingCount : map.count;
-  const damage = isFlying ? map.flyingDamage : map.damage;
-  return count[cell] > 0 && hp <= damage[cell];
+export function isLethalAt(map, cell, hp) {
+  return map.count[cell] > 0 && hp <= map.damage[cell];
 }
 
-export function coverageAt(map, cell, isFlying = false) {
-  return (isFlying ? map.flyingCount : map.count)[cell];
+export function coverageAt(map, cell) {
+  return map.count[cell];
 }
 
-export function damageAt(map, cell, isFlying = false) {
-  return (isFlying ? map.flyingDamage : map.damage)[cell];
+export function damageAt(map, cell) {
+  return map.damage[cell];
 }

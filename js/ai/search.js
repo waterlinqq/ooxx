@@ -21,7 +21,6 @@ import { buildThreatMap, isLethalAt } from './threat.js';
 import {
   getValidMoves,
   getValidAttackTargets,
-  getValidBlessTargets,
   getValidDeployCells,
   getEnemiesOnLine,
   getTowerTargets,
@@ -105,9 +104,6 @@ function generateActions(ctx) {
       for (const target of uniqueAttackTargets) {
         actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
       }
-      for (const target of getValidBlessTargets(board, unit)) {
-        actions.push({ type: 'bless', unitId: unit.id, targetId: target.id });
-      }
     }
   }
 
@@ -116,7 +112,7 @@ function generateActions(ctx) {
 
 function sameAction(a, b) {
   if (!a || !b || a.type !== b.type || a.unitId !== b.unitId) return false;
-  if (a.type === 'attack' || a.type === 'bless') return a.targetId === b.targetId;
+  if (a.type === 'attack') return a.targetId === b.targetId;
   return a.row === b.row && a.col === b.col;
 }
 
@@ -151,13 +147,6 @@ function scoreAttackOrder(ctx, action, team) {
   return score;
 }
 
-function scoreBlessOrder(ctx, action) {
-  const target = ctx.unitsById.get(action.targetId);
-  if (!target) return -Infinity;
-  const healing = target.hp < target.maxHp ? 60 : 0;
-  return 180 + healing + target.atk * 4;
-}
-
 function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   const enemy = enemyOf(team);
   const cell = action.row * ctx.size + action.col;
@@ -185,7 +174,7 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   // Landing somewhere the opponent can kill outright is almost never worth it. The leaf
   // evaluation is what confirms that; this only keeps such moves from filling the
   // candidate cap ahead of better ones.
-  if (isLethalAt(hostile, cell, unit.hp, unit.isFlying)) {
+  if (isLethalAt(hostile, cell, unit.hp)) {
     score -= 300 + materialValue(unit);
   }
 
@@ -203,8 +192,6 @@ function orderActions(ctx, actions, ttAction, ply) {
     let score;
     if (action.type === 'attack') {
       score = scoreAttackOrder(ctx, action, team);
-    } else if (action.type === 'bless') {
-      score = scoreBlessOrder(ctx, action);
     } else {
       const unit = ctx.unitsById.get(action.unitId);
       score = scorePlacementOrder(ctx, action, team, hostile, unit, weights);

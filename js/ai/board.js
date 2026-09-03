@@ -9,6 +9,7 @@
 import { CLASSES, CLASS_IDS, SLOT_ORDER, parseSlot } from '../units.js';
 import {
   getWinLines,
+  getAdjacentCells,
   getAdjacentCells8,
   getEnemiesOnLine,
   getTowerTargets,
@@ -106,13 +107,13 @@ function cloneUnit(unit, searchIndex) {
     hp: unit.hp,
     maxHp: unit.maxHp,
     atk: unit.atk,
+    baseAtk: unit.baseAtk ?? CLASSES[unit.classId].atk,
     range: unit.range,
     moveRange: unit.moveRange ?? 1,
     jumpMove: unit.jumpMove ?? false,
     jumpRange: unit.jumpRange ?? null,
     deathExplosion: unit.deathExplosion ?? 0,
-    isFlying: unit.isFlying ?? false,
-    canBless: unit.canBless ?? false,
+    passiveBlessing: unit.passiveBlessing ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -366,11 +367,35 @@ function resolveExplosions(ctx, directKills, records, casualties) {
     const col = bomber.deadCol;
     for (const [r, c] of getAdjacentCells8(row, col, ctx.size)) {
       const victim = ctx.board[r][c];
-      if (!victim || victim.team === bomber.team || victim.isFlying) continue;
+      if (!victim || victim.team === bomber.team) continue;
       const record = { unit: victim, prevHp: victim.hp, row: r, col: c, died: false };
       record.died = damage(ctx, victim, bomber.deathExplosion);
       records.push(record);
       if (record.died) casualties.push(victim);
+    }
+  }
+}
+
+function applyPassivePriestBlessings(ctx, team, records) {
+  const priests = [];
+  for (const row of ctx.board) {
+    for (const unit of row) {
+      if (unit?.team === team && unit.passiveBlessing) priests.push(unit);
+    }
+  }
+
+  for (const priest of priests) {
+    for (const [r, c] of getAdjacentCells(priest.row, priest.col, ctx.size)) {
+      const target = ctx.board[r][c];
+      if (!target || target.team !== priest.team || target.id === priest.id) continue;
+
+      const nextHp = Math.min(target.maxHp, target.hp + 1);
+      if (nextHp === target.hp) continue;
+
+      records.push({ target, prevHp: target.hp });
+      xorUnitHash(ctx, target, r, c);
+      target.hp = nextHp;
+      xorUnitHash(ctx, target, r, c);
     }
   }
 }
@@ -398,7 +423,7 @@ export function makeAction(ctx, action) {
     fromRow: actor.row,
     fromCol: actor.col,
     damageRecords: [],
-    blessRecord: null,
+    blessRecords: [],
     enemyKills: [],
     selfLosses: [],
   };
@@ -433,14 +458,9 @@ export function makeAction(ctx, action) {
     }
 
     resolveExplosions(ctx, directKills, undo.damageRecords, undo.selfLosses);
-  } else if (action.type === 'bless') {
-    const target = ctx.unitsById.get(action.targetId);
-    undo.blessRecord = { target, prevHp: target.hp, prevAtk: target.atk };
-    xorUnitHash(ctx, target, target.row, target.col);
-    target.hp = Math.min(target.maxHp, target.hp + 1);
-    target.atk += 1;
-    xorUnitHash(ctx, target, target.row, target.col);
   }
+
+  applyPassivePriestBlessings(ctx, team, undo.blessRecords);
 
   if (!ctx.acted.has(actor.searchIndex)) {
     ctx.acted.add(actor.searchIndex);
@@ -549,6 +569,13 @@ export function unmakeAction(ctx, undo) {
 
   const { action, actor } = undo;
 
+  for (let i = undo.blessRecords.length - 1; i >= 0; i--) {
+    const { target, prevHp } = undo.blessRecords[i];
+    xorUnitHash(ctx, target, target.row, target.col);
+    target.hp = prevHp;
+    xorUnitHash(ctx, target, target.row, target.col);
+  }
+
   if (action.type === 'deploy') {
     lift(ctx, actor);
     insertIntoReserve(ctx, actor, undo.reserveIndex);
@@ -558,15 +585,6 @@ export function unmakeAction(ctx, undo) {
   if (action.type === 'move') {
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
-    return;
-  }
-
-  if (action.type === 'bless') {
-    const { target, prevHp, prevAtk } = undo.blessRecord;
-    xorUnitHash(ctx, target, target.row, target.col);
-    target.hp = prevHp;
-    target.atk = prevAtk;
-    xorUnitHash(ctx, target, target.row, target.col);
     return;
   }
 

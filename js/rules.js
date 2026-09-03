@@ -62,11 +62,7 @@ export function getUnitAt(board, row, col) {
 }
 
 export function canAttackTarget(attacker, target) {
-  if (!attacker || !target || attacker.team === target.team) return false;
-  if (!target.isFlying) return true;
-  return attacker.type === 'ranged'
-    || attacker.type === 'mage'
-    || attacker.type === 'tower';
+  return Boolean(attacker && target && attacker.team !== target.team);
 }
 
 export function getAdjacentCells(row, col, size = 3) {
@@ -132,7 +128,7 @@ export function getMageLines(unit, size = 3) {
   const { row, col } = unit;
   const lines = [];
 
-  for (const [dr, dc] of MAGE_DIRS) {
+  for (const [dr, dc] of ORTHOGONAL_DIRS) {
     let r = row + dr;
     let c = col + dc;
     while (isInBounds(r, c, size)) {
@@ -215,7 +211,10 @@ export function getValidAttackTargets(board, unit) {
   const targets = [];
 
   if (unit.type === 'melee' || unit.type === 'support') {
-    for (const [r, c] of getAdjacentCells8(unit.row, unit.col, size)) {
+    const attackCells = unit.classId === 'bomber'
+      ? getAdjacentCells8(unit.row, unit.col, size)
+      : getAdjacentCells(unit.row, unit.col, size);
+    for (const [r, c] of attackCells) {
       const target = board[r][c];
       if (target && canAttackTarget(unit, target)) targets.push(target);
     }
@@ -224,7 +223,7 @@ export function getValidAttackTargets(board, unit) {
 
   if (unit.type === 'ranged') {
     const seen = new Set();
-    for (const [dr, dc] of MAGE_DIRS) {
+    for (const [dr, dc] of ORTHOGONAL_DIRS) {
       let r = unit.row + dr;
       let c = unit.col + dc;
       let steps = 0;
@@ -267,15 +266,12 @@ export function getValidAttackTargets(board, unit) {
   return targets;
 }
 
-export function getValidBlessTargets(board, unit) {
-  if (unit.row < 0 || !unit.canBless) return [];
+export function getPriestBlessingTargets(board, priest) {
+  if (priest.row < 0 || !priest.passiveBlessing) return [];
 
-  const targets = [];
-  for (const [r, c] of getAdjacentCells(unit.row, unit.col, boardSize(board))) {
-    const target = board[r][c];
-    if (target && target.team === unit.team && target.id !== unit.id) targets.push(target);
-  }
-  return targets;
+  return getAdjacentCells(priest.row, priest.col, boardSize(board))
+    .map(([r, c]) => board[r][c])
+    .filter((target) => target && target.team === priest.team && target.id !== priest.id);
 }
 
 export function getValidDeployCells(board) {
@@ -320,12 +316,15 @@ export function applyDeploy(board, unit, row, col) {
   return { board: next, unit: deployed };
 }
 
-export function applyBless(board, priest, target) {
+export function applyPriestBlessing(board, priest) {
   const next = cloneBoard(board);
-  const blessed = next[target.row][target.col];
-  blessed.hp = Math.min(blessed.maxHp, blessed.hp + 1);
-  blessed.atk += 1;
-  return { board: next, unit: next[priest.row][priest.col], target: blessed };
+  const sourceTargets = getPriestBlessingTargets(board, priest);
+  const targets = sourceTargets.map((target) => {
+    const blessed = next[target.row][target.col];
+    blessed.hp = Math.min(blessed.maxHp, blessed.hp + 1);
+    return blessed;
+  });
+  return { board: next, unit: next[priest.row]?.[priest.col] ?? null, targets };
 }
 
 export function resolveDeathExplosions(board, killedUnits) {
@@ -346,7 +345,7 @@ export function resolveDeathExplosions(board, killedUnits) {
 
     for (const [r, c] of getAdjacentCells8(bomber.row, bomber.col, size)) {
       const cell = next[r][c];
-      if (!cell || cell.team === bomber.team || cell.isFlying) continue;
+      if (!cell || cell.team === bomber.team) continue;
 
       cell.hp -= damage;
       explosionHits.push(cell);

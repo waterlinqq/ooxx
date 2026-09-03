@@ -17,17 +17,18 @@ import {
 import {
   getValidMoves,
   getValidAttackTargets,
-  getValidBlessTargets,
   getValidDeployCells,
   getTowerVolleyEndpoints,
   applyMove,
   applyDeploy,
   applyAttack,
-  applyBless,
+  applyPriestBlessing,
   checkWin,
   isTeamEliminated,
 } from './rules.js';
 import { chooseAiAction } from './ai.js';
+import { createSearchContext } from './ai/board.js';
+import { evaluate } from './ai/evaluate.js';
 
 export class Game {
   constructor() {
@@ -47,6 +48,8 @@ export class Game {
     this.redReserve = [];
     this.message = '請選擇棋盤模式';
     this.lastWinLine = null;
+    this.endReason = null;
+    this.finalScores = null;
     this.animating = false;
     this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
@@ -137,6 +140,8 @@ export class Game {
     this.phase = 'lobby';
     this.board = createEmptyBoard(this.getModeConfig().size);
     this.lastWinLine = null;
+    this.endReason = null;
+    this.finalScores = null;
     this.message = '請選擇棋盤模式';
     this.notify();
   }
@@ -176,6 +181,7 @@ export class Game {
       winCount: mode.size,
       turnDurationMs: mode.turnDurationMs,
       turnBonusMs: mode.turnBonusMs,
+      matchDurationMs: mode.matchDurationMs,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
       currentSlot: this.currentSlot,
@@ -192,9 +198,10 @@ export class Game {
       redReserve: this.redReserve,
       message: this.message,
       lastWinLine: this.lastWinLine,
+      endReason: this.endReason,
+      finalScores: this.finalScores,
       validMoves: this.getHighlightMoves(),
       validTargets: this.getHighlightTargets(),
-      validBless: this.getHighlightBless(),
       validDeploy: this.getHighlightDeploy(),
       animating: this.animating,
       actionsRemaining: this.actionsRemaining,
@@ -231,7 +238,7 @@ export class Game {
     if (this.is2v2()) {
       const label = formatSlotLabel(this.currentSlot);
       if (this.canHumanAct()) {
-        return `${label} 回合 · 你的回合：拖曳單位移動、攻擊或祝福，點後備區再點空格部署，點敵方單位查看資訊`;
+        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
       }
       return `${label} 回合 · AI 思考中`;
     }
@@ -239,7 +246,7 @@ export class Game {
     const team = TEAM[this.currentPlayer];
     const actionsPerTurn = mode.actionsPerTurn;
     if (this.currentPlayer === 'blue') {
-      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動、攻擊或祝福，點後備區再點空格部署，點敵方單位查看資訊`;
+      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
     }
     return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
   }
@@ -258,7 +265,6 @@ export class Game {
         if (this.actedUnitIds.has(unit.id)) continue;
         if (getValidMoves(this.board, unit).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
-        if (getValidBlessTargets(this.board, unit).length > 0) return true;
       }
     }
     return false;
@@ -281,7 +287,6 @@ export class Game {
         if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
         if (getValidMoves(this.board, unit).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
-        if (getValidBlessTargets(this.board, unit).length > 0) return true;
       }
     }
     return false;
@@ -319,6 +324,8 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.lastWinLine = null;
+    this.endReason = null;
+    this.finalScores = null;
     this.phase = 'battle';
     this.resetTurnActions();
 
@@ -395,9 +402,7 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.draggingUnitId = unitId;
-    this.message = unit.canBless
-      ? '點選或拖曳至綠格移動、紅格攻擊、紫格祝福'
-      : '點選或拖曳至綠格移動、紅格攻擊';
+    this.message = '點選或拖曳至綠格移動、紅格攻擊';
     this.notify();
   }
 
@@ -436,11 +441,6 @@ export class Game {
       } else {
         this.resetPlayerTurn();
       }
-      return;
-    }
-
-    if (this.tryBlessTarget(unitId, row, col)) {
-      this.draggingUnitId = null;
       return;
     }
 
@@ -489,14 +489,6 @@ export class Game {
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
     return getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
-  }
-
-  getHighlightBless() {
-    if (!this.draggingUnitId) return [];
-    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
-    const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
-    if (!unit) return [];
-    return getValidBlessTargets(this.board, unit).map((t) => [t.row, t.col]);
   }
 
   getHighlightDeploy() {
@@ -569,6 +561,11 @@ export class Game {
       await this.playAttackFx(fx);
     }
 
+    if (this.phase !== 'battle') {
+      this.animating = false;
+      return;
+    }
+
     this.board = result.board;
     this.animating = false;
 
@@ -594,28 +591,25 @@ export class Game {
     return true;
   }
 
-  tryBlessTarget(unitId, row, col) {
-    const unit = this.board.flat().find((u) => u?.id === unitId);
-    const target = this.board[row][col];
-    if (!unit || !target || target.team !== unit.team || target.id === unit.id) return false;
-    if (this.actedUnitIds.has(unitId)) return false;
-
-    const valid = getValidBlessTargets(this.board, unit);
-    if (!valid.some((candidate) => candidate.id === target.id)) return false;
-
-    const result = applyBless(this.board, unit, target);
-    this.board = result.board;
-    this.endAction(
-      `祝福 ${CLASSES[target.classId].name}（HP ${result.target.hp}/${result.target.maxHp} · ATK ${result.target.atk}）`,
-      unitId,
-    );
-    return true;
-  }
-
   endAction(actionLabel, unitId) {
     const team = TEAM[this.currentPlayer];
     const enemy = this.currentPlayer === 'blue' ? 'red' : 'blue';
     const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
+
+    const blessedUnitIds = new Set();
+    const priestIds = this.board.flat()
+      .filter((unit) => unit?.team === this.currentPlayer && unit.passiveBlessing)
+      .map((unit) => unit.id);
+    for (const priestId of priestIds) {
+      const priest = this.board.flat().find((unit) => unit?.id === priestId);
+      if (!priest) continue;
+      const blessing = applyPriestBlessing(this.board, priest);
+      this.board = blessing.board;
+      for (const target of blessing.targets) blessedUnitIds.add(target.id);
+    }
+    if (blessedUnitIds.size > 0) {
+      actionLabel += ` · 祝福 ${blessedUnitIds.size} 名友軍`;
+    }
 
     this.actedUnitIds.add(unitId);
     this.actionsRemaining--;
@@ -762,13 +756,6 @@ export class Game {
       return;
     }
 
-    if (action.type === 'bless') {
-      const unit = this.board.flat().find((u) => u?.id === action.unitId);
-      const target = this.board.flat().find((u) => u?.id === action.targetId);
-      const result = applyBless(this.board, unit, target);
-      this.board = result.board;
-      this.endAction(`${slotLabel} 祝福 ${CLASSES[target.classId].name}`, action.unitId);
-    }
   }
 
   surrender() {
@@ -781,9 +768,48 @@ export class Game {
     this.handleRoundWin('red', `${TEAM.blue.name}投降`);
   }
 
-  handleRoundWin(winner, detail) {
+  endMatchByTime() {
+    if (this.phase !== 'battle') return;
+
+    const mode = this.getModeConfig();
+    const ownerSeat = this.is2v2() ? parseSlot(this.currentSlot).seat : null;
+    const context = createSearchContext(
+      {
+        board: this.board,
+        blueReserve: this.blueReserve,
+        redReserve: this.redReserve,
+        actedUnitIds: this.actedUnitIds,
+      },
+      {
+        team: this.currentPlayer,
+        ownerSeat,
+        actionsPerTurn: mode.actionsPerTurn,
+      },
+    );
+    const blueScore = evaluate(context, 'blue');
+    const redScore = evaluate(context, 'red');
+    const winner = blueScore === redScore
+      ? null
+      : blueScore > redScore ? 'blue' : 'red';
+
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.inspectedUnitId = null;
+    this.lastWinLine = null;
+    this.animating = false;
+    this.endReason = 'timeout';
+    this.finalScores = { blue: blueScore, red: redScore };
+
+    const detail = `時間到 · 最終分數：藍隊 ${blueScore}｜紅隊 ${redScore}`;
+    this.handleRoundWin(winner, detail, 'timeout');
+  }
+
+  handleRoundWin(winner, detail, reason = 'victory') {
     this.phase = 'gameEnd';
-    this.message = `${detail} — ${TEAM[winner].name}獲勝！`;
+    this.endReason = reason;
+    this.message = winner
+      ? `${detail} — ${TEAM[winner].name}獲勝！`
+      : `${detail} — 平手！`;
     this.notify();
   }
 
@@ -793,6 +819,8 @@ export class Game {
     this.phase = 'formation';
     this.board = createEmptyBoard(this.getModeConfig().size);
     this.lastWinLine = null;
+    this.endReason = null;
+    this.finalScores = null;
     this.blueReserve = [];
     this.redReserve = [];
     this.message = this.getFormationMessage();

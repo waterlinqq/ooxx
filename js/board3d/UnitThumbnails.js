@@ -4,7 +4,6 @@ import { buildUnitModel } from './UnitModels.js';
 
 const THUMB_SIZE = 256;
 const UNIT_BASE_Y = 0.072;
-const EAGLE_FLIGHT_HEIGHT = 0.34;
 const PREVIEW_ROTATION_Y = 0.35;
 const FRAME_PADDING = 1.06;
 
@@ -91,8 +90,7 @@ export function generateUnitThumbnails(classIds) {
     if (model.ring) model.ring.visible = false;
     if (model.shadow) model.shadow.visible = false;
 
-    const flightHeight = classId === 'eagle' ? EAGLE_FLIGHT_HEIGHT : 0;
-    model.root.position.set(0, UNIT_BASE_Y + flightHeight, 0);
+    model.root.position.set(0, UNIT_BASE_Y, 0);
     model.body.rotation.y = PREVIEW_ROTATION_Y;
     scene.add(model.root);
     fitCameraToModel(camera, model.root);

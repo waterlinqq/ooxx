@@ -26,6 +26,9 @@ const startBattleBtn = document.getElementById('startBattle');
 const backToLobbyBtn = document.getElementById('backToLobby');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
+const matchTimerEl = document.getElementById('matchTimer');
+const matchTimerFillEl = document.getElementById('matchTimerFill');
+const matchTimerTextEl = document.getElementById('matchTimerText');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailInfoEl = document.getElementById('classDetailInfo');
 const classPreviewHostEl = document.getElementById('classPreviewHost');
@@ -49,6 +52,7 @@ const NAV_SCREENS = {
 const DEFAULT_TURN_DURATION_MS = 15000;
 const DEFAULT_TURN_BONUS_MS = 5000;
 const TURN_TIMER_TICK_MS = 50;
+const MATCH_TIMER_TICK_MS = 100;
 
 let turnTimerInterval = null;
 let turnTimerRemainingMs = DEFAULT_TURN_DURATION_MS;
@@ -58,6 +62,75 @@ let turnTimerLastTick = 0;
 let turnTimerPaused = false;
 let turnTimerHumanTurn = false;
 let turnTimerLastActedCount = 0;
+let matchTimerInterval = null;
+let matchTimerDurationMs = 0;
+let matchTimerRemainingMs = 0;
+let matchTimerLastTick = 0;
+let matchTimerActive = false;
+
+function formatClock(durationMs) {
+  const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function clearMatchTimer() {
+  if (matchTimerInterval) {
+    clearInterval(matchTimerInterval);
+    matchTimerInterval = null;
+  }
+  matchTimerActive = false;
+  matchTimerLastTick = 0;
+}
+
+function updateMatchTimer() {
+  const pct = matchTimerDurationMs > 0
+    ? Math.min(1, matchTimerRemainingMs / matchTimerDurationMs)
+    : 0;
+  matchTimerFillEl.style.width = `${pct * 100}%`;
+  matchTimerTextEl.textContent = formatClock(matchTimerRemainingMs);
+  matchTimerEl.classList.toggle('match-timer-low', pct <= 0.1 && pct > 0);
+}
+
+function startMatchTimer(durationMs) {
+  clearMatchTimer();
+  matchTimerActive = true;
+  matchTimerDurationMs = durationMs;
+  matchTimerRemainingMs = durationMs;
+  matchTimerLastTick = performance.now();
+  matchTimerEl.classList.remove('hidden');
+  matchTimerEl.setAttribute('aria-hidden', 'false');
+  updateMatchTimer();
+
+  matchTimerInterval = setInterval(() => {
+    const now = performance.now();
+    matchTimerRemainingMs -= now - matchTimerLastTick;
+    matchTimerLastTick = now;
+
+    if (matchTimerRemainingMs <= 0) {
+      matchTimerRemainingMs = 0;
+      updateMatchTimer();
+      game.endMatchByTime();
+      return;
+    }
+
+    updateMatchTimer();
+  }, MATCH_TIMER_TICK_MS);
+}
+
+function syncMatchTimer(state) {
+  if (state.phase !== 'battle') {
+    matchTimerEl.classList.add('hidden');
+    matchTimerEl.setAttribute('aria-hidden', 'true');
+    clearMatchTimer();
+    return;
+  }
+
+  if (!matchTimerActive) {
+    startMatchTimer(state.matchDurationMs);
+  }
+}
 
 function clearTurnTimer() {
   if (turnTimerInterval) {
@@ -176,7 +249,7 @@ function clearWinConditionToast() {
 
 function showWinConditionToast(winCount) {
   clearWinConditionToast();
-  winConditionTextEl.textContent = `連成 ${winCount} 子 · 或全滅對手`;
+  winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手 · 時間到比總分`;
   winConditionToastEl.classList.remove('hidden', 'dismissing');
 
   winConditionHideTimer = setTimeout(() => {
@@ -247,12 +320,14 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
-  if (cls.isFlying) return '浮空 · 只能被弓箭手與魔法師攻擊';
-  if (cls.deathExplosion) return `近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
+  if (cls.deathExplosion) return `八向近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
-  if (cls.type === 'mage') return '八方向光束穿透攻擊';
-  if (cls.type === 'ranged') return `八方向射線 · 射程 ${cls.range}`;
-  return '近戰';
+  if (cls.moveRange === Infinity) return '移動距離無限';
+  if (cls.type === 'mage') return '上下左右光束穿透攻擊';
+  if (cls.type === 'ranged') return `上下左右射線 · 射程 ${cls.range}`;
+  if (cls.type === 'tower') return `上下左右齊射 · 射程 ${cls.range}`;
+  if (cls.passiveBlessing) return '上下左右祝福 · 恢復 1 生命';
+  return '上下左右近戰';
 }
 
 function renderClassDetail(classId) {
@@ -356,10 +431,12 @@ function renderModePicker(state) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
-    const subtitle = mode.matchFormat === '2v2' ? '2v2 單局' : '';
-    btn.innerHTML = subtitle
-      ? `<span class="mode-btn-label">${mode.label}</span><span class="mode-btn-sub">${subtitle}</span>`
-      : mode.label;
+    const format = mode.matchFormat === '2v2' ? '2v2 · ' : '';
+    const minutes = Math.round(mode.matchDurationMs / 60000);
+    btn.innerHTML = `
+      <span class="mode-btn-label">${mode.label}</span>
+      <span class="mode-btn-sub">${format}限時 ${minutes} 分鐘</span>
+    `;
     btn.disabled = !canPick;
     btn.addEventListener('click', () => game.setBoardMode(mode.id));
     modeButtonsEl.appendChild(btn);
@@ -391,6 +468,7 @@ function renderBattlePanels(state) {
 }
 
 function render(state) {
+  syncMatchTimer(state);
   syncTurnTimer(state);
 
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');

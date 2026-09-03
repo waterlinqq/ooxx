@@ -255,7 +255,7 @@ function countMeleeThreats(board, row, col, team) {
   return count;
 }
 
-/** 弓箭手：八方向射線上首個敵方，並避免貼臉 */
+/** 弓箭手：上下左右射線上首個敵方，並避免貼臉 */
 function scoreArcherPosition(board, row, col, team, range) {
   const phantom = { row, col, team, type: 'ranged', range };
   let bonus = 0;

@@ -190,7 +190,6 @@ export class UnitMeshManager {
       displayPos: new THREE.Vector3(),
       classId: unit.classId,
       crouchDepth: CROUCH_DEPTH[unit.classId] ?? 1,
-      flightHeight: unit.isFlying ? 0.34 : 0,
       team: unit.team,
       seed: Math.random() * Math.PI * 2,
       jitter: Math.random(),
@@ -728,13 +727,11 @@ export class UnitMeshManager {
 
       entry.root.position.copy(entry.displayPos).add(entry.fxOffset);
 
-      const hoverAmount = entry.flightHeight > 0 ? 0.035 : 0.01;
-      const hover = Math.sin(time * 2 + entry.seed) * hoverAmount * (1 - entry.walk);
+      const hover = Math.sin(time * 2 + entry.seed) * 0.01 * (1 - entry.walk);
       const selectLift = entry.dragging
         ? 0.045 + Math.sin(time * 5 + entry.seed) * 0.012
         : 0;
-      const rise =
-        entry.flightHeight + entry.fxOffset.y + entry.lift + entry.spawnLift + hover + selectLift;
+      const rise = entry.fxOffset.y + entry.lift + entry.spawnLift + hover + selectLift;
       entry.root.position.y = entry.displayPos.y + rise;
 
       if (entry.ring) {

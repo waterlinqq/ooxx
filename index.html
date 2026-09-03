@@ -60,6 +60,15 @@
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
           <section class="board-wrap">
+            <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
+              <div class="match-timer-label">
+                <span>整局剩餘時間</span>
+                <time id="matchTimerText">00:00</time>
+              </div>
+              <div class="match-timer-track">
+                <div class="match-timer-fill" id="matchTimerFill"></div>
+              </div>
+            </div>
             <div class="turn-timer hidden" id="turnTimer" aria-hidden="true">
               <div class="turn-timer-track">
                 <div class="turn-timer-fill" id="turnTimerFill"></div>
@@ -100,7 +109,12 @@
           </div>
           <div class="class-picker" id="classPicker"></div>
           <div class="class-detail" id="classDetail">
-            <div class="detail-preview-host" id="classPreviewHost"></div>
+            <div class="detail-preview-host" id="classPreviewHost">
+              <div class="range-legend" aria-label="範圍圖例">
+                <span><i class="range-swatch move"></i>移動範圍</span>
+                <span><i class="range-swatch attack"></i>攻擊範圍</span>
+              </div>
+            </div>
             <div class="detail-info" id="classDetailInfo"></div>
           </div>
         </div>

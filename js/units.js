@@ -7,7 +7,7 @@ export const CLASSES = {
     atk: 3,
     range: 3,
     type: 'ranged',
-    desc: '八方向射線，首個敵方，不可繞過',
+    desc: '上下左右射線，首個敵方，不可繞過',
   },
   tower: {
     id: 'tower',
@@ -28,7 +28,7 @@ export const CLASSES = {
     atk: 1,
     range: 1,
     type: 'melee',
-    desc: '生命值極高，可攻擊相鄰八格',
+    desc: '生命值極高，可攻擊上下左右相鄰格',
   },
   swordsman: {
     id: 'swordsman',
@@ -38,7 +38,7 @@ export const CLASSES = {
     atk: 3,
     range: 1,
     type: 'melee',
-    desc: '八向近戰高傷害',
+    desc: '上下左右近戰高傷害',
   },
   mage: {
     id: 'mage',
@@ -50,7 +50,7 @@ export const CLASSES = {
     // getEnemiesOnLine deliberately ignores range. Kept only for UI symmetry.
     range: 3,
     type: 'mage',
-    desc: '八方向光束穿透，傷害低',
+    desc: '上下左右光束穿透，傷害低',
   },
   assassin: {
     id: 'assassin',
@@ -62,7 +62,7 @@ export const CLASSES = {
     jumpMove: true,
     jumpRange: 2,
     type: 'melee',
-    desc: '八向近戰，可跳躍至周遭兩格',
+    desc: '上下左右近戰，可跳躍至周遭兩格',
   },
   bomber: {
     id: 'bomber',
@@ -80,12 +80,11 @@ export const CLASSES = {
     name: '老鷹',
     icon: '🦅',
     hp: 1,
-    atk: 1,
+    atk: 2,
     range: 1,
-    moveRange: 1,
+    moveRange: Infinity,
     type: 'melee',
-    isFlying: true,
-    desc: '浮空八向近戰，只會受到弓箭與魔法攻擊',
+    desc: '上下左右近戰，可移動至任意可到達的空格',
   },
   priest: {
     id: 'priest',
@@ -95,8 +94,8 @@ export const CLASSES = {
     atk: 1,
     range: 1,
     type: 'support',
-    canBless: true,
-    desc: '可八向近戰，並祝福相鄰隊友，使其生命與攻擊各增加 1',
+    passiveBlessing: true,
+    desc: '上下左右近戰；我方任一單位行動後，使祝福範圍內友軍恢復 1 生命',
   },
 };
 
@@ -138,6 +137,7 @@ export const BOARD_MODES = {
     actionsPerTurn: 1,
     turnDurationMs: 10000,
     turnBonusMs: 0,
+    matchDurationMs: 5 * 60 * 1000,
     // Four a side is the largest roster that still leaves the 9 cells un-fillable, which
     // is what keeps a single action per turn viable. AI self-play shows the cliff either
     // side of it: at five a side every game ends by attrition instead of a line, and
@@ -154,6 +154,7 @@ export const BOARD_MODES = {
     actionsPerTurn: 1,
     turnDurationMs: 15000,
     turnBonusMs: 5000,
+    matchDurationMs: 8 * 60 * 1000,
     rosterSize: 10,
     maxPerClass: 4,
     roster: [
@@ -172,6 +173,7 @@ export const BOARD_MODES = {
     actionsPerTurn: 1,
     turnDurationMs: 18000,
     turnBonusMs: 5000,
+    matchDurationMs: 10 * 60 * 1000,
     rosterSize: 14,
     maxPerClass: 5,
     // Longest distance is 4, so range-3 units no longer reach everywhere and mobility
@@ -252,13 +254,13 @@ export function createUnit(classId, teamId, ownerSeat = null) {
     hp: cls.hp,
     maxHp: cls.hp,
     atk: cls.atk,
+    baseAtk: cls.atk,
     range: cls.range,
     moveRange: cls.moveRange ?? 1,
     jumpMove: cls.jumpMove ?? false,
     jumpRange: cls.jumpRange ?? null,
     deathExplosion: cls.deathExplosion ?? 0,
-    isFlying: cls.isFlying ?? false,
-    canBless: cls.canBless ?? false,
+    passiveBlessing: cls.passiveBlessing ?? false,
     type: cls.type,
     row: -1,
     col: -1,

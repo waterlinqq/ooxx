@@ -10,13 +10,12 @@ import {
   applyDeploy,
   applyMove,
   applyAttack,
-  applyBless,
+  applyPriestBlessing,
   checkWin,
   isTeamEliminated,
   getValidDeployCells,
   getValidMoves,
   getValidAttackTargets,
-  getValidBlessTargets,
 } from '../../js/rules.js';
 
 export const MAX_TURNS = 800;
@@ -65,7 +64,6 @@ export function hasValidActionsForSlot(board, reserve, slot, actedUnitIds) {
       if (!ownedBySeat(unit, seat)) continue;
       if (getValidMoves(board, unit).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
-      if (getValidBlessTargets(board, unit).length > 0) return true;
     }
   }
   return false;
@@ -79,7 +77,6 @@ export function hasValidActions(board, reserve, team, actedUnitIds) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
       if (getValidMoves(board, unit).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
-      if (getValidBlessTargets(board, unit).length > 0) return true;
     }
   }
   return false;
@@ -135,19 +132,18 @@ function serializeAction(action, board, reserves) {
     };
   }
 
-  if (action.type === 'bless') {
-    const unit = byId.get(action.unitId);
-    const target = byId.get(action.targetId);
-    return {
-      type: 'bless',
-      classId: unit?.classId ?? null,
-      targetClassId: target?.classId ?? null,
-      from: unit ? { row: unit.row, col: unit.col } : null,
-      target: target ? { row: target.row, col: target.col } : null,
-    };
-  }
-
   return action;
+}
+
+function triggerPassiveBlessings(state, team) {
+  const priestIds = state.board.flat()
+    .filter((unit) => unit?.team === team && unit.passiveBlessing)
+    .map((unit) => unit.id);
+  for (const priestId of priestIds) {
+    const priest = state.board.flat().find((unit) => unit?.id === priestId);
+    if (!priest) continue;
+    state.board = applyPriestBlessing(state.board, priest).board;
+  }
 }
 
 function applyAiAction(state, action, team) {
@@ -161,12 +157,14 @@ function applyAiAction(state, action, team) {
     state.board = applyDeploy(state.board, unit, action.row, action.col).board;
     if (team === 'blue') state.blueReserve = state.blueReserve.filter((u) => u.id !== unit.id);
     else state.redReserve = state.redReserve.filter((u) => u.id !== unit.id);
+    triggerPassiveBlessings(state, team);
     return { label: 'deploy', detail, landedAt: { row: action.row, col: action.col } };
   }
 
   if (action.type === 'move') {
     const unit = state.board.flat().find((u) => u?.id === action.unitId);
     state.board = applyMove(state.board, unit, action.row, action.col).board;
+    triggerPassiveBlessings(state, team);
     return { label: 'move', detail, landedAt: { row: action.row, col: action.col } };
   }
 
@@ -175,19 +173,13 @@ function applyAiAction(state, action, team) {
     const target = state.board.flat().find((u) => u?.id === action.targetId);
     const result = applyAttack(state.board, unit, target);
     state.board = result.board;
+    triggerPassiveBlessings(state, team);
     return {
       label: 'attack',
       detail,
       kills: result.killed.length,
       selfLosses: result.explosionKilled?.length ?? 0,
     };
-  }
-
-  if (action.type === 'bless') {
-    const unit = state.board.flat().find((u) => u?.id === action.unitId);
-    const target = state.board.flat().find((u) => u?.id === action.targetId);
-    state.board = applyBless(state.board, unit, target).board;
-    return { label: 'bless', detail };
   }
 
   return null;
