@@ -771,7 +771,59 @@ function buildAssassin(mats) {
   armR.pivot.rotation.set(-0.55, 0, 0.3);
   armL.pivot.rotation.set(-0.25, 0, -0.34);
 
-  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, hood, scarf };
+  return { group, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, hood, scarf };
+}
+
+function buildViper(mats) {
+  const group = new THREE.Group();
+  const scaleMat = standard(0x4ade80, {
+    roughness: 0.48,
+    metalness: 0.18,
+    emissive: 0x14532d,
+    emissiveIntensity: 0.35,
+  });
+  const bellyMat = standard(0xfef08a, { roughness: 0.72, metalness: 0.04 });
+  const poisonMat = standard(0x22c55e, {
+    roughness: 0.32,
+    emissive: 0x15803d,
+    emissiveIntensity: 0.65,
+    transparent: true,
+    opacity: 0.92,
+  });
+
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.24, 0);
+  group.add(torso);
+
+  const segmentGeo = cached('viper-segment', () => new THREE.SphereGeometry(0.075, 12, 10));
+  const coil = [
+    [0, 0, 0], [0.09, 0.015, 0.04], [0.13, 0.04, -0.02], [0.07, 0.035, -0.11],
+    [-0.05, 0.028, -0.13], [-0.11, 0.02, -0.05], [-0.07, 0.012, 0.05],
+  ];
+  for (const [x, y, z] of coil) {
+    part(torso, segmentGeo, scaleMat, { pos: [x, y, z], scale: [1, 0.82, 1] });
+  }
+  part(torso, segmentGeo, bellyMat, { pos: [0, -0.02, 0], scale: [0.85, 0.55, 0.85], shadow: false });
+
+  const head = part(torso, cached('viper-head', () => new THREE.SphereGeometry(0.095, 14, 12)), scaleMat, {
+    pos: [0.15, 0.055, 0.055],
+    scale: [1.15, 0.88, 1.2],
+  });
+  part(head, cached('viper-snout', () => new THREE.ConeGeometry(0.042, 0.11, 8)), scaleMat, {
+    pos: [0, -0.015, 0.09],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  const eyes = addEyes(head, mats, { y: 0.015, z: 0.055, spread: 0.048, size: 0.013 });
+  const fangGeo = cached('viper-fang', () => new THREE.ConeGeometry(0.011, 0.045, 6));
+  part(head, fangGeo, mats.gold, { pos: [-0.022, -0.045, 0.088], rot: [0.35, 0, 0.18], shadow: false });
+  part(head, fangGeo, mats.gold, { pos: [0.022, -0.045, 0.088], rot: [0.35, 0, -0.18], shadow: false });
+  part(head, cached('viper-tongue', () => new THREE.BoxGeometry(0.007, 0.003, 0.055)), poisonMat, {
+    pos: [0, -0.035, 0.12],
+    rot: [0.25, 0, 0],
+    shadow: false,
+  });
+
+  return { group, torso, head, eyes };
 }
 
 function buildBomber(mats) {
@@ -1083,6 +1135,7 @@ const BUILDERS = {
   eagle: buildEagle,
   priest: buildPriest,
   ghost: buildGhost,
+  viper: buildViper,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -1100,6 +1153,7 @@ const SILHOUETTE = {
   eagle: [0.92, 0.92, 0.92],
   priest: [0.94, 1, 0.94],
   ghost: [0.9, 1.08, 0.9],
+  viper: [0.92, 0.78, 0.92],
 };
 
 export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {

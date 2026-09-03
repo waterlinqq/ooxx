@@ -388,6 +388,58 @@ export function applyTeamPriestBlessings(board, team, excludePriestIds = []) {
   return { board: next, targets };
 }
 
+export const POISON_ATK_PENALTY = 1;
+
+/** Applies poison debuff if the unit is not already poisoned. Returns true when newly poisoned. */
+export function applyPoisonEffect(unit) {
+  if (unit.poisoned) return false;
+  unit.poisoned = true;
+  unit.poisonFresh = true;
+  const base = unit.baseAtk ?? unit.atk;
+  unit.atk = Math.max(1, base - POISON_ATK_PENALTY);
+  return true;
+}
+
+export function clearPoison(unit) {
+  if (!unit.poisoned) return;
+  unit.poisoned = false;
+  unit.poisonFresh = false;
+  unit.atk = unit.baseAtk ?? unit.atk;
+}
+
+/** Resolves poison damage at a turn boundary. Skips the tick on the turn poison was applied. */
+export function applyPoisonTurnTicks(board) {
+  const next = cloneBoard(board);
+  const ticks = [];
+  const killed = [];
+
+  for (let r = 0; r < next.length; r++) {
+    for (let c = 0; c < next[r].length; c++) {
+      const unit = next[r][c];
+      if (!unit?.poisoned) continue;
+      if (unit.poisonFresh) {
+        unit.poisonFresh = false;
+        continue;
+      }
+      unit.hp -= 1;
+      ticks.push({ row: r, col: c, unit: { ...unit } });
+      if (unit.hp <= 0) {
+        killed.push({ ...unit, hp: unit.hp, row: r, col: c });
+        next[r][c] = null;
+      }
+    }
+  }
+
+  const explosion = resolveDeathExplosions(next, killed);
+  return {
+    board: explosion.board,
+    ticks,
+    killed,
+    explosionKilled: explosion.explosionKilled,
+    explosions: explosion.explosions,
+  };
+}
+
 /** Transforms attacker into the possessed form of victim, keeping ghost hp and taking victim atk. */
 export function applyPossession(attacker, victim) {
   const cls = CLASSES[victim.classId];
@@ -406,6 +458,9 @@ export function applyPossession(attacker, victim) {
     deathExplosion: attacker.deathExplosion,
     passiveBlessing: attacker.passiveBlessing,
     possessionOnKill: attacker.possessionOnKill,
+    poisonOnHit: attacker.poisonOnHit,
+    poisoned: attacker.poisoned,
+    poisonFresh: attacker.poisonFresh,
   };
 
   attacker.classId = victim.classId;
@@ -422,6 +477,8 @@ export function applyPossession(attacker, victim) {
   attacker.deathExplosion = cls.deathExplosion ?? 0;
   attacker.passiveBlessing = cls.passiveBlessing ?? false;
   attacker.possessionOnKill = false;
+  attacker.poisonOnHit = cls.poisonOnHit ?? false;
+  clearPoison(attacker);
 
   return prev;
 }
@@ -493,7 +550,17 @@ export function applyAttack(board, attacker, target) {
   }
 
   const possessed = [];
+  const poisoned = [];
   const attackerOnBoard = next[attacker.row]?.[attacker.col];
+  if (attackerOnBoard?.poisonOnHit) {
+    for (const hit of hits) {
+      const cell = next[hit.row]?.[hit.col];
+      if (!cell || cell.team === attacker.team) continue;
+      if (applyPoisonEffect(cell)) {
+        poisoned.push({ row: hit.row, col: hit.col, unit: { ...cell } });
+      }
+    }
+  }
   if (attackerOnBoard?.possessionOnKill && canAttackTarget(attacker, target)) {
     const victimIdx = killed.findIndex((k) => k.id === target.id);
     if (victimIdx >= 0) {
@@ -517,6 +584,7 @@ export function applyAttack(board, attacker, target) {
     hits,
     killed,
     possessed,
+    poisoned,
     explosionKilled: explosion.explosionKilled,
     explosions: explosion.explosions,
   };

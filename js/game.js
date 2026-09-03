@@ -23,6 +23,7 @@ import {
   applyDeploy,
   applyAttack,
   applyTeamPriestBlessings,
+  applyPoisonTurnTicks,
   checkWin,
   isTeamEliminated,
   getValidPotionTargets,
@@ -387,7 +388,28 @@ export class Game {
 
   applyTurnBoundaryEffects() {
     if (this.resolvePendingBombs()) return true;
+    if (this.resolvePoisonTicks()) return true;
     return false;
+  }
+
+  resolvePoisonTicks() {
+    const hasPoisoned = this.board.some((row) => row.some((unit) => unit?.poisoned));
+    if (!hasPoisoned) return false;
+
+    const result = applyPoisonTurnTicks(this.board);
+    this.board = result.board;
+
+    const labels = result.ticks.map(({ unit }) => {
+      const cls = CLASSES[unit.classId];
+      return `${cls?.name ?? '單位'} -1（中毒）`;
+    });
+    if (result.explosions?.length > 0) {
+      const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);
+      labels.push(`自爆波及 ${blastHits} 人`);
+    }
+
+    const detail = labels.length > 0 ? `☠️ 中毒結算：${labels.join('、')}` : '☠️ 中毒結算';
+    return this.checkWinAfterItemEffect(detail);
   }
 
   getState() {
@@ -1018,6 +1040,9 @@ export class Game {
     if (result.possessed?.length > 0) {
       const victimName = CLASSES[result.possessed[0].victimClassId]?.name ?? '敵人';
       detail += `，幽魂附身 ${victimName}`;
+    }
+    if (result.poisoned?.length > 0) {
+      detail += `，${result.poisoned.length} 人中毒`;
     }
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);

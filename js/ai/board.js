@@ -16,6 +16,7 @@ import {
   getArtilleryTargets,
   canAttackTarget,
   applyPossession,
+  applyPoisonEffect,
 } from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
@@ -118,6 +119,9 @@ function cloneUnit(unit, searchIndex) {
     deathExplosion: unit.deathExplosion ?? 0,
     passiveBlessing: unit.passiveBlessing ?? false,
     possessionOnKill: unit.possessionOnKill ?? false,
+    poisonOnHit: unit.poisonOnHit ?? false,
+    poisoned: unit.poisoned ?? false,
+    poisonFresh: unit.poisonFresh ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -252,9 +256,19 @@ function unitAttackKey(ctx, unit, row, col) {
   return [mix32(seed), mix32(seed ^ 0x27d4eb2f)];
 }
 
+function unitPoisonKey(ctx, unit, row, col) {
+  if (!unit.poisoned && !unit.poisonFresh) return [0, 0];
+  const cell = row * ctx.size + col;
+  const flags = (unit.poisoned ? 1 : 0) | (unit.poisonFresh ? 2 : 0);
+  const seed = Math.imul(cell + 1, 0x9e3779b9)
+    ^ Math.imul(flags + 1, 0x85ebca6b);
+  return [mix32(seed), mix32(seed ^ 0x27d4eb2f)];
+}
+
 function xorUnitHash(ctx, unit, row, col) {
   xorHash(ctx, unitCellKey(ctx, unit, row, col));
   xorHash(ctx, unitAttackKey(ctx, unit, row, col));
+  xorHash(ctx, unitPoisonKey(ctx, unit, row, col));
 }
 
 function reserveCountKey(ctx, team, classId, count) {
@@ -380,6 +394,33 @@ function resolveExplosions(ctx, directKills, records, casualties) {
   }
 }
 
+function applyPoisonTicksInPlace(ctx, damageRecords, selfLosses, skipRecords) {
+  const { board, size } = ctx;
+  const directKills = [];
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const unit = board[r][c];
+      if (!unit?.poisoned) continue;
+      if (unit.poisonFresh) {
+        xorUnitHash(ctx, unit, r, c);
+        unit.poisonFresh = false;
+        xorUnitHash(ctx, unit, r, c);
+        skipRecords.push({ unit });
+        continue;
+      }
+      const record = { unit, prevHp: unit.hp, row: r, col: c, died: false };
+      record.died = damage(ctx, unit, 1);
+      damageRecords.push(record);
+      if (record.died) directKills.push(unit);
+    }
+  }
+
+  if (directKills.length > 0) {
+    resolveExplosions(ctx, directKills, damageRecords, selfLosses);
+  }
+}
+
 function applyPassivePriestBlessings(ctx, team, records, excludePriestIds = []) {
   const excluded = new Set(excludePriestIds);
   const priests = [];
@@ -435,6 +476,8 @@ export function makeAction(ctx, action) {
     damageRecords: [],
     blessRecords: [],
     possessUndo: null,
+    poisonRecords: [],
+    poisonSkipRecords: [],
     enemyKills: [],
     selfLosses: [],
   };
@@ -489,6 +532,24 @@ export function makeAction(ctx, action) {
     }
 
     resolveExplosions(ctx, directKills, undo.damageRecords, undo.selfLosses);
+
+    if (actor.poisonOnHit) {
+      for (const hit of hits) {
+        if (!isOnBoard(hit) || hit.poisoned) continue;
+        const prevPoisoned = hit.poisoned;
+        const prevPoisonFresh = hit.poisonFresh;
+        const prevAtk = hit.atk;
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        applyPoisonEffect(hit);
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        undo.poisonRecords.push({
+          unit: hit,
+          prevPoisoned,
+          prevPoisonFresh,
+          prevAtk,
+        });
+      }
+    }
   }
 
   const excludePriestIds = action.type === 'deploy' && actor.passiveBlessing ? [actor.id] : [];
@@ -501,7 +562,7 @@ export function makeAction(ctx, action) {
   }
 
   ctx.lastMover = team;
-  advanceTurn(ctx);
+  advanceTurn(ctx, undo);
   return undo;
 }
 
@@ -556,10 +617,13 @@ export function currentSeat(ctx) {
   return ctx.slotCycle ? ctx.slotCycle[ctx.slotIndex].seat : null;
 }
 
-function advanceTurn(ctx) {
+function advanceTurn(ctx, undo) {
   xorActionsLeft(ctx);
   ctx.actionsLeft--;
-  if (ctx.actionsLeft <= 0) flipSide(ctx);
+  if (ctx.actionsLeft <= 0) {
+    applyPoisonTicksInPlace(ctx, undo.damageRecords, undo.selfLosses, undo.poisonSkipRecords);
+    flipSide(ctx);
+  }
   xorActionsLeft(ctx);
 }
 
@@ -576,8 +640,15 @@ function rewindTurn(ctx, undo) {
  * terminal position.
  */
 export function passTurn(ctx) {
-  const undo = { turn: ctx.turn, actionsLeft: ctx.actionsLeft };
+  const undo = {
+    turn: ctx.turn,
+    actionsLeft: ctx.actionsLeft,
+    damageRecords: [],
+    selfLosses: [],
+    poisonSkipRecords: [],
+  };
   xorActionsLeft(ctx);
+  applyPoisonTicksInPlace(ctx, undo.damageRecords, undo.selfLosses, undo.poisonSkipRecords);
   flipSide(ctx);
   xorActionsLeft(ctx);
   return undo;
@@ -587,6 +658,14 @@ export function unpassTurn(ctx, undo) {
   xorActionsLeft(ctx);
   unflipSide(ctx, undo.turn);
   ctx.actionsLeft = undo.actionsLeft;
+  for (const rec of undo.poisonSkipRecords) {
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.poisonFresh = true;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+  for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
+    restoreDamaged(ctx, undo.damageRecords[i]);
+  }
   xorActionsLeft(ctx);
 }
 
@@ -606,6 +685,15 @@ export function unmakeAction(ctx, undo) {
     xorUnitHash(ctx, target, target.row, target.col);
     target.hp = prevHp;
     xorUnitHash(ctx, target, target.row, target.col);
+  }
+
+  for (let i = undo.poisonRecords.length - 1; i >= 0; i--) {
+    const rec = undo.poisonRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.poisoned = rec.prevPoisoned;
+    rec.unit.poisonFresh = rec.prevPoisonFresh;
+    rec.unit.atk = rec.prevAtk;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
 
   if (action.type === 'deploy') {
@@ -628,6 +716,12 @@ export function unmakeAction(ctx, undo) {
 
   for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
     restoreDamaged(ctx, undo.damageRecords[i]);
+  }
+
+  for (const rec of undo.poisonSkipRecords) {
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.poisonFresh = true;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
 }
 

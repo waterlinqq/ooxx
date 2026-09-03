@@ -328,7 +328,8 @@ export class UnitMeshManager {
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
     if (inspected && unit.team === 'red') {
       statsEl.classList.remove('hidden');
-      statsEl.textContent = `ATK ${unit.atk}`;
+      const poisonTag = unit.poisoned ? ' · 中毒' : '';
+      statsEl.textContent = `ATK ${unit.atk}${poisonTag}`;
     } else {
       statsEl.classList.add('hidden');
       statsEl.textContent = '';

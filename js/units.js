@@ -119,6 +119,17 @@ export const CLASSES = {
     possessionOnKill: true,
     desc: '上下左右近戰；擊殺敵人時附身該單位成為友軍（繼承對方攻擊，生命為幽魂剩餘生命）',
   },
+  viper: {
+    id: 'viper',
+    name: '毒蛇',
+    icon: '🐍',
+    hp: 1,
+    atk: 1,
+    range: 1,
+    type: 'melee',
+    poisonOnHit: true,
+    desc: '上下左右近戰；命中使敵人中毒（攻擊-1，每回合結束扣 1 血，不可疊加）',
+  },
 };
 
 export const TEAM = {
@@ -285,6 +296,9 @@ export function createUnit(classId, teamId, ownerSeat = null) {
     deathExplosion: cls.deathExplosion ?? 0,
     passiveBlessing: cls.passiveBlessing ?? false,
     possessionOnKill: cls.possessionOnKill ?? false,
+    poisonOnHit: cls.poisonOnHit ?? false,
+    poisoned: false,
+    poisonFresh: false,
     type: cls.type,
     row: -1,
     col: -1,

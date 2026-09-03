@@ -352,6 +352,7 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
+  if (cls.poisonOnHit) return '上下左右近戰 · 命中使敵中毒';
   if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
   if (cls.deathExplosion) return `八向近戰 · 亡語自爆 ${cls.deathExplosion} 傷`;
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
