@@ -6,6 +6,7 @@ const HIGHLIGHT = {
   attack: { color: 0xef4444, opacity: 0.48, emissive: 0x991b1b },
   deploy: { color: 0x3b82f6, opacity: 0.42, emissive: 0x1d4ed8 },
   win: { color: 0xfbbf24, opacity: 0.55, emissive: 0xb45309 },
+  item: { color: 0xa855f7, opacity: 0.45, emissive: 0x6b21a8 },
 };
 
 function cellKey(r, c) {
@@ -28,6 +29,7 @@ export class HighlightSystem {
     const moves = new Set(state.validMoves.map(([r, c]) => cellKey(r, c)));
     const targets = new Set(state.validTargets.map(([r, c]) => cellKey(r, c)));
     const deploy = new Set(state.validDeploy.map(([r, c]) => cellKey(r, c)));
+    const items = new Set((state.validItemTargets || []).map(([r, c]) => cellKey(r, c)));
     const win = new Set((state.lastWinLine || []).map(([r, c]) => cellKey(r, c)));
 
     for (let r = 0; r < boardSize; r++) {
@@ -35,6 +37,7 @@ export class HighlightSystem {
         const key = cellKey(r, c);
         let type = null;
         if (win.has(key)) type = 'win';
+        else if (items.has(key)) type = 'item';
         else if (deploy.has(key)) type = 'deploy';
         else if (targets.has(key)) type = 'attack';
         else if (moves.has(key)) type = 'move';

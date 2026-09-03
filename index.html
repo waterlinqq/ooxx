@@ -16,6 +16,11 @@
 </head>
 <body>
   <div class="app">
+    <header class="status-bar" id="statusBar">
+      <span class="status-icon">💰</span>
+      <span class="status-text" id="statusMessage">請選擇棋盤模式</span>
+      <span class="coin-badge" id="coinBalance" aria-label="金幣">0</span>
+    </header>
     <main class="game-main" id="gameMain">
       <!-- 戰鬥 -->
       <section class="game-screen active" id="screenBattle" data-screen="battle">
@@ -42,6 +47,14 @@
               <span class="section-hint" id="formationCount"></span>
             </div>
             <div class="roster-lineup" id="formationLineup"></div>
+          </div>
+
+          <div id="formationItemSection">
+            <div class="section-title">
+              本場道具
+              <span class="section-hint">可選 1 個 · 一場限用 1 次</span>
+            </div>
+            <div class="item-grid" id="formationItems"></div>
           </div>
 
           <div>
@@ -89,6 +102,14 @@
           </section>
 
           <div class="battle-panels">
+            <div class="item-battle-bar hidden" id="itemBattleBar">
+              <div class="item-battle-info">
+                <span class="item-battle-icon" id="itemBattleIcon"></span>
+                <span class="item-battle-name" id="itemBattleName"></span>
+              </div>
+              <button class="btn item-use-btn" id="useItemBtn" type="button">使用道具</button>
+              <button class="btn hidden" id="cancelItemBtn" type="button">取消選取</button>
+            </div>
             <button class="btn danger btn-block hidden" id="surrender" type="button">🏳️ 投降</button>
             <div class="panel end-panel hidden" id="endPanel">
               <div class="end-result" id="endResult"></div>
@@ -123,22 +144,24 @@
       <!-- 背包 -->
       <section class="game-screen" id="screenBag" data-screen="bag">
         <div class="screen-scroll">
-          <div class="placeholder-page">
-            <div class="placeholder-icon">🎒</div>
-            <h2 class="placeholder-title">背包</h2>
-            <p class="placeholder-desc">即將開放</p>
+          <div class="screen-hero compact">
+            <div class="screen-hero-icon">🎒</div>
+            <h2 class="screen-title">背包</h2>
+            <p class="screen-desc">對戰前在編隊畫面選擇要帶入的道具</p>
           </div>
+          <div class="item-grid item-grid-readonly" id="bagGrid"></div>
         </div>
       </section>
 
       <!-- 商店 -->
       <section class="game-screen" id="screenShop" data-screen="shop">
         <div class="screen-scroll">
-          <div class="placeholder-page">
-            <div class="placeholder-icon">🏪</div>
-            <h2 class="placeholder-title">商店</h2>
-            <p class="placeholder-desc">即將開放</p>
+          <div class="screen-hero compact">
+            <div class="screen-hero-icon">🏪</div>
+            <h2 class="screen-title">商店</h2>
+            <p class="screen-desc">使用金幣購買消耗品</p>
           </div>
+          <div class="item-grid" id="shopGrid"></div>
         </div>
       </section>
     </main>

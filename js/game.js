@@ -25,10 +25,17 @@ import {
   applyPriestBlessing,
   checkWin,
   isTeamEliminated,
+  getValidPotionTargets,
+  getValidBombCells,
+  healUnitAt,
+  applyTrapDamage,
+  resolveDeathExplosions,
 } from './rules.js';
 import { chooseAiAction } from './ai.js';
 import { createSearchContext } from './ai/board.js';
 import { evaluate } from './ai/evaluate.js';
+import { getItem, getCoinReward } from './items.js';
+import { getSaveSnapshot, addCoins, getInventoryCount, consumeItem } from './save.js';
 
 export class Game {
   constructor() {
@@ -55,6 +62,11 @@ export class Game {
     this.actedUnitIds = new Set();
     this.playAttackFx = null;
     this.listeners = [];
+    this.equippedItem = null;
+    this.itemUsed = false;
+    this.itemTargeting = null;
+    this.pendingBombs = [];
+    this.lastCoinReward = 0;
   }
 
   subscribe(fn) {
@@ -142,6 +154,7 @@ export class Game {
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
+    this.equippedItem = null;
     this.message = '請選擇棋盤模式';
     this.notify();
   }
@@ -169,8 +182,200 @@ export class Game {
     this.notify();
   }
 
+  selectEquippedItem(itemId) {
+    if (this.phase !== 'formation') return;
+
+    if (itemId === null) {
+      this.equippedItem = null;
+      this.message = this.getFormationMessage();
+      this.notify();
+      return;
+    }
+
+    const item = getItem(itemId);
+    if (!item) return;
+
+    if (getInventoryCount(itemId) <= 0) {
+      this.message = `背包沒有 ${item.name}`;
+      this.notify();
+      return;
+    }
+
+    this.equippedItem = itemId;
+    this.message = `${this.getFormationMessage()} · 已選 ${item.name}`;
+    this.notify();
+  }
+
+  canUseItem() {
+    return this.phase === 'battle'
+      && this.canHumanAct()
+      && !this.animating
+      && this.equippedItem
+      && !this.itemUsed
+      && !this.itemTargeting;
+  }
+
+  getHighlightItemTargets() {
+    if (!this.itemTargeting) return [];
+
+    if (this.itemTargeting === 'potion') {
+      return getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
+    }
+
+    if (this.itemTargeting === 'bomb') {
+      const occupied = new Set(this.pendingBombs.map(({ row, col }) => `${row},${col}`));
+      return getValidBombCells(this.board).filter(([r, c]) => !occupied.has(`${r},${c}`));
+    }
+
+    return [];
+  }
+
+  beginUseItem() {
+    if (!this.canUseItem()) return;
+
+    const item = getItem(this.equippedItem);
+    if (!item) return;
+
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.inspectedUnitId = null;
+
+    this.itemTargeting = this.equippedItem;
+    const hint = item.targeting === 'friendly_unit'
+      ? '點選要治療的己方單位'
+      : '點選空格放置炸彈';
+    this.message = `${item.icon} ${item.name}：${hint}`;
+    this.notify();
+  }
+
+  cancelItemTargeting() {
+    if (!this.itemTargeting) return;
+    this.itemTargeting = null;
+    this.message = this.getPlayerTurnMessage();
+    this.notify();
+  }
+
+  tryItemTarget(row, col) {
+    if (!this.itemTargeting || this.phase !== 'battle' || !this.canHumanAct()) return;
+
+    if (this.itemTargeting === 'potion') {
+      const unit = this.board[row]?.[col];
+      if (!unit || !this.ownsHumanUnit(unit)) return;
+
+      const valid = this.getHighlightItemTargets();
+      if (!valid.some(([r, c]) => r === row && c === col)) return;
+
+      const amount = getItem('potion')?.effect?.amount ?? 2;
+      const result = healUnitAt(this.board, row, col, amount);
+      this.board = result.board;
+      const cls = CLASSES[unit.classId];
+      this.finishItemUse(`使用紅藥水治療 ${cls.name}`);
+      return;
+    }
+
+    if (this.itemTargeting === 'bomb') {
+      if (this.board[row]?.[col]) return;
+
+      const valid = this.getHighlightItemTargets();
+      if (!valid.some(([r, c]) => r === row && c === col)) return;
+
+      this.pendingBombs.push({ row, col });
+      this.finishItemUse('放置炸彈');
+    }
+  }
+
+  finishItemUse(label) {
+    consumeItem(this.equippedItem);
+    this.itemUsed = true;
+    this.itemTargeting = null;
+
+    if (!this.checkWinAfterItemEffect(label)) {
+      this.message = `${label} — 還可行動 ${this.actionsRemaining}/${this.getActionsPerTurn()} 次`;
+      this.notify();
+    }
+  }
+
+  checkWinAfterItemEffect(detail) {
+    for (const team of ['blue', 'red']) {
+      const winLine = checkWin(this.board, team);
+      if (winLine) {
+        this.lastWinLine = winLine;
+        this.handleRoundWin(team, `${detail}後連成 ${this.getWinCountLabel()} 子！`);
+        return true;
+      }
+    }
+
+    for (const team of ['blue', 'red']) {
+      const enemy = team === 'blue' ? 'red' : 'blue';
+      const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
+      if (isTeamEliminated(this.board, enemy, enemyReserve)) {
+        this.lastWinLine = null;
+        this.handleRoundWin(team, `${detail}後全滅對手！`);
+        return true;
+      }
+    }
+
+    this.message = detail;
+    this.notify();
+    return false;
+  }
+
+  resolvePendingBombs() {
+    if (this.pendingBombs.length === 0) return false;
+
+    const bombs = [...this.pendingBombs];
+    this.pendingBombs = [];
+    let board = this.board;
+    const labels = [];
+    const allKilled = [];
+
+    for (const { row, col } of bombs) {
+      const result = applyTrapDamage(board, row, col, 2);
+      board = result.board;
+      if (result.hit) {
+        const cls = CLASSES[result.hit.classId];
+        labels.push(`${cls?.name ?? '單位'} -2`);
+      }
+      if (result.killed) allKilled.push(result.killed);
+    }
+
+    if (allKilled.length > 0) {
+      const explosion = resolveDeathExplosions(board, allKilled);
+      board = explosion.board;
+    }
+
+    this.board = board;
+    const detail = labels.length > 0 ? `💣 炸彈引爆：${labels.join('、')}` : '💣 炸彈引爆';
+    return this.checkWinAfterItemEffect(detail);
+  }
+
+  validateEquippedItemForBattle() {
+    if (!this.equippedItem) return;
+    const item = getItem(this.equippedItem);
+    if (!item || getInventoryCount(this.equippedItem) <= 0) {
+      this.equippedItem = null;
+      this.message = item
+        ? `${this.getFormationMessage()} · ${item.name}已不在背包，未帶道具`
+        : `${this.getFormationMessage()} · 未帶道具`;
+    }
+  }
+
+  resetBattleItemState() {
+    this.itemUsed = false;
+    this.itemTargeting = null;
+    this.pendingBombs = [];
+    this.lastCoinReward = 0;
+  }
+
+  applyTurnBoundaryEffects() {
+    if (this.resolvePendingBombs()) return true;
+    return false;
+  }
+
   getState() {
     const mode = this.getModeConfig();
+    const save = getSaveSnapshot();
+    const equippedItem = this.equippedItem;
     return {
       boardMode: this.boardMode,
       boardSize: mode.size,
@@ -208,6 +413,16 @@ export class Game {
       actionsPerTurn: this.getActionsPerTurn(),
       actedUnitIds: [...this.actedUnitIds],
       startButtonLabel: this.getStartButtonLabel(),
+      equippedItem,
+      itemUsed: this.itemUsed,
+      itemTargeting: this.itemTargeting,
+      validItemTargets: this.getHighlightItemTargets(),
+      pendingBombs: this.pendingBombs.map((b) => ({ ...b })),
+      coins: save.coins,
+      inventory: save.inventory,
+      lastCoinReward: this.lastCoinReward,
+      canUseItem: this.canUseItem(),
+      itemDef: equippedItem ? getItem(equippedItem) : null,
     };
   }
 
@@ -299,6 +514,7 @@ export class Game {
       this.notify();
       return;
     }
+    this.validateEquippedItemForBattle();
     this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
   }
@@ -328,6 +544,7 @@ export class Game {
     this.finalScores = null;
     this.phase = 'battle';
     this.resetTurnActions();
+    this.resetBattleItemState();
 
     if (this.is2v2()) {
       this.message = `2v2 單局 — ${formatSlotLabel(this.currentSlot)} 先攻：藍1 為你，其餘由 AI 代打`;
@@ -362,6 +579,7 @@ export class Game {
 
   selectReserve(unitId) {
     if (!this.canHumanAct()) return;
+    if (this.itemTargeting) return;
     const unit = this.getCurrentReserve().find((u) => u.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
     this.draggingUnitId = null;
@@ -396,6 +614,10 @@ export class Game {
 
   beginDragUnit(unitId) {
     if (!this.canHumanAct()) return;
+    if (this.itemTargeting) {
+      this.cancelItemTargeting();
+      return;
+    }
     if (this.actedUnitIds.has(unitId)) return;
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
@@ -455,6 +677,7 @@ export class Game {
 
   endTurnEarly() {
     if (!this.canHumanAct()) return;
+    if (this.itemTargeting) this.cancelItemTargeting();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
@@ -501,6 +724,11 @@ export class Game {
   clickCell(row, col) {
     if (this.phase !== 'battle' || this.animating) return;
     if (!this.canHumanAct()) return;
+
+    if (this.itemTargeting) {
+      this.tryItemTarget(row, col);
+      return;
+    }
 
     if (this.selectedReserveId) {
       this.tryDeploy(row, col);
@@ -661,9 +889,12 @@ export class Game {
 
     for (let i = 1; i <= order.length; i++) {
       const nextSlot = order[(startIdx + i) % order.length];
+
       this.currentSlot = nextSlot;
       this.syncCurrentPlayerFromSlot();
       this.resetTurnActions();
+
+      if (this.applyTurnBoundaryEffects()) return;
 
       if (this.hasValidActionsForSlot(nextSlot)) {
         this.message = this.getPlayerTurnMessage();
@@ -681,6 +912,9 @@ export class Game {
   switchPlayer() {
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
     this.resetTurnActions();
+
+    if (this.applyTurnBoundaryEffects()) return;
+
     this.message = this.getPlayerTurnMessage();
     this.notify();
     this.scheduleAiIfNeeded();
@@ -807,9 +1041,20 @@ export class Game {
   handleRoundWin(winner, detail, reason = 'victory') {
     this.phase = 'gameEnd';
     this.endReason = reason;
+
+    const didWin = winner === 'blue';
+    const isDraw = winner === null;
+    const reward = isDraw
+      ? getCoinReward(this.boardMode, false)
+      : getCoinReward(this.boardMode, didWin);
+
+    addCoins(reward);
+    this.lastCoinReward = reward;
+
+    const coinText = reward > 0 ? ` · +${reward} 金幣` : '';
     this.message = winner
-      ? `${detail} — ${TEAM[winner].name}獲勝！`
-      : `${detail} — 平手！`;
+      ? `${detail} — ${TEAM[winner].name}獲勝！${coinText}`
+      : `${detail} — 平手！${coinText}`;
     this.notify();
   }
 

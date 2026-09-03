@@ -419,3 +419,44 @@ export function resetBoardState() {
     redReserve: [],
   };
 }
+
+export function getValidPotionTargets(board, team, filterFn = () => true) {
+  const cells = [];
+  const size = boardSize(board);
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const unit = board[r][c];
+      if (unit?.team === team && filterFn(unit) && unit.hp < unit.maxHp) {
+        cells.push([r, c]);
+      }
+    }
+  }
+  return cells;
+}
+
+export function getValidBombCells(board) {
+  return getValidDeployCells(board);
+}
+
+export function healUnitAt(board, row, col, amount) {
+  const next = cloneBoard(board);
+  const unit = next[row][col];
+  if (!unit) return { board, unit: null };
+  unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+  return { board: next, unit };
+}
+
+export function applyTrapDamage(board, row, col, damage) {
+  const next = cloneBoard(board);
+  const unit = next[row][col];
+  if (!unit) return { board: next, hit: null, killed: null };
+
+  unit.hp -= damage;
+  const hit = { ...unit };
+  let killed = null;
+  if (unit.hp <= 0) {
+    killed = { ...unit, hp: unit.hp };
+    next[row][col] = null;
+  }
+  return { board: next, hit, killed };
+}

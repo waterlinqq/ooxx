@@ -1624,3 +1624,123 @@ body {
   font-size: 1.1rem;
   line-height: 1;
 }
+
+.coin-badge {
+  font-weight: 700;
+  color: #fbbf24;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.15);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 0 4px 16px;
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 140px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+  text-align: center;
+  color: var(--text);
+}
+
+.item-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.item-card.item-equipped {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+
+.item-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.item-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.item-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.item-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.item-price,
+.item-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.item-action {
+  margin-top: auto;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.item-battle-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.item-battle-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-battle-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.item-battle-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.item-use-btn {
+  flex-shrink: 0;
+}
+
+#formationItemSection {
+  margin-bottom: 16px;
+}

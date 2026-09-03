@@ -2,6 +2,10 @@ import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
+import { ITEMS, SHOP_PRICES } from './items.js';
+import { loadSave, buyItem, canAfford } from './save.js';
+
+loadSave();
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -41,6 +45,16 @@ const surrenderBtn = document.getElementById('surrender');
 const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
 const winConditionTextEl = document.getElementById('winConditionText');
+const statusMessageEl = document.getElementById('statusMessage');
+const coinBalanceEl = document.getElementById('coinBalance');
+const formationItemsEl = document.getElementById('formationItems');
+const bagGridEl = document.getElementById('bagGrid');
+const shopGridEl = document.getElementById('shopGrid');
+const itemBattleBarEl = document.getElementById('itemBattleBar');
+const itemBattleIconEl = document.getElementById('itemBattleIcon');
+const itemBattleNameEl = document.getElementById('itemBattleName');
+const useItemBtn = document.getElementById('useItemBtn');
+const cancelItemBtn = document.getElementById('cancelItemBtn');
 
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
@@ -278,6 +292,7 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
   onDragCancel: () => game.cancelDrag(),
   onReserveSelect: (unitId) => game.selectReserve(unitId),
   onUnitInspect: (unitId) => game.inspectUnit(unitId),
+  onItemTarget: (row, col) => game.tryItemTarget(row, col),
   canControlUnit,
 });
 
@@ -368,6 +383,115 @@ function renderClassPicker() {
   }
 
   renderClassDetail(selectedClassId);
+}
+
+function createItemCard(item, { count, price, equipped, readonly, onSelect, onBuy }) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'item-card';
+  if (equipped) card.classList.add('item-equipped');
+
+  const owned = count ?? 0;
+  const canBuy = price != null && canAfford(item.id);
+
+  if (onBuy) {
+    card.disabled = !canBuy;
+    if (!canBuy) card.title = '金幣不足';
+  } else if (onSelect && item.id !== null && owned <= 0) {
+    card.disabled = true;
+  }
+
+  card.innerHTML = `
+    <span class="item-icon">${item.icon ?? '📦'}</span>
+    <span class="item-name">${item.name ?? '不帶道具'}</span>
+    <span class="item-desc">${item.desc ?? '本場不攜帶任何道具'}</span>
+    ${price != null ? `<span class="item-price">💰 ${price}</span>` : ''}
+    ${count != null && item.id ? `<span class="item-count">×${owned}</span>` : ''}
+    ${onBuy ? '<span class="item-action">購買</span>' : ''}
+  `;
+
+  if (onSelect) card.addEventListener('click', () => onSelect(item.id));
+  if (onBuy) card.addEventListener('click', () => onBuy(item.id));
+
+  if (readonly) card.disabled = false;
+
+  return card;
+}
+
+function renderCoinBalance(state) {
+  coinBalanceEl.textContent = String(state.coins ?? 0);
+  statusMessageEl.textContent = state.message ?? '';
+}
+
+function renderFormationItems(state) {
+  formationItemsEl.innerHTML = '';
+
+  const noneItem = { id: null, name: '不帶道具', icon: '➖', desc: '本場不攜帶任何道具' };
+  const noneCard = createItemCard(noneItem, {
+    equipped: state.equippedItem === null,
+    onSelect: (id) => game.selectEquippedItem(id),
+  });
+  formationItemsEl.appendChild(noneCard);
+
+  for (const item of Object.values(ITEMS)) {
+    const count = state.inventory[item.id] ?? 0;
+    const card = createItemCard(item, {
+      count,
+      equipped: state.equippedItem === item.id,
+      onSelect: (id) => game.selectEquippedItem(id),
+    });
+    formationItemsEl.appendChild(card);
+  }
+}
+
+function renderBag(state) {
+  bagGridEl.innerHTML = '';
+
+  for (const item of Object.values(ITEMS)) {
+    const count = state.inventory[item.id] ?? 0;
+    const card = createItemCard(item, { count, readonly: true });
+    card.disabled = false;
+    bagGridEl.appendChild(card);
+  }
+}
+
+function renderShop(state) {
+  shopGridEl.innerHTML = '';
+
+  for (const item of Object.values(ITEMS)) {
+    const card = createItemCard(item, {
+      price: SHOP_PRICES[item.id],
+      onBuy: (id) => {
+        const result = buyItem(id);
+        if (result.ok) {
+          game.notify();
+        }
+      },
+    });
+    shopGridEl.appendChild(card);
+  }
+}
+
+function renderBattleItem(state) {
+  const show = state.phase === 'battle' && state.equippedItem && state.itemDef;
+  itemBattleBarEl.classList.toggle('hidden', !show);
+  if (!show) return;
+
+  itemBattleIconEl.textContent = state.itemDef.icon;
+  itemBattleNameEl.textContent = state.itemDef.name;
+
+  const targeting = Boolean(state.itemTargeting);
+  cancelItemBtn.classList.toggle('hidden', !targeting);
+  useItemBtn.classList.toggle('hidden', targeting || state.itemUsed);
+
+  if (state.itemUsed) {
+    useItemBtn.disabled = true;
+    useItemBtn.textContent = '已使用';
+    return;
+  }
+
+  useItemBtn.textContent = '使用道具';
+  useItemBtn.disabled = !state.canUseItem || state.animating;
 }
 
 function renderFormation(state) {
@@ -463,7 +587,10 @@ function renderBattlePanels(state) {
   backToLobbyBtn.classList.toggle('hidden', !showEnd);
 
   if (showEnd) {
-    endResultEl.textContent = state.message;
+    const coinLine = state.lastCoinReward > 0
+      ? `\n💰 +${state.lastCoinReward} 金幣`
+      : '';
+    endResultEl.textContent = state.message + coinLine;
   }
 }
 
@@ -492,7 +619,14 @@ function render(state) {
 
   renderBattlePanels(state);
   renderLobbyFooter(state);
-  if (inFormation) renderFormation(state);
+  renderCoinBalance(state);
+  if (inFormation) {
+    renderFormation(state);
+    renderFormationItems(state);
+  }
+  if (inBattleFlow) renderBattleItem(state);
+  if (activeNav === 'bag') renderBag(state);
+  if (activeNav === 'shop') renderShop(state);
 
   const showBoard = inBattleFlow && activeNav === 'battle';
   board3d.setVisible(showBoard);
@@ -526,6 +660,8 @@ startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => game.restartSeries());
 backToLobbyBtn.addEventListener('click', () => game.backToLobby());
 surrenderBtn.addEventListener('click', () => game.surrender());
+useItemBtn.addEventListener('click', () => game.beginUseItem());
+cancelItemBtn.addEventListener('click', () => game.cancelItemTargeting());
 
 game.subscribe(render);
 render(game.getState());

@@ -185,6 +185,14 @@ export class InputController {
     }
     if (!this.state || this.state.animating) return;
 
+    if (this.state.itemTargeting) {
+      const pick = this.pickTarget(event);
+      if (pick && (pick.kind === 'tile' || pick.kind === 'unit')) {
+        this.callbacks.onItemTarget(pick.row, pick.col);
+      }
+      return;
+    }
+
     const pick = this.pickTarget(event);
     if (!pick) {
       if (this.state.draggingUnitId) {

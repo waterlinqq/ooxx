@@ -4,6 +4,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { TileGrid, TILE_PITCH } from './TileGrid.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
+import { BombMarkerManager } from './BombMarkerManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
@@ -104,6 +105,7 @@ export class BoardScene {
     this.unitManager = new UnitMeshManager(this.scene);
     this.reserveZone = new ReserveZone3d(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
+    this.bombMarkers = new BombMarkerManager(this.tileGrid);
     this.attackFx = new AttackFx3d({
       scene: this.scene,
       camera: this.camera,
@@ -229,6 +231,7 @@ export class BoardScene {
     this.reserveZone.setBoardSize(state.boardSize);
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
+    this.bombMarkers.sync(state.pendingBombs ?? []);
     this.unitManager.syncBoard(state.board, state);
     this.reserveZone.sync(state);
     this.input.setState(state);
@@ -254,6 +257,7 @@ export class BoardScene {
   clear() {
     this.unitManager.syncBoard([], { actedUnitIds: [], draggingUnitId: null });
     this.highlightSystem.clear();
+    this.bombMarkers.clear();
   }
 
   animate() {
