@@ -37,7 +37,14 @@
               </div>
             </div>
             <div class="online-waiting hidden" id="onlineWaiting">
-              <p class="online-match-countdown hidden" id="onlineMatchCountdown">10</p>
+              <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
+                <div class="online-match-rings" aria-hidden="true">
+                  <span class="online-match-ring"></span>
+                  <span class="online-match-ring"></span>
+                  <span class="online-match-ring"></span>
+                </div>
+                <p class="online-match-label">匹配中<span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+              </div>
               <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
               <button class="btn" id="cancelRoomBtn" type="button">取消</button>
             </div>

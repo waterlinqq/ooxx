@@ -32,12 +32,12 @@ fi
 echo "Build with VITE_API_BASE=$VITE_API_BASE"
 VITE_API_BASE="$VITE_API_BASE" npm run build
 
-aws s3 sync dist/ "s3://$BUCKET/" \
+aws s3 sync apps/web/dist/ "s3://$BUCKET/" \
   --profile "$PROFILE" \
   --exclude index.html \
   --cache-control "public,max-age=31536000,immutable"
 
-aws s3 cp dist/index.html "s3://$BUCKET/index.html" \
+aws s3 cp apps/web/dist/index.html "s3://$BUCKET/index.html" \
   --profile "$PROFILE" \
   --content-type "text/html; charset=utf-8" \
   --cache-control "no-cache"

@@ -19,6 +19,7 @@ async function createGuestToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error('無法建立訪客身份');
   const data = await res.json();

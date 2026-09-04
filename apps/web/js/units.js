@@ -1,1 +1,1 @@
-export * from '../shared/units.js';
+export * from '@ooxx/shared/units.js';

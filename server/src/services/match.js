@@ -30,13 +30,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 
 async function loadMapProps() {
-  const mod = await import(pathToFileURL(path.join(repoRoot, 'js/mapProps.js')).href);
+  const mod = await import(pathToFileURL(path.join(repoRoot, 'apps/web/js/mapProps.js')).href);
   return mod;
 }
 
 async function loadAiEvaluate() {
-  const boardMod = await import(pathToFileURL(path.join(repoRoot, 'js/ai/board.js')).href);
-  const evalMod = await import(pathToFileURL(path.join(repoRoot, 'js/ai/evaluate.js')).href);
+  const boardMod = await import(pathToFileURL(path.join(repoRoot, 'apps/web/js/ai/board.js')).href);
+  const evalMod = await import(pathToFileURL(path.join(repoRoot, 'apps/web/js/ai/evaluate.js')).href);
   return { createSearchContext: boardMod.createSearchContext, evaluate: evalMod.evaluate };
 }
 

@@ -1,6 +1,6 @@
 // Head-to-head bench for two AI builds. Colours are swapped every other game so the
 // first-move advantage cancels out and the win rate reflects engine strength only.
-import { getBoardMode, createRandomRoster } from '../js/units.js';
+import { getBoardMode, createRandomRoster } from '../apps/web/js/units.js';
 import { runMatch, createRng } from './lib/match.mjs';
 
 const DEFAULT_MODES = ['3x3', '4x4', '5x5'];
@@ -10,8 +10,8 @@ function parseArgs(argv) {
     games: 40,
     modes: null,
     seed: 20260902,
-    a: '../js/ai.js',
-    b: '../js/ai-legacy.js',
+    a: '../apps/web/js/ai.js',
+    b: '../apps/web/js/ai-legacy.js',
     aName: null,
     bName: null,
     difficulty: 'hard',

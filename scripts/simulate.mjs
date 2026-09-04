@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { chooseAiAction } from '../js/ai.js';
-import { getBoardMode } from '../js/units.js';
+import { chooseAiAction } from '../apps/web/js/ai.js';
+import { getBoardMode } from '../apps/web/js/units.js';
 import { runMatch, createRng } from './lib/match.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

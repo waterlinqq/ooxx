@@ -1,1 +1,1 @@
-export * from '../shared/mapPropUtils.js';
+export * from '@ooxx/shared/mapPropUtils.js';

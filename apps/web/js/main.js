@@ -57,7 +57,7 @@ const onlineLobbyActionsEl = document.getElementById('onlineLobbyActions');
 const onlineWaitingEl = document.getElementById('onlineWaiting');
 const waitingRoomCodeEl = document.getElementById('waitingRoomCode');
 const waitingRoomCodeLineEl = document.getElementById('waitingRoomCodeLine');
-const onlineMatchCountdownEl = document.getElementById('onlineMatchCountdown');
+const onlineMatchIndicatorEl = document.getElementById('onlineMatchIndicator');
 const findMatchBtn = document.getElementById('findMatchBtn');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
@@ -1030,12 +1030,9 @@ function renderOnlineLobby(state) {
   if (waiting) {
     const matching = Boolean(state.matchmaking);
     waitingRoomCodeLineEl.classList.toggle('hidden', matching);
-    onlineMatchCountdownEl.classList.toggle('hidden', !matching);
+    onlineMatchIndicatorEl.classList.toggle('hidden', !matching);
 
-    if (matching) {
-      const remainSec = Math.max(0, Math.ceil((state.matchmakingRemainingMs ?? 0) / 1000));
-      onlineMatchCountdownEl.textContent = String(remainSec);
-    } else {
+    if (!matching) {
       waitingRoomCodeEl.textContent = state.roomCode ?? '';
     }
   }

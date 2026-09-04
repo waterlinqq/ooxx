@@ -1,23 +1,23 @@
 {
   "name": "ooxx",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "server",
+    "shared"
+  ],
   "scripts": {
-    "dev": "vite",
-    "dev:server": "npm run dev --prefix server",
+    "dev": "npm run dev --workspace=@ooxx/web",
+    "dev:server": "npm run dev --workspace=@ooxx/server",
     "dev:all": "npx concurrently -k \"npm run dev\" \"npm run dev:server\"",
     "docker:up": "docker compose up -d db",
-    "migrate": "npm run migrate --prefix server",
-    "build": "vite build",
-    "preview": "vite preview",
+    "migrate": "npm run migrate --workspace=@ooxx/server",
+    "build": "npm run build --workspace=@ooxx/web",
+    "preview": "npm run preview --workspace=@ooxx/web",
     "sim": "node scripts/simulate.mjs",
     "arena": "node scripts/arena.mjs"
   },
-  "dependencies": {
-    "three": "^0.170.0"
-  },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "vite": "^6.0.0"
+    "concurrently": "^9.1.2"
   }
 }

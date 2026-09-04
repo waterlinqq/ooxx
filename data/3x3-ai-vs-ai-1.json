@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-04T03:38:04.776Z",
+  "generatedAt": "2026-09-04T17:51:20.091Z",
   "config": {
     "games": 1,
     "boardMode": "3x3",
@@ -29,7 +29,7 @@
       "turn_limit": 0
     },
     "uniqueScripts": 1,
-    "avgMovesPerRound": 11
+    "avgMovesPerRound": 21
   },
   "games": [
     {
@@ -56,8 +56,8 @@
               2
             ]
           ],
-          "totalTurns": 11,
-          "totalMoves": 11,
+          "totalTurns": 21,
+          "totalMoves": 21,
           "moves": [
             {
               "turn": 1,
@@ -78,7 +78,7 @@
               "label": "deploy",
               "detail": {
                 "type": "deploy",
-                "classId": "swordsman",
+                "classId": "archer",
                 "row": 0,
                 "col": 0
               }
@@ -90,9 +90,9 @@
               "label": "deploy",
               "detail": {
                 "type": "deploy",
-                "classId": "mage",
-                "row": 0,
-                "col": 1
+                "classId": "shield",
+                "row": 2,
+                "col": 2
               }
             },
             {
@@ -102,31 +102,22 @@
               "label": "deploy",
               "detail": {
                 "type": "deploy",
-                "classId": "archer",
-                "row": 2,
-                "col": 1
+                "classId": "shield",
+                "row": 0,
+                "col": 2
               }
             },
             {
               "turn": 5,
               "team": "blue",
               "actionRemainingAfter": 0,
-              "label": "attack",
+              "label": "deploy",
               "detail": {
-                "type": "attack",
-                "classId": "swordsman",
-                "targetClassId": "archer",
-                "from": {
-                  "row": 1,
-                  "col": 1
-                },
-                "target": {
-                  "row": 2,
-                  "col": 1
-                }
-              },
-              "kills": 1,
-              "selfLosses": 0
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 1
+              }
             },
             {
               "turn": 6,
@@ -135,7 +126,7 @@
               "label": "deploy",
               "detail": {
                 "type": "deploy",
-                "classId": "shield",
+                "classId": "swordsman",
                 "row": 2,
                 "col": 1
               }
@@ -144,22 +135,142 @@
               "turn": 7,
               "team": "blue",
               "actionRemainingAfter": 0,
-              "label": "deploy",
+              "label": "attack",
               "detail": {
-                "type": "deploy",
-                "classId": "archer",
-                "row": 1,
-                "col": 2
-              }
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 0,
+                  "col": 0
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
             },
             {
               "turn": 8,
               "team": "red",
               "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "swordsman",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 1,
+                  "col": 1
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 9,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 0,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 10,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "swordsman",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 1,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 11,
+              "team": "blue",
+              "actionRemainingAfter": 0,
               "label": "move",
               "detail": {
                 "type": "move",
-                "classId": "swordsman",
+                "classId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "to": {
+                  "row": 1,
+                  "col": 1
+                }
+              }
+            },
+            {
+              "turn": 12,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 0
+              }
+            },
+            {
+              "turn": 13,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "shield",
+                "from": {
+                  "row": 2,
+                  "col": 2
+                },
+                "to": {
+                  "row": 1,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 14,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
                 "from": {
                   "row": 0,
                   "col": 0
@@ -171,19 +282,19 @@
               }
             },
             {
-              "turn": 9,
+              "turn": 15,
               "team": "blue",
               "actionRemainingAfter": 0,
               "label": "deploy",
               "detail": {
                 "type": "deploy",
-                "classId": "shield",
+                "classId": "archer",
                 "row": 0,
                 "col": 0
               }
             },
             {
-              "turn": 10,
+              "turn": 16,
               "team": "red",
               "actionRemainingAfter": 0,
               "label": "move",
@@ -191,23 +302,107 @@
                 "type": "move",
                 "classId": "swordsman",
                 "from": {
-                  "row": 1,
-                  "col": 0
+                  "row": 2,
+                  "col": 1
                 },
                 "to": {
                   "row": 2,
-                  "col": 0
+                  "col": 2
                 }
               }
             },
             {
-              "turn": 11,
+              "turn": 17,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "mage",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "target": {
+                  "row": 1,
+                  "col": 0
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 18,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "mage",
+                "from": {
+                  "row": 1,
+                  "col": 0
+                },
+                "target": {
+                  "row": 1,
+                  "col": 1
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 19,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "mage",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "target": {
+                  "row": 1,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 20,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "shield",
+                "from": {
+                  "row": 2,
+                  "col": 2
+                },
+                "target": {
+                  "row": 1,
+                  "col": 2
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 21,
               "team": "blue",
               "actionRemainingAfter": 0,
               "label": "move",
               "detail": {
                 "type": "move",
-                "classId": "shield",
+                "classId": "archer",
                 "from": {
                   "row": 0,
                   "col": 0

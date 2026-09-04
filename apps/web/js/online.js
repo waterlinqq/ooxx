@@ -1,4 +1,4 @@
-import { MSG, MATCHMAKING_TIMEOUT_MS } from '../shared/protocol.js';
+import { MSG, MATCHMAKING_TIMEOUT_MS } from '@ooxx/shared/protocol.js';
 import { ensureGuestToken, refreshGuestToken } from './guestAuth.js';
 import { wsUrl } from './config.js';
 import {
@@ -84,9 +84,14 @@ export class OnlineClient {
     if (this.ws?.readyState === WebSocket.CONNECTING) {
       await new Promise((resolve, reject) => {
         const ws = this.ws;
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('連線逾時'));
+        }, 5000);
         const onOpen = () => { cleanup(); resolve(); };
         const onError = () => { cleanup(); reject(new Error('WebSocket 連線失敗')); };
         const cleanup = () => {
+          clearTimeout(timer);
           ws.removeEventListener('open', onOpen);
           ws.removeEventListener('error', onError);
         };
@@ -106,16 +111,27 @@ export class OnlineClient {
     let token = await ensureGuestToken();
     await new Promise((resolve, reject) => {
       this.ws = new WebSocket(wsUrl());
-      this.ws.onopen = () => resolve();
-      this.ws.onerror = () => reject(new Error('WebSocket 連線失敗'));
-      this.ws.onclose = () => {
-        this.authenticated = false;
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => {
-          this.reconnect().catch(() => {});
-        }, 2000);
-      };
+      const timer = setTimeout(() => {
+        this.ws.onclose = null;
+        this.ws.close();
+        reject(new Error('連線逾時'));
+      }, 5000);
       this.ws.onmessage = (ev) => this.handleMessage(ev.data);
+      this.ws.onopen = () => {
+        clearTimeout(timer);
+        this.ws.onclose = () => {
+          this.authenticated = false;
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnect().catch(() => {});
+          }, 2000);
+        };
+        resolve();
+      };
+      this.ws.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error('WebSocket 連線失敗'));
+      };
     });
 
     try {
@@ -412,15 +428,26 @@ export class OnlineClient {
   async findMatch(boardMode, nickname) {
     this.selectedBoardMode = boardMode;
     this.lastError = null;
+    this.beginLocalMatchmaking(boardMode);
+    void this.tryServerMatch(boardMode, nickname);
+  }
+
+  async tryServerMatch(boardMode, nickname) {
+    const gen = this.matchmakingGen;
     try {
       await this.connect();
+      if (gen !== this.matchmakingGen || this.gameState) return;
       await this.send(MSG.FIND_MATCH, { boardMode, nickname });
-      if (this.gameState) return;
-      if (this.roomState?.matchmaking) this.startMatchmakingWatch(this.roomState);
-      this.notify();
     } catch (e) {
-      if (String(e?.message ?? '').includes('已在其他房間')) throw e;
-      this.beginLocalMatchmaking(boardMode);
+      if (gen !== this.matchmakingGen) return;
+      if (String(e?.message ?? '').includes('已在其他房間')) {
+        this.matchmakingGen += 1;
+        this.aiFallbackPending = false;
+        this.clearMatchmakingWatch();
+        this.roomState = null;
+        this.roomCode = null;
+        this.notifyError(e.message);
+      }
     }
   }
 
@@ -447,16 +474,13 @@ export class OnlineClient {
     }
   }
 
-  startMatchmakingWatch(payload) {
-    const created = payload.createdAt ? new Date(payload.createdAt).getTime() : Date.now();
-    const until = created + MATCHMAKING_TIMEOUT_MS;
-    if (this.matchmakingTimer && this.matchmakingUntil === until) return;
+  startMatchmakingWatch() {
+    if (this.matchmakingTimer) return;
 
-    this.clearMatchmakingWatch();
-    this.matchmakingUntil = until;
+    this.matchmakingUntil = Date.now() + MATCHMAKING_TIMEOUT_MS;
     this.matchmakingGen += 1;
     const gen = this.matchmakingGen;
-    const remaining = until - Date.now();
+    const remaining = this.matchmakingUntil - Date.now();
     if (remaining <= 0) {
       this.handleMatchmakingTimeout(gen);
       return;

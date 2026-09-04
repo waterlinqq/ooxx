@@ -1,1 +1,1 @@
-export * from '../shared/rules.js';
+export * from '@ooxx/shared/rules.js';

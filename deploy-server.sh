@@ -34,7 +34,7 @@ rsync -avz --delete \
   -e "$RSYNC_SSH" \
   --exclude node_modules \
   --exclude server/node_modules \
-  --exclude dist \
+  --exclude apps/web/dist \
   --exclude .git \
   --exclude .env \
   --exclude 'tmp-*' \

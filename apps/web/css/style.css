@@ -2426,11 +2426,87 @@ body {
   margin: 0 0 12px;
 }
 
-.online-match-countdown {
-  font-size: 2.4rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  margin: 0 0 8px;
-  line-height: 1.1;
+.online-match-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 12px;
+}
+
+.online-match-rings {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+
+.online-match-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: matchRingPulse 2.1s ease-out infinite;
+}
+
+.online-match-ring:nth-child(2) {
+  animation-delay: 0.7s;
+}
+
+.online-match-ring:nth-child(3) {
+  animation-delay: 1.4s;
+}
+
+@keyframes matchRingPulse {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.online-match-label {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.online-match-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 2px;
+  vertical-align: baseline;
+}
+
+.online-match-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.35;
+  animation: matchDotBounce 1.2s ease-in-out infinite;
+}
+
+.online-match-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.online-match-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes matchDotBounce {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
 }

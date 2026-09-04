@@ -2,6 +2,16 @@
 
 回合制戰棋，支援 **3×3**、**4×4** 與 **5×5** 棋盤，藍隊對戰 AI 紅隊。
 
+## 專案結構
+
+```
+ooxx/
+├── apps/web/          # 前端（Vite + Three.js）
+├── server/            # WebSocket + API 後端
+├── shared/            # 前後端共用規則與協定
+└── scripts/           # AI 對戰模擬工具
+```
+
 ## 啟動
 
 **建議（開發用，含熱重載）：**
@@ -30,20 +40,20 @@ npm run preview
 
 ## 技術
 
-- 棋盤區使用 **Three.js** 等距低多邊形 3D 渲染（`js/board3d/`）
+- 棋盤區使用 **Three.js** 等距低多邊形 3D 渲染（`apps/web/js/board3d/`）
 - 大廳、編隊、側欄維持原有 2D DOM UI
-- 遊戲規則在 `js/rules.js`、流程在 `js/game.js`、AI 在 `js/ai/`
+- 遊戲規則在 `apps/web/js/rules.js`、流程在 `apps/web/js/game.js`、AI 在 `apps/web/js/ai/`
 
 ## 新手教學
 
-第一次開啟遊戲會直接進入九宮格新手教學，之後可從大廳的「新手教學」重玩。教學是**固定腳本**（`js/tutorial.js`），不呼叫 AI，四個步驟依序教：
+第一次開啟遊戲會直接進入九宮格新手教學，之後可從大廳的「新手教學」重玩。教學是**固定腳本**（`apps/web/js/tutorial.js`），不呼叫 AI，四個步驟依序教：
 
 1. 部署 — 紅隊接著部署弓箭手
 2. 攻擊 — 劍士一擊消滅弓箭手，紅隊接著部署盾牌手
 3. 再部署一個 — 紅隊盾牌手反擊但只造成 1 傷害
 4. 連成一線 — 完成中間橫排三子獲勝
 
-教學進行中，玩家只能做當前步驟指定的那一個行動：後備區只有該職業可選（其餘單位淡化），其餘輸入會提示回到教學。一根會點動的手指（`js/board3d/TutorialPointer.js`）指出當下該點的東西，會依序從後備區單位移到目標格；棋盤不再顯示格子高亮。同時關閉回合與對局計時器、不給金幣、也不能投降，完成或跳過後寫入存檔就不再自動觸發。
+教學進行中，玩家只能做當前步驟指定的那一個行動：後備區只有該職業可選（其餘單位淡化），其餘輸入會提示回到教學。一根會點動的手指（`apps/web/js/board3d/TutorialPointer.js`）指出當下該點的東西，會依序從後備區單位移到目標格；棋盤不再顯示格子高亮。同時關閉回合與對局計時器、不給金幣、也不能投降，完成或跳過後寫入存檔就不再自動觸發。
 
 ## 規則
 
@@ -72,7 +82,7 @@ npm run preview
 
 ## AI
 
-紅隊 AI 位於 `js/ai/`，介面是 `chooseAiAction(state, options)`：
+紅隊 AI 位於 `apps/web/js/ai/`，介面是 `chooseAiAction(state, options)`：
 
 - `board.js` — 搜尋用的盤面層：記憶化連線表、增量維護的連線計數、make/unmake 就地套用行動、Zobrist 雜湊
 - `threat.js` — 攻擊威脅圖：每一格「敵方能造成的最大單次傷害」，用於落點安全與擋線單位脆弱度判斷
@@ -85,9 +95,9 @@ npm run preview
 
 ```bash
 npm run sim -- --mode 4x4 --games 100                 # AI 自我對戰，結果輸出到 data/
-npm run arena -- --mode 4x4 --games 20                # 目前 AI 對上 js/ai-legacy.js
+npm run arena -- --mode 4x4 --games 20                # 目前 AI 對上 apps/web/js/ai-legacy.js
 npm run arena -- --mode 4x4 --roster random           # 每局隨機編組，貼近實際對局
-npm run arena -- --mode 4x4 --b ../js/ai.js --difficulty-a hard --difficulty-b normal
+npm run arena -- --mode 4x4 --b ../apps/web/js/ai.js --difficulty-a hard --difficulty-b normal
 ```
 
 兩者都接受 `--seed`，同一顆種子可完整重現一批對局。`arena` 會回報勝率、平均與最長決策時間、「落子後立即可被擊殺」比率，以及相異棋局數（用來確認 AI 不是每局都下同一套棋）。

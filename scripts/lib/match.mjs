@@ -1,9 +1,9 @@
-// Shared AI-vs-AI match runner. Mirrors the turn bookkeeping in js/game.js so
+// Shared AI-vs-AI match runner. Mirrors the turn bookkeeping in apps/web/js/game.js so
 // simulations and arena runs measure the same game the player actually sees.
 import {
   createUnit,
   createEmptyBoard,
-} from '../../js/units.js';
+} from '../../apps/web/js/units.js';
 import {
   applyDeploy,
   applyMove,
@@ -14,9 +14,9 @@ import {
   getValidDeployCells,
   getValidMoves,
   getValidAttackTargets,
-} from '../../js/rules.js';
-import { generateMapProps, resolveMapPropOnEnter } from '../../js/mapProps.js';
-import { isObstacleCell } from '../../js/mapPropUtils.js';
+} from '../../apps/web/js/rules.js';
+import { generateMapProps, resolveMapPropOnEnter } from '../../apps/web/js/mapProps.js';
+import { isObstacleCell } from '../../apps/web/js/mapPropUtils.js';
 
 export const MAX_TURNS = 800;
 
