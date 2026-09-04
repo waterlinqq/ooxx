@@ -36,14 +36,6 @@ const CROUCH_DEPTH = {
 const TMP_DIR = new THREE.Vector3();
 const TMP_TARGET = new THREE.Vector3();
 
-const SEAT_CLASSES = ['seat-blue-0', 'seat-blue-1', 'seat-red-0', 'seat-red-1'];
-
-function applySeatClass(wrap, unit, matchFormat) {
-  wrap.classList.remove(...SEAT_CLASSES);
-  if (matchFormat === '2v2' && unit.ownerSeat != null) {
-    wrap.classList.add(`seat-${unit.team}-${unit.ownerSeat}`);
-  }
-}
 function createHpLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label';
@@ -122,18 +114,18 @@ export class UnitMeshManager {
 
         let entry = this.units.get(unit.id);
         if (!entry) {
-          entry = this.createUnitEntry(unit, state.matchFormat);
+          entry = this.createUnitEntry(unit);
           this.units.set(unit.id, entry);
           this.group.add(entry.root);
         } else if (entry.classId !== unit.classId || entry.team !== unit.team) {
           this.group.remove(entry.root);
           this.disposeEntry(entry);
-          entry = this.createUnitEntry(unit, state.matchFormat);
+          entry = this.createUnitEntry(unit);
           this.units.set(unit.id, entry);
           this.group.add(entry.root);
         }
 
-        this.updateUnitEntry(entry, unit, r, c, state.matchFormat, {
+        this.updateUnitEntry(entry, unit, r, c, {
           acted: acted.has(unit.id),
           dragging: draggingId === unit.id,
           inspected: inspectedId === unit.id,
@@ -151,11 +143,8 @@ export class UnitMeshManager {
     }
   }
 
-  createUnitEntry(unit, matchFormat) {
-    const model = buildUnitModel(unit.classId, unit.team, {
-      ownerSeat: unit.ownerSeat,
-      matchFormat,
-    });
+  createUnitEntry(unit) {
+    const model = buildUnitModel(unit.classId, unit.team);
     const root = model.root;
     root.userData = { kind: 'unit', unitId: unit.id };
 
@@ -290,7 +279,7 @@ export class UnitMeshManager {
     mat.opacity = selected ? Math.min(1, baseOpacity + 0.08) : baseOpacity;
   }
 
-  updateUnitEntry(entry, unit, row, col, matchFormat, { acted, dragging, inspected, yaw }) {
+  updateUnitEntry(entry, unit, row, col, { acted, dragging, inspected, yaw }) {
     const pos = tileWorldPosition(row, col, this.boardSize);
     TMP_TARGET.set(pos.x, UNIT_BASE_Y, pos.z);
 
@@ -335,13 +324,11 @@ export class UnitMeshManager {
       statsEl.textContent = '';
     }
 
-    applySeatClass(entry.wrap, unit, matchFormat);
-
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);
     entry.wrap.classList.toggle('selected', dragging);
     entry.wrap.classList.toggle('inspected', inspected);
-    entry.wrap.classList.toggle('enemy', unit.team === 'red' && matchFormat !== '2v2');
+    entry.wrap.classList.toggle('enemy', unit.team === 'red');
     entry.root.userData.row = row;
     entry.root.userData.col = col;
     entry.acted = acted;

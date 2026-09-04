@@ -6,15 +6,12 @@ export { WIN_SCORE } from './ai/evaluate.js';
 /**
  * Chooses one action for the given team.
  *
- * The signature is unchanged from the heuristic AI this replaced, so js/game.js and the
- * simulation scripts need no adjustment: pass a team name for the simple case, or an
- * options object to name a 2v2 seat, override the search budget, or inject an RNG for
- * tie-breaking.
+ * Pass a team name for the simple case, or an options object to override the search
+ * budget or inject an RNG for tie-breaking.
  *
  * @param {{board: Array, blueReserve?: Array, redReserve?: Array, actedUnitIds?: Set}} state
- * @param {string|{team: string, ownerSeat?: number|null, actionsPerTurn?: number,
- *   roster?: string[], difficulty?: 'easy'|'normal'|'hard', rng?: () => number,
- *   timeBudgetMs?: number}} teamOrOptions
+ * @param {string|{team: string, actionsPerTurn?: number, roster?: string[],
+ *   difficulty?: 'easy'|'normal'|'hard', rng?: () => number, timeBudgetMs?: number}} teamOrOptions
  * @returns {{type: 'deploy'|'move'|'attack', unitId: string, row?: number, col?: number,
  *   targetId?: string}|null}
  */
@@ -31,7 +28,6 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
     },
     {
       team: options.team ?? 'red',
-      ownerSeat: options.ownerSeat ?? null,
       actionsPerTurn: options.actionsPerTurn ?? fallbackMode.actionsPerTurn,
       difficulty: options.difficulty ?? 'hard',
       rng: options.rng ?? null,

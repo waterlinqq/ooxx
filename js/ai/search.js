@@ -13,7 +13,6 @@ import {
   passTurn,
   unpassTurn,
   hashKey,
-  currentSeat,
   enemyOf,
 } from './board.js';
 import { evaluate, terminalScore, materialValue, getCellWeights, WIN_SCORE } from './evaluate.js';
@@ -52,20 +51,8 @@ function capForPly(ply) {
   return ply < CANDIDATE_CAP.length ? CANDIDATE_CAP[ply] : CANDIDATE_CAP[CANDIDATE_CAP.length - 1];
 }
 
-function ownedByCurrentSeat(unit, seat) {
-  return seat == null || unit.ownerSeat == null || unit.ownerSeat === seat;
-}
-
-/**
- * All legal actions for whoever is on the move.
- *
- * Reserve units of the same class are interchangeable — they are always at full hp — so
- * only one representative per class is expanded. On a 4x4 opening that removes 64 of 160
- * candidates without losing a single distinct position.
- */
 function generateActions(ctx) {
   const team = ctx.turn;
-  const seat = currentSeat(ctx);
   const actions = [];
 
   const reserve = ctx.reserves[team];
@@ -74,7 +61,6 @@ function generateActions(ctx) {
     if (deployCells.length > 0) {
       const seenClasses = new Set();
       for (const unit of reserve) {
-        if (!ownedByCurrentSeat(unit, seat)) continue;
         if (seenClasses.has(unit.classId)) continue;
         seenClasses.add(unit.classId);
         for (const [row, col] of deployCells) {
@@ -91,7 +77,6 @@ function generateActions(ctx) {
       const unit = boardRow[c];
       if (!unit || unit.team !== team) continue;
       if (ctx.acted.has(unit.searchIndex)) continue;
-      if (!ownedByCurrentSeat(unit, seat)) continue;
 
       for (const [row, col] of getValidMoves(board, unit)) {
         actions.push({ type: 'move', unitId: unit.id, row, col });
@@ -325,20 +310,19 @@ function pickResult(results, noise, rng) {
  * Picks an action for `options.team`.
  *
  * @param {object} state public game state (board, reserves, actedUnitIds)
- * @param {object} options team, ownerSeat, actionsPerTurn, difficulty, rng, timeBudgetMs
+ * @param {object} options team, actionsPerTurn, difficulty, rng, timeBudgetMs
  * @returns {object|null} an action in the `{type, unitId, row?, col?, targetId?}` shape
  */
 export function searchBestAction(state, options) {
   const {
     team,
-    ownerSeat = null,
     actionsPerTurn = 2,
     difficulty = 'hard',
     rng = null,
     timeBudgetMs = null,
   } = options;
 
-  const ctx = createSearchContext(state, { team, actionsPerTurn, ownerSeat });
+  const ctx = createSearchContext(state, { team, actionsPerTurn });
   const preset = DIFFICULTY[difficulty] ?? DIFFICULTY.hard;
   const budget = timeBudgetMs
     ?? Math.round((TIME_BUDGET_MS[ctx.size] ?? 450) * preset.timeFactor);

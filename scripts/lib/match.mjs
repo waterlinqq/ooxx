@@ -1,10 +1,8 @@
-// Shared AI-vs-AI match runner. Mirrors the turn/slot bookkeeping in js/game.js so
+// Shared AI-vs-AI match runner. Mirrors the turn bookkeeping in js/game.js so
 // simulations and arena runs measure the same game the player actually sees.
 import {
-  SLOT_ORDER,
   createUnit,
   createEmptyBoard,
-  parseSlot,
 } from '../../js/units.js';
 import {
   applyDeploy,
@@ -32,41 +30,16 @@ export function createRng(seed = 1) {
   };
 }
 
-export function createSimUnit(classId, teamId, counter, ownerSeat = null) {
-  const unit = createUnit(classId, teamId, ownerSeat);
+export function createSimUnit(classId, teamId, counter) {
+  const unit = createUnit(classId, teamId);
   unit.id = `${teamId}-${classId}-${counter}`;
   return unit;
 }
 
-// Mirrors createTeamReserve's alternating seat split so simulations match live matches.
-export function createSimReserve(roster, teamId, counterStart, matchFormat) {
-  return roster.map((classId, index) => {
-    const ownerSeat = matchFormat === '2v2' ? index % 2 : null;
-    return createSimUnit(classId, teamId, counterStart + index, ownerSeat);
-  });
-}
-
-// A null ownerSeat means the unit belongs to the whole team (1v1), so it passes every
-// seat filter; only 2v2 rosters carry a real seat.
-function ownedBySeat(unit, seat) {
-  return unit.ownerSeat == null || unit.ownerSeat === seat;
-}
-
-export function hasValidActionsForSlot(board, reserve, slot, actedUnitIds) {
-  const { team, seat } = parseSlot(slot);
-  const slotReserve = reserve.filter((u) => ownedBySeat(u, seat));
-
-  if (getValidDeployCells(board).length > 0 && slotReserve.length > 0) return true;
-
-  for (const row of board) {
-    for (const unit of row) {
-      if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (!ownedBySeat(unit, seat)) continue;
-      if (getValidMoves(board, unit).length > 0) return true;
-      if (getValidAttackTargets(board, unit).length > 0) return true;
-    }
-  }
-  return false;
+export function createSimReserve(roster, teamId, counterStart) {
+  return roster.map((classId, index) =>
+    createSimUnit(classId, teamId, counterStart + index)
+  );
 }
 
 export function hasValidActions(board, reserve, team, actedUnitIds) {
@@ -141,7 +114,6 @@ function triggerPassiveBlessings(state, team, excludePriestIds = []) {
 }
 
 function applyAiAction(state, action, team) {
-  // Snapshot identities before the board mutates so the log can name the actors.
   const reserves = { blue: state.blueReserve, red: state.redReserve };
   const detail = serializeAction(action, state.board, reserves);
 
@@ -191,24 +163,6 @@ function checkRoundEnd(state, actingTeam) {
   return null;
 }
 
-function advanceSlot(currentSlot, slotOrder) {
-  const idx = slotOrder.indexOf(currentSlot);
-  return slotOrder[(idx + 1) % slotOrder.length];
-}
-
-function findNextActiveSlot(state, slotOrder) {
-  const reserveByTeam = { blue: state.blueReserve, red: state.redReserve };
-  let slot = state.currentSlot;
-  for (let i = 0; i < slotOrder.length; i++) {
-    slot = advanceSlot(slot, slotOrder);
-    const { team } = parseSlot(slot);
-    if (hasValidActionsForSlot(state.board, reserveByTeam[team], slot, state.actedUnitIds)) {
-      return slot;
-    }
-  }
-  return advanceSlot(state.currentSlot, slotOrder);
-}
-
 function createStats() {
   return {
     blue: { decisions: 0, timeMs: 0, maxTimeMs: 0, placements: 0, exposedPlacements: 0, kills: 0, selfLosses: 0 },
@@ -219,35 +173,29 @@ function createStats() {
 /**
  * Plays one round to completion.
  *
- * `agents` maps a team (1v1) or a slot (2v2) to `{ choose, options }`, where `choose`
- * has the `chooseAiAction(state, options)` signature. That indirection is what lets the
- * arena put two different AI builds on opposite sides of the same board.
+ * `agents` maps each team to `{ choose, options }`, where `choose` has the
+ * `chooseAiAction(state, options)` signature.
  */
 export function runMatch({
   mode,
   round = 1,
   firstPlayer = 'blue',
-  firstSlot = null,
   unitCounterStart = 0,
   agents,
   rosters = null,
   maxTurns = MAX_TURNS,
   recordMoves = true,
 }) {
-  const { size, matchFormat, actionsPerTurn } = mode;
-  const is2v2 = matchFormat === '2v2';
-  // Live matches let each side pick its own lineup, so the runner accepts a per-team
-  // override and only falls back to the mode's preset roster.
+  const { size, actionsPerTurn } = mode;
   const blueRoster = rosters?.blue ?? mode.roster;
   const redRoster = rosters?.red ?? mode.roster;
   let unitCounter = unitCounterStart;
 
   const state = {
     board: createEmptyBoard(size),
-    blueReserve: createSimReserve(blueRoster, 'blue', unitCounter, matchFormat),
-    redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length, matchFormat),
-    currentPlayer: is2v2 ? 'blue' : firstPlayer,
-    currentSlot: firstSlot ?? `${firstPlayer}-0`,
+    blueReserve: createSimReserve(blueRoster, 'blue', unitCounter),
+    redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length),
+    currentPlayer: firstPlayer,
     actionsRemaining: actionsPerTurn,
     actedUnitIds: new Set(),
   };
@@ -255,16 +203,12 @@ export function runMatch({
 
   const moves = [];
   const stats = createStats();
-  const slotOrder = [...SLOT_ORDER];
   let turn = 1;
   let moveCount = 0;
 
-  const resolveAgent = (team, slot) => agents[is2v2 ? slot : team];
-
   const finish = (winner, reason, winLine) => ({
     round,
-    firstPlayer: is2v2 ? 'blue' : firstPlayer,
-    firstSlot: firstSlot ?? `${firstPlayer}-0`,
+    firstPlayer,
     rosters: { blue: blueRoster, red: redRoster },
     winner,
     reason,
@@ -277,25 +221,18 @@ export function runMatch({
   });
 
   while (turn <= maxTurns) {
-    const team = is2v2 ? parseSlot(state.currentSlot).team : state.currentPlayer;
-    const seat = is2v2 ? parseSlot(state.currentSlot).seat : undefined;
-    state.currentPlayer = team;
+    const team = state.currentPlayer;
     const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
 
-    const canAct = is2v2
-      ? hasValidActionsForSlot(state.board, reserve, state.currentSlot, state.actedUnitIds)
-      : hasValidActions(state.board, reserve, team, state.actedUnitIds);
-
-    if (!canAct) {
-      if (is2v2) state.currentSlot = findNextActiveSlot(state, slotOrder);
-      else state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds)) {
+      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;
       continue;
     }
 
-    const agent = resolveAgent(team, state.currentSlot);
+    const agent = agents[team];
     const started = performance.now();
     const action = agent.choose(
       {
@@ -307,7 +244,6 @@ export function runMatch({
       {
         ...agent.options,
         team,
-        ownerSeat: seat,
         actionsPerTurn,
         rosters: { blue: blueRoster, red: redRoster },
       },
@@ -320,8 +256,7 @@ export function runMatch({
     teamStats.maxTimeMs = Math.max(teamStats.maxTimeMs, elapsed);
 
     if (!action) {
-      if (is2v2) state.currentSlot = findNextActiveSlot(state, slotOrder);
-      else state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;
@@ -347,7 +282,6 @@ export function runMatch({
       moves.push({
         turn,
         team,
-        ...(is2v2 ? { slot: state.currentSlot } : {}),
         actionRemainingAfter: state.actionsRemaining,
         ...applied,
       });
@@ -355,15 +289,6 @@ export function runMatch({
 
     const end = checkRoundEnd(state, team);
     if (end) return finish(end.winner, end.reason, end.winLine);
-
-    if (is2v2) {
-      // game.js hands the board to the next seat after every single action.
-      state.currentSlot = findNextActiveSlot(state, slotOrder);
-      state.actionsRemaining = actionsPerTurn;
-      state.actedUnitIds = new Set();
-      turn++;
-      continue;
-    }
 
     const exhausted = state.actionsRemaining <= 0
       || !hasValidActions(state.board, reserve, team, state.actedUnitIds);

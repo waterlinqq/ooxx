@@ -752,22 +752,6 @@ body {
   background: linear-gradient(90deg, #ef4444, #fca5a5);
 }
 
-.unit-3d-label.seat-blue-0 .unit-3d-hp-fill {
-  background: linear-gradient(90deg, #3b82f6, #93c5fd);
-}
-
-.unit-3d-label.seat-blue-1 .unit-3d-hp-fill {
-  background: linear-gradient(90deg, #9333ea, #d8b4fe);
-}
-
-.unit-3d-label.seat-red-0 .unit-3d-hp-fill {
-  background: linear-gradient(90deg, #ef4444, #fca5a5);
-}
-
-.unit-3d-label.seat-red-1 .unit-3d-hp-fill {
-  background: linear-gradient(90deg, #f97316, #fdba74);
-}
-
 .unit-3d-stats {
   font-size: 0.54rem;
   font-weight: 700;
@@ -859,14 +843,6 @@ body {
   padding: 1px 4px;
   top: 4px;
   left: 4px;
-}
-
-.board[data-size="5"] .seat-badge {
-  font-size: 0.48rem;
-  width: 14px;
-  height: 14px;
-  top: 4px;
-  right: 4px;
 }
 
 .fx-layer {
@@ -1003,24 +979,6 @@ body {
 .team-red .team-badge {
   background: rgba(254, 202, 202, 0.95);
   color: #7f1d1d;
-}
-
-.seat-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 2;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: rgba(251, 191, 36, 0.95);
-  color: #78350f;
-  font-size: 0.58rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
 }
 
 .cell:hover {

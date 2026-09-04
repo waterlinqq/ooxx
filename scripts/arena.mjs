@@ -1,6 +1,6 @@
 // Head-to-head bench for two AI builds. Colours are swapped every other game so the
 // first-move advantage cancels out and the win rate reflects engine strength only.
-import { getBoardMode, SLOT_ORDER, createRandomRoster } from '../js/units.js';
+import { getBoardMode, createRandomRoster } from '../js/units.js';
 import { runMatch, createRng } from './lib/match.mjs';
 
 const DEFAULT_MODES = ['3x3', '4x4', '5x5'];
@@ -59,15 +59,8 @@ async function loadEngine(spec, name, difficulty, rng) {
   };
 }
 
-function buildAgents(mode, engineForBlue, engineForRed) {
-  if (mode.matchFormat !== '2v2') {
-    return { blue: engineForBlue, red: engineForRed };
-  }
-  const agents = {};
-  for (const slot of SLOT_ORDER) {
-    agents[slot] = slot.startsWith('blue') ? engineForBlue : engineForRed;
-  }
-  return agents;
+function buildAgents(engineForBlue, engineForRed) {
+  return { blue: engineForBlue, red: engineForRed };
 }
 
 function emptyTally(name) {
@@ -138,16 +131,14 @@ async function main() {
 
     for (let i = 0; i < opts.games; i++) {
       const aIsBlue = i % 2 === 0;
-      const firstPlayer = mode.matchFormat === '2v2' ? 'blue' : (i % 4 < 2 ? 'blue' : 'red');
-      // Both sides get the same lineup so the result measures the engine, not the draw.
+      const firstPlayer = i % 2 === 0 ? 'blue' : 'red';
       const roster = opts.roster === 'random' ? createRandomRoster(modeId, rosterRng) : null;
       const result = runMatch({
         mode,
         firstPlayer,
-        firstSlot: mode.matchFormat === '2v2' ? 'blue-0' : `${firstPlayer}-0`,
         unitCounterStart: unitCounter,
         rosters: roster ? { blue: roster, red: roster } : null,
-        agents: buildAgents(mode, aIsBlue ? engineA : engineB, aIsBlue ? engineB : engineA),
+        agents: buildAgents(aIsBlue ? engineA : engineB, aIsBlue ? engineB : engineA),
       });
       unitCounter = result.unitCounterEnd;
       totalMoves += result.totalMoves;

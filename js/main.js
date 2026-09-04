@@ -296,7 +296,6 @@ function canControlUnit(state, unit) {
     const actor = state.tutorialActorCell;
     return Boolean(actor) && actor.row === unit.row && actor.col === unit.col;
   }
-  if (state.matchFormat === '2v2') return unit.ownerSeat === 0;
   return true;
 }
 
@@ -594,11 +593,9 @@ function renderModePicker(state) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
-    const format = mode.matchFormat === '2v2' ? '2v2 · ' : '';
-    const minutes = Math.round(mode.matchDurationMs / 60000);
     btn.innerHTML = `
       <span class="mode-btn-label">${mode.label}</span>
-      <span class="mode-btn-sub">${format}限時 ${minutes} 分鐘</span>
+      <span class="mode-btn-sub">限時 ${minutes} 分鐘</span>
     `;
     btn.disabled = !canPick;
     btn.addEventListener('click', () => game.setBoardMode(mode.id));

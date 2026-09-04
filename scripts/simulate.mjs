@@ -65,27 +65,22 @@ function main() {
     `${opts.mode}-ai-vs-ai-${opts.games}.json`,
   );
 
-  const label = mode.matchFormat === '2v2' ? ' (2v2)' : '';
-  console.log(`開始模擬：${opts.games} 場單局 · ${opts.mode} · AI vs AI${label} · seed ${opts.seed}`);
+  console.log(`開始模擬：${opts.games} 場單局 · ${opts.mode} · AI vs AI · seed ${opts.seed}`);
   const started = Date.now();
 
   const rng = createRng(opts.seed);
   const agent = { choose: chooseAiAction, options: { difficulty: opts.difficulty, rng } };
-  const is2v2 = mode.matchFormat === '2v2';
-  const agents = is2v2
-    ? { 'blue-0': agent, 'blue-1': agent, 'red-0': agent, 'red-1': agent }
-    : { blue: agent, red: agent };
+  const agents = { blue: agent, red: agent };
 
   const games = [];
   let unitCounter = 0;
 
   for (let i = 0; i < opts.games; i++) {
-    const firstPlayer = is2v2 ? 'blue' : (i % 2 === 0 ? 'blue' : 'red');
+    const firstPlayer = i % 2 === 0 ? 'blue' : 'red';
     const round = runMatch({
       mode,
       round: 1,
       firstPlayer,
-      firstSlot: is2v2 ? 'blue-0' : `${firstPlayer}-0`,
       unitCounterStart: unitCounter,
       agents,
     });
@@ -97,10 +92,7 @@ function main() {
       boardSize: mode.size,
       rounds: [{
         round: 1,
-        // Team, not slot: in 2v2 the blue team opens through seat blue-0, and the
-        // first-player tally compares this against the winning team.
         firstPlayer: round.firstPlayer,
-        firstSlot: round.firstSlot,
         winner: round.winner,
         reason: round.reason,
         winLine: round.winLine,
@@ -123,14 +115,11 @@ function main() {
       games: opts.games,
       boardMode: opts.mode,
       boardSize: mode.size,
-      matchFormat: mode.matchFormat,
       actionsPerTurn: mode.actionsPerTurn,
       seed: opts.seed,
       difficulty: opts.difficulty,
-      players: is2v2
-        ? { 'blue-0': 'ai', 'blue-1': 'ai', 'red-0': 'ai', 'red-1': 'ai' }
-        : { blue: 'ai', red: 'ai' },
-      firstPlayerAlternation: !is2v2,
+      players: { blue: 'ai', red: 'ai' },
+      firstPlayerAlternation: true,
     },
     summary,
     games,

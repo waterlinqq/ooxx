@@ -1,24 +1,8 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { parseSlot } from '../units.js';
 import { getScreenGroundAxes, playerFacingYaw } from './CameraFacing.js';
 import { TILE_PITCH, TILE_SIZE } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
-
-const SEAT_CLASSES = ['seat-blue-0', 'seat-blue-1', 'seat-red-0', 'seat-red-1'];
-
-/** The tutorial narrows the bench to the one class the current step asks for. */
-function tutorialAllows(state, unit) {
-  const allowed = state.tutorialSelectableClassIds;
-  return !allowed || allowed.includes(unit.classId);
-}
-
-function applySeatClass(wrap, unit, matchFormat) {
-  wrap.classList.remove(...SEAT_CLASSES);
-  if (matchFormat === '2v2' && unit.ownerSeat != null) {
-    wrap.classList.add(`seat-${unit.team}-${unit.ownerSeat}`);
-  }
-}
 
 const UNIT_BASE_Y = 0.072;
 const RESERVE_SCALE = 0.82;
@@ -30,6 +14,12 @@ const ROW_STEP = TILE_PITCH * 1.55;
 
 const TMP_BASE = new THREE.Vector3();
 const TMP_OFFSET = new THREE.Vector3();
+
+/** The tutorial narrows the bench to the one class the current step asks for. */
+function tutorialAllows(state, unit) {
+  const allowed = state.tutorialSelectableClassIds;
+  return !allowed || allowed.includes(unit.classId);
+}
 
 // Small rosters (e.g. 3×3's four-a-side) fit one row and keep the camera closer.
 const SINGLE_ROW_MAX = 4;
@@ -131,42 +121,15 @@ export class ReserveZone3d {
     const seen = new Set();
     const entries = [];
 
-    if (state.matchFormat === '2v2') {
-      // A row per seat, so the player reads their own bench apart from the AI teammate's.
-      const humanSeat = parseSlot(state.humanSlot).seat;
-      const ownUnits = state.blueReserve.filter((u) => u.ownerSeat === humanSeat);
-      const mateUnits = state.blueReserve.filter((u) => u.ownerSeat !== humanSeat);
-
-      ownUnits.forEach((unit, i) => {
-        entries.push({
-          unit,
-          side: 'blue',
-          role: 'own',
-          slot: { row: 0, col: i, colsInRow: ownUnits.length },
-          selectable: state.isHumanTurn && tutorialAllows(state, unit),
-        });
+    state.blueReserve.forEach((unit, i) => {
+      entries.push({
+        unit,
+        side: 'blue',
+        role: 'own',
+        slot: reserveGridSlot(i, state.blueReserve.length),
+        selectable: state.isHumanTurn && tutorialAllows(state, unit),
       });
-
-      mateUnits.forEach((unit, i) => {
-        entries.push({
-          unit,
-          side: 'blue',
-          role: 'teammate',
-          slot: { row: 1, col: i, colsInRow: mateUnits.length },
-          selectable: false,
-        });
-      });
-    } else {
-      state.blueReserve.forEach((unit, i) => {
-        entries.push({
-          unit,
-          side: 'blue',
-          role: 'own',
-          slot: reserveGridSlot(i, state.blueReserve.length),
-          selectable: state.isHumanTurn && tutorialAllows(state, unit),
-        });
-      });
-    }
+    });
 
     state.redReserve.forEach((unit, i) => {
       entries.push({
@@ -195,7 +158,7 @@ export class ReserveZone3d {
   upsertUnit({ unit, side, role, slot, selectable }, state) {
     let entry = this.units.get(unit.id);
     if (!entry) {
-      entry = this.createEntry(unit, side, state.matchFormat);
+      entry = this.createEntry(unit, side);
       this.units.set(unit.id, entry);
       this.group.add(entry.root);
     }
@@ -235,15 +198,13 @@ export class ReserveZone3d {
       }
     }
 
-    applySeatClass(entry.wrap, unit, state.matchFormat);
-
     entry.wrap.classList.toggle('selected', selected);
     entry.wrap.classList.toggle('inspected', inspected);
     entry.wrap.classList.toggle(
       'tutorial-focus',
       side === 'blue' && selectable && !selected && state.tutorialSelectableClassIds != null,
     );
-    entry.wrap.classList.toggle('enemy', side === 'red' && state.matchFormat !== '2v2');
+    entry.wrap.classList.toggle('enemy', side === 'red');
     entry.wrap.classList.toggle('disabled', side === 'blue' && !selectable);
 
     entry.root.userData = {
@@ -254,11 +215,8 @@ export class ReserveZone3d {
     };
   }
 
-  createEntry(unit, side, matchFormat) {
-    const model = buildUnitModel(unit.classId, unit.team, {
-      ownerSeat: unit.ownerSeat,
-      matchFormat,
-    });
+  createEntry(unit, side) {
+    const model = buildUnitModel(unit.classId, unit.team);
     const root = model.root;
     const { label, wrap } = createReserveLabel();
     label.position.set(0, model.height * RESERVE_SCALE + 0.18, 0);

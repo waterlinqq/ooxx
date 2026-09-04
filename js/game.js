@@ -2,7 +2,6 @@ import {
   CLASSES,
   TEAM,
   BOARD_MODES,
-  SLOT_ORDER,
   getBoardMode,
   getRosterLimit,
   getMaxPerClass,
@@ -11,8 +10,6 @@ import {
   createRandomRoster,
   createEmptyBoard,
   createTeamReserve,
-  parseSlot,
-  formatSlotLabel,
 } from './units.js';
 import {
   getValidMoves,
@@ -57,9 +54,6 @@ export class Game {
     this.boardMode = '3x3';
     this.phase = 'lobby';
     this.currentPlayer = 'blue';
-    this.currentSlot = 'blue-0';
-    this.humanSlot = 'blue-0';
-    this.slotOrder = [...SLOT_ORDER];
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
@@ -100,10 +94,6 @@ export class Game {
 
   getModeConfig() {
     return getBoardMode(this.boardMode);
-  }
-
-  is2v2() {
-    return this.getModeConfig().matchFormat === '2v2';
   }
 
   getActionsPerTurn() {
@@ -410,7 +400,6 @@ export class Game {
     return {
       boardMode: this.boardMode,
       boardSize: mode.size,
-      matchFormat: mode.matchFormat,
       rosterLimit: this.getRosterLimit(),
       maxPerClass: this.getMaxPerClass(),
       formationReady: this.isFormationReady(),
@@ -420,10 +409,7 @@ export class Game {
       matchDurationMs: mode.matchDurationMs,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
-      currentSlot: this.currentSlot,
-      humanSlot: this.humanSlot,
       isHumanTurn: this.canHumanAct(),
-      slotLabel: formatSlotLabel(this.currentSlot),
       draggingUnitId: this.draggingUnitId,
       selectedReserveId: this.selectedReserveId,
       inspectedUnitId: this.inspectedUnitId,
@@ -468,19 +454,11 @@ export class Game {
 
   canHumanAct() {
     if (this.phase !== 'battle' || this.animating) return false;
-    if (this.is2v2()) return this.currentSlot === this.humanSlot;
     return this.currentPlayer === 'blue';
   }
 
   ownsHumanUnit(unit) {
-    if (!unit || unit.team !== 'blue') return false;
-    if (!this.is2v2()) return true;
-    const { seat } = parseSlot(this.humanSlot);
-    return unit.ownerSeat === seat;
-  }
-
-  syncCurrentPlayerFromSlot() {
-    this.currentPlayer = parseSlot(this.currentSlot).team;
+    return Boolean(unit && unit.team === 'blue');
   }
 
   getPlayerTurnMessage() {
@@ -491,13 +469,6 @@ export class Game {
       if (!step) return '教學完成';
       return `步驟 ${this.tutorial.stepIndex + 1}／${TUTORIAL_STEP_COUNT} · ${step.title}：${step.text}`;
     }
-    if (this.is2v2()) {
-      const label = formatSlotLabel(this.currentSlot);
-      if (this.canHumanAct()) {
-        return `${label} 回合 · 你的回合：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
-      }
-      return `${label} 回合 · AI 思考中`;
-    }
 
     const team = TEAM[this.currentPlayer];
     const actionsPerTurn = mode.actionsPerTurn;
@@ -507,33 +478,7 @@ export class Game {
     return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
   }
 
-  hasValidActionsForSlot(slot = this.currentSlot) {
-    const { team, seat } = parseSlot(slot);
-    const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
-    const slotReserve = this.is2v2() ? reserve.filter((u) => u.ownerSeat === seat) : reserve;
-    const deployCells = getValidDeployCells(this.board);
-    if (deployCells.length > 0 && slotReserve.length > 0) return true;
-
-    for (const row of this.board) {
-      for (const unit of row) {
-        if (!unit || unit.team !== team) continue;
-        if (this.is2v2() && unit.ownerSeat !== seat) continue;
-        if (this.actedUnitIds.has(unit.id)) continue;
-        if (getValidMoves(this.board, unit).length > 0) return true;
-        if (getValidAttackTargets(this.board, unit).length > 0) return true;
-      }
-    }
-    return false;
-  }
-
   hasValidActionsForTeam(team = this.currentPlayer) {
-    if (this.is2v2()) {
-      return this.slotOrder.some((slot) => {
-        const parsed = parseSlot(slot);
-        return parsed.team === team && this.hasValidActionsForSlot(slot);
-      });
-    }
-
     const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
     const deployCells = getValidDeployCells(this.board);
     if (deployCells.length > 0 && reserve.length > 0) return true;
@@ -716,19 +661,12 @@ export class Game {
     return 'blue';
   }
 
-  getRoundFirstSlot() {
-    if (this.is2v2()) return 'blue-0';
-    const team = this.getRoundFirstPlayer();
-    return `${team}-0`;
-  }
-
   startRound() {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
-    this.blueReserve = createTeamReserve(this.blueRoster, 'blue', mode.matchFormat);
-    this.redReserve = createTeamReserve(this.redRoster, 'red', mode.matchFormat);
-    this.currentSlot = this.getRoundFirstSlot();
-    this.syncCurrentPlayerFromSlot();
+    this.blueReserve = createTeamReserve(this.blueRoster, 'blue');
+    this.redReserve = createTeamReserve(this.redRoster, 'red');
+    this.currentPlayer = this.getRoundFirstPlayer();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
@@ -741,8 +679,6 @@ export class Game {
 
     if (this.tutorial) {
       this.message = this.getPlayerTurnMessage();
-    } else if (this.is2v2()) {
-      this.message = `2v2 單局 — ${formatSlotLabel(this.currentSlot)} 先攻：藍1 為你，其餘由 AI 代打`;
     } else {
       const first = TEAM[this.currentPlayer].name;
       if (this.currentPlayer === 'blue') {
@@ -764,12 +700,6 @@ export class Game {
     if (this.tutorial) {
       if (this.currentPlayer === 'red') {
         setTimeout(() => this.runTutorialEnemyTurn(), 800);
-      }
-      return;
-    }
-    if (this.is2v2()) {
-      if (this.currentSlot !== this.humanSlot) {
-        setTimeout(() => this.runAiTurn(), 500);
       }
       return;
     }
@@ -896,21 +826,12 @@ export class Game {
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
-    if (this.is2v2()) {
-      this.advanceSlot();
-      return;
-    }
     this.actionsRemaining = 0;
     this.switchPlayer();
   }
 
   getCurrentReserve() {
-    const reserve = this.currentPlayer === 'blue' ? this.blueReserve : this.redReserve;
-    if (this.is2v2()) {
-      const { seat } = parseSlot(this.currentSlot);
-      return reserve.filter((u) => u.ownerSeat === seat);
-    }
-    return reserve;
+    return this.currentPlayer === 'blue' ? this.blueReserve : this.redReserve;
   }
 
   getHighlightMoves() {
@@ -1099,12 +1020,6 @@ export class Game {
       return;
     }
 
-    if (this.is2v2()) {
-      this.message = actionLabel;
-      this.advanceSlot();
-      return;
-    }
-
     if (this.actionsRemaining > 0) {
       if (!this.hasValidActionsForTeam()) {
         this.message = `${actionLabel} — 無更多可行動，換 ${TEAM[enemy].name}回合`;
@@ -1124,33 +1039,6 @@ export class Game {
     this.switchPlayer();
   }
 
-  advanceSlot() {
-    const order = this.slotOrder;
-    const startIdx = order.indexOf(this.currentSlot);
-    const { team: endedTeam } = parseSlot(this.currentSlot);
-
-    for (let i = 1; i <= order.length; i++) {
-      const nextSlot = order[(startIdx + i) % order.length];
-
-      this.currentSlot = nextSlot;
-      this.syncCurrentPlayerFromSlot();
-      this.resetTurnActions();
-
-      if (this.applyTurnBoundaryEffects(endedTeam)) return;
-
-      if (this.hasValidActionsForSlot(nextSlot)) {
-        this.message = this.getPlayerTurnMessage();
-        this.notify();
-        this.scheduleAiIfNeeded();
-        return;
-      }
-    }
-
-    this.message = this.getPlayerTurnMessage();
-    this.notify();
-    this.scheduleAiIfNeeded();
-  }
-
   switchPlayer() {
     const endedTeam = this.currentPlayer;
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
@@ -1163,14 +1051,6 @@ export class Game {
     this.scheduleAiIfNeeded();
   }
 
-  getAiTurnContext() {
-    if (this.is2v2()) {
-      const { team, seat } = parseSlot(this.currentSlot);
-      return { team, ownerSeat: seat, slotLabel: formatSlotLabel(this.currentSlot) };
-    }
-    return { team: 'red', ownerSeat: undefined, slotLabel: TEAM.red.name };
-  }
-
   runAiTurn() {
     if (this.phase !== 'battle' || this.animating) return;
     if (this.tutorial) {
@@ -1178,10 +1058,8 @@ export class Game {
       return;
     }
 
-    if (this.is2v2() && this.currentSlot === this.humanSlot) return;
-    if (!this.is2v2() && this.currentPlayer !== 'red') return;
+    if (this.currentPlayer !== 'red') return;
 
-    const { team, ownerSeat, slotLabel } = this.getAiTurnContext();
     const mode = this.getModeConfig();
     const action = chooseAiAction(
       {
@@ -1191,34 +1069,27 @@ export class Game {
         actedUnitIds: this.actedUnitIds,
       },
       {
-        team,
-        ownerSeat,
+        team: 'red',
         actionsPerTurn: mode.actionsPerTurn,
         rosters: { blue: this.blueRoster, red: this.redRoster },
       },
     );
 
     if (!action) {
-      if (this.is2v2()) {
-        this.advanceSlot();
-      } else if (this.actionsRemaining > 0) {
+      if (this.actionsRemaining > 0) {
         this.switchPlayer();
       }
       return;
     }
 
-    const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
+    const teamLabel = TEAM.red.name;
 
     if (action.type === 'deploy') {
-      const unit = reserve.find((u) => u.id === action.unitId);
+      const unit = this.redReserve.find((u) => u.id === action.unitId);
       const result = applyDeploy(this.board, unit, action.row, action.col);
       this.board = result.board;
-      if (team === 'blue') {
-        this.blueReserve = this.blueReserve.filter((u) => u.id !== unit.id);
-      } else {
-        this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      }
-      this.endAction(`${slotLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
+      this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
+      this.endAction(`${teamLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
       return;
     }
 
@@ -1226,17 +1097,15 @@ export class Game {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const result = applyMove(this.board, unit, action.row, action.col);
       this.board = result.board;
-      this.endAction(`${slotLabel} 移動`, action.unitId);
+      this.endAction(`${teamLabel} 移動`, action.unitId);
       return;
     }
 
     if (action.type === 'attack') {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       const target = this.board.flat().find((u) => u?.id === action.targetId);
-      this.resolveAttack(unit, target, `${slotLabel} 攻擊`);
-      return;
+      this.resolveAttack(unit, target, `${teamLabel} 攻擊`);
     }
-
   }
 
   surrender() {
@@ -1255,7 +1124,6 @@ export class Game {
     if (this.tutorial) return;
 
     const mode = this.getModeConfig();
-    const ownerSeat = this.is2v2() ? parseSlot(this.currentSlot).seat : null;
     const context = createSearchContext(
       {
         board: this.board,
@@ -1265,7 +1133,6 @@ export class Game {
       },
       {
         team: this.currentPlayer,
-        ownerSeat,
         actionsPerTurn: mode.actionsPerTurn,
       },
     );

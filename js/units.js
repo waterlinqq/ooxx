@@ -137,18 +137,7 @@ export const TEAM = {
   red: { id: 'red', name: '紅隊', color: '#ef4444', light: '#fee2e2' },
 };
 
-// 2v2 seat tint: self blue, ally purple, enemies red and orange.
-export const SEAT_COLORS = {
-  'blue-0': '#3b82f6',
-  'blue-1': '#9333ea',
-  'red-0': '#ef4444',
-  'red-1': '#f97316',
-};
-
-export function resolveUnitColor(team, ownerSeat = null, matchFormat = '1v1') {
-  if (matchFormat === '2v2' && ownerSeat != null) {
-    return SEAT_COLORS[`${team}-${ownerSeat}`] ?? TEAM[team].color;
-  }
+export function resolveUnitColor(team) {
   return TEAM[team].color;
 }
 
@@ -166,7 +155,6 @@ export const BOARD_MODES = {
     id: '3x3',
     label: '九宮格',
     size: 3,
-    matchFormat: '1v1',
     actionsPerTurn: 1,
     turnDurationMs: 10000,
     turnBonusMs: 0,
@@ -183,7 +171,6 @@ export const BOARD_MODES = {
     id: '4x4',
     label: '十六宮格',
     size: 4,
-    matchFormat: '1v1',
     actionsPerTurn: 1,
     turnDurationMs: 15000,
     turnBonusMs: 5000,
@@ -199,31 +186,19 @@ export const BOARD_MODES = {
     id: '5x5',
     label: '二十五宮格',
     size: 5,
-    matchFormat: '2v2',
-    // 2v2 passes the board to the next seat after every single action, so a seat only
-    // ever gets one. The constraints above are still satisfied: a team gets two actions
-    // per round across its two seats, with an opposing seat acting in between.
     actionsPerTurn: 1,
     turnDurationMs: 18000,
     turnBonusMs: 5000,
     matchDurationMs: 10 * 60 * 1000,
-    // Twelve unique classes is the roster cap once duplicates are disallowed.
+    // All twelve classes, one each; longest board distance is 4 so range-3 no longer
+    // covers the whole grid and mobility matters most.
     rosterSize: 12,
     maxPerClass: 1,
-    // Longest distance is 4, so range-3 units no longer reach everywhere and mobility
-    // matters most. Ordered so the alternating 2v2 seat split in createTeamReserve
-    // hands each player a comparable mix.
-    roster: [
-      'swordsman', 'archer', 'shield', 'mage', 'assassin',
-      'bomber', 'artillery', 'tower', 'eagle', 'priest',
-      'ghost', 'viper',
-    ],
+    roster: Object.keys(CLASSES),
   },
 };
 
 export const CLASS_IDS = Object.keys(CLASSES);
-
-export const SLOT_ORDER = ['blue-0', 'red-0', 'blue-1', 'red-1'];
 
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
@@ -239,9 +214,6 @@ export function getMaxPerClass(modeId) {
   return mode.maxPerClass ?? getRosterLimit(modeId);
 }
 
-// Grouping duplicates together matters: createTeamReserve splits a 2v2 roster by
-// alternating index, so adjacent duplicates land one per seat instead of piling every
-// copy of a class onto the same player.
 export function sortRosterByClass(roster) {
   return [...roster].sort((a, b) => CLASS_IDS.indexOf(a) - CLASS_IDS.indexOf(b));
 }
@@ -278,13 +250,12 @@ export function createRandomRoster(modeId, rng = Math.random) {
   return sortRosterByClass(roster);
 }
 
-export function createUnit(classId, teamId, ownerSeat = null) {
+export function createUnit(classId, teamId) {
   const cls = CLASSES[classId];
   return {
     id: `${teamId}-${classId}-${Math.random().toString(36).slice(2, 8)}`,
     classId,
     team: teamId,
-    ownerSeat,
     hp: cls.hp,
     maxHp: cls.hp,
     atk: cls.atk,
@@ -306,25 +277,8 @@ export function createUnit(classId, teamId, ownerSeat = null) {
   };
 }
 
-export function parseSlot(slot) {
-  const [team, seat] = slot.split('-');
-  return { team, seat: Number(seat) };
-}
-
-export function formatSlotLabel(slot) {
-  const { team, seat } = parseSlot(slot);
-  const teamName = team === 'blue' ? '藍' : '紅';
-  return `${teamName}${seat + 1}`;
-}
-
-export function createTeamReserve(roster, teamId, matchFormat = '1v1') {
-  // Alternating seats keeps both 2v2 players on a comparable class mix even though the
-  // roster is written grouped by class; splitting it in half would give one player all
-  // the swordsmen and the other all the assassins.
-  return roster.map((classId, index) => {
-    const ownerSeat = matchFormat === '2v2' ? index % 2 : null;
-    return createUnit(classId, teamId, ownerSeat);
-  });
+export function createTeamReserve(roster, teamId) {
+  return roster.map((classId) => createUnit(classId, teamId));
 }
 
 export function createEmptyBoard(size = 3) {

@@ -51,8 +51,8 @@ function keepColor(material) {
   return material;
 }
 
-export function createMaterialSet(team, ownerSeat = null, matchFormat = '1v1') {
-  const base = new THREE.Color(resolveUnitColor(team, ownerSeat, matchFormat));
+export function createMaterialSet(team) {
+  const base = new THREE.Color(resolveUnitColor(team));
   const deep = base.clone().lerp(new THREE.Color(0x0b1220), 0.55);
   const light = base.clone().lerp(new THREE.Color(0xffffff), 0.5);
   const glowColor = base.clone().lerp(new THREE.Color(0xffffff), 0.25);
@@ -1732,8 +1732,8 @@ const SILHOUETTE = {
   viper: [0.98, 1.04, 0.98],
 };
 
-export function buildUnitModel(classId, team, { ownerSeat = null, matchFormat = '1v1' } = {}) {
-  const mats = createMaterialSet(team, ownerSeat, matchFormat);
+export function buildUnitModel(classId, team) {
+  const mats = createMaterialSet(team);
   const rig = (BUILDERS[classId] ?? buildFallback)(mats);
 
   const root = new THREE.Group();

@@ -634,14 +634,10 @@ function evaluateStateForTeam(state, team) {
   return evaluateBoard(state.board, team, reserve, enemyReserve, composition);
 }
 
-function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set(), ownerSeat = undefined) {
+function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set()) {
   const actions = [];
-  const slotReserve =
-    ownerSeat !== undefined && ownerSeat !== null
-      ? reserve.filter((u) => u.ownerSeat === ownerSeat)
-      : reserve;
 
-  for (const unit of slotReserve) {
+  for (const unit of reserve) {
     if (actedUnitIds.has(unit.id)) continue;
     for (const [r, c] of getValidDeployCells(board)) {
       actions.push({ type: 'deploy', unitId: unit.id, row: r, col: c });
@@ -651,7 +647,6 @@ function getAllActionsForTeam(board, reserve, team, actedUnitIds = new Set(), ow
   for (const row of board) {
     for (const unit of row) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (ownerSeat !== undefined && ownerSeat !== null && unit.ownerSeat !== ownerSeat) continue;
 
       for (const [r, c] of getValidMoves(board, unit)) {
         actions.push({ type: 'move', unitId: unit.id, row: r, col: c });
@@ -735,10 +730,10 @@ function getActedUnitIds(state) {
   return state.actedUnitIds ?? new Set();
 }
 
-function findWinningActions(state, team, ownerSeat = undefined) {
+function findWinningActions(state, team) {
   const reserve = getReserve(state, team);
   const acted = getActedUnitIds(state);
-  const actions = getAllActionsForTeam(state.board, reserve, team, acted, ownerSeat);
+  const actions = getAllActionsForTeam(state.board, reserve, team, acted);
 
   return actions.filter((action) => {
     const outcome = getSimulatedOutcome(state, action, team);
@@ -1065,9 +1060,9 @@ function pickBestActionMinimax(state, actions, team = 'red', criticalCells = nul
 export function chooseAiAction(state, teamOrOptions = 'red') {
   const options =
     typeof teamOrOptions === 'string'
-      ? { team: teamOrOptions, ownerSeat: undefined }
+      ? { team: teamOrOptions }
       : teamOrOptions;
-  const { team, ownerSeat } = options;
+  const { team } = options;
 
   const fallbackMode = getBoardMode(`${state.board.length}x${state.board.length}`);
   searchActionsPerTurn = options.actionsPerTurn ?? fallbackMode.actionsPerTurn;
@@ -1091,11 +1086,10 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
     getReserve(safeState, team),
     team,
     acted,
-    ownerSeat,
   );
   if (actions.length === 0) return null;
 
-  const winActions = findWinningActions(safeState, team, ownerSeat);
+  const winActions = findWinningActions(safeState, team);
   if (winActions.length > 0) {
     return pickBestAction(safeState, winActions, team);
   }
