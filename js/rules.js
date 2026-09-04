@@ -1,4 +1,5 @@
 import { CLASSES, createEmptyBoard, cloneBoard } from './units.js';
+import { isStoneCell } from './mapPropUtils.js';
 
 export function getWinLines(size, winLength = size) {
   const lines = [];
@@ -84,8 +85,9 @@ export function getAdjacentCells8(row, col, size = 3) {
   return cells;
 }
 
-export function getValidMoves(board, unit) {
+export function getValidMoves(board, unit, mapProps = null) {
   if (unit.row < 0) return [];
+  if (unit.immobilized) return [];
 
   const size = boardSize(board);
 
@@ -95,6 +97,7 @@ export function getValidMoves(board, unit) {
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (board[r][c] || (r === unit.row && c === unit.col)) continue;
+        if (isStoneCell(mapProps, r, c)) continue;
         if (chebyshev(unit.row, unit.col, r, c) <= maxJump) moves.push([r, c]);
       }
     }
@@ -113,6 +116,7 @@ export function getValidMoves(board, unit) {
       for (const [nr, nc] of getAdjacentCells(r, c, size)) {
         const key = `${nr},${nc}`;
         if (board[nr][nc] || visited.has(key)) continue;
+        if (isStoneCell(mapProps, nr, nc)) continue;
         visited.add(key);
         moves.push([nr, nc]);
         nextFrontier.push([nr, nc, steps + 1]);
@@ -299,12 +303,12 @@ export function getPriestBlessingTargets(board, priest) {
     .filter((target) => target && target.team === priest.team && target.id !== priest.id);
 }
 
-export function getValidDeployCells(board) {
+export function getValidDeployCells(board, mapProps = null) {
   const size = boardSize(board);
   const cells = [];
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
-      if (!board[r][c]) cells.push([r, c]);
+      if (!board[r][c] && !isStoneCell(mapProps, r, c)) cells.push([r, c]);
     }
   }
   return cells;
@@ -373,6 +377,7 @@ export function applyTeamPriestBlessings(board, team, excludePriestIds = []) {
       if (blessedIds.has(target.id)) continue;
 
       const blessed = next[target.row][target.col];
+      if (!blessed) continue;
       const prevHp = blessed.hp;
       blessed.hp = Math.min(blessed.maxHp, blessed.hp + 1);
       if (blessed.hp <= prevHp) continue;
@@ -619,8 +624,8 @@ export function getValidPotionTargets(board, team, filterFn = () => true) {
   return cells;
 }
 
-export function getValidBombCells(board) {
-  return getValidDeployCells(board);
+export function getValidBombCells(board, mapProps = null) {
+  return getValidDeployCells(board, mapProps);
 }
 
 export function healUnitAt(board, row, col, amount) {

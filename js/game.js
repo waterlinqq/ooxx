@@ -48,6 +48,12 @@ import {
   getTutorialStep,
   matchesTutorialGoal,
 } from './tutorial.js';
+import {
+  createEmptyMapProps,
+  generateMapProps,
+  resolveMapPropOnEnter,
+  isStoneCell,
+} from './mapProps.js';
 
 export class Game {
   constructor() {
@@ -58,6 +64,7 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.board = createEmptyBoard(this.getModeConfig().size);
+    this.mapProps = createEmptyMapProps(this.getModeConfig().size);
     this.blueRoster = [];
     this.redRoster = [];
     this.blueReserve = [];
@@ -122,6 +129,7 @@ export class Game {
     this.boardMode = modeId;
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
+    this.mapProps = createEmptyMapProps(mode.size);
     // Roster size and per-class caps differ per mode, so a lineup built for the old mode
     // can't carry over.
     this.blueRoster = [];
@@ -145,6 +153,7 @@ export class Game {
     this.tutorial = null;
     this.phase = 'lobby';
     this.board = createEmptyBoard(this.getModeConfig().size);
+    this.mapProps = createEmptyMapProps(this.getModeConfig().size);
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
@@ -225,7 +234,7 @@ export class Game {
 
     if (this.itemTargeting === 'bomb') {
       const occupied = new Set(this.pendingBombs.map(({ row, col }) => `${row},${col}`));
-      return getValidBombCells(this.board).filter(([r, c]) => !occupied.has(`${r},${c}`));
+      return getValidBombCells(this.board, this.mapProps).filter(([r, c]) => !occupied.has(`${r},${c}`));
     }
 
     return [];
@@ -414,6 +423,7 @@ export class Game {
       selectedReserveId: this.selectedReserveId,
       inspectedUnitId: this.inspectedUnitId,
       board: this.board,
+      mapProps: this.mapProps,
       blueRoster: this.blueRoster,
       redRoster: this.redRoster,
       blueReserve: this.blueReserve,
@@ -480,20 +490,36 @@ export class Game {
 
   hasValidActionsForTeam(team = this.currentPlayer) {
     const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
-    const deployCells = getValidDeployCells(this.board);
+    const deployCells = getValidDeployCells(this.board, this.mapProps);
     if (deployCells.length > 0 && reserve.length > 0) return true;
 
     for (const row of this.board) {
       for (const unit of row) {
         if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
-        if (getValidMoves(this.board, unit).length > 0) return true;
+        if (getValidMoves(this.board, unit, this.mapProps).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
       }
     }
     return false;
   }
 
-  // ── 新手教學 ──────────────────────────────────────────────────────────────
+  applyTerrainAfterLanding(unitId, row, col) {
+    const result = resolveMapPropOnEnter(this.board, this.mapProps, row, col, unitId);
+    this.board = result.board;
+    this.mapProps = result.mapProps;
+    return result.events;
+  }
+
+  appendTerrainToLabel(actionLabel, terrainEvents) {
+    if (terrainEvents.length === 0) return actionLabel;
+    return `${actionLabel} · ${terrainEvents.join('、')}`;
+  }
+
+  checkTerrainOutcome(actionLabel, terrainEvents) {
+    if (terrainEvents.length === 0) return false;
+    return this.checkWinAfterItemEffect(this.appendTerrainToLabel(actionLabel, terrainEvents));
+  }
+
   // The tutorial replays a fixed script (js/tutorial.js) instead of consulting the AI.
   // Player input is narrowed to the one action the current step asks for, so a first-time
   // player cannot wander off the rails.
@@ -516,6 +542,7 @@ export class Game {
     this.phase = 'lobby';
     this.animating = false;
     this.board = createEmptyBoard(this.getModeConfig().size);
+    this.mapProps = createEmptyMapProps(this.getModeConfig().size);
     this.blueRoster = [];
     this.redRoster = [];
     this.blueReserve = [];
@@ -630,7 +657,9 @@ export class Game {
       const result = applyDeploy(this.board, unit, enemy.row, enemy.col);
       this.board = result.board;
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      this.endAction(enemy.label, unit.id, { isDeploy: true });
+      const terrainEvents = this.applyTerrainAfterLanding(unit.id, enemy.row, enemy.col);
+      if (this.checkTerrainOutcome(enemy.label, terrainEvents)) return;
+      this.endAction(this.appendTerrainToLabel(enemy.label, terrainEvents), unit.id, { isDeploy: true });
       return;
     }
 
@@ -641,7 +670,9 @@ export class Game {
     if (enemy.type === 'move') {
       const result = applyMove(this.board, attacker, enemy.to.row, enemy.to.col);
       this.board = result.board;
-      this.endAction(enemy.label, attacker.id);
+      const terrainEvents = this.applyTerrainAfterLanding(attacker.id, enemy.to.row, enemy.to.col);
+      if (this.checkTerrainOutcome(enemy.label, terrainEvents)) return;
+      this.endAction(this.appendTerrainToLabel(enemy.label, terrainEvents), attacker.id);
       return;
     }
 
@@ -664,6 +695,7 @@ export class Game {
   startRound() {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
+    this.mapProps = generateMapProps(mode.size);
     this.blueReserve = createTeamReserve(this.blueRoster, 'blue');
     this.redReserve = createTeamReserve(this.redRoster, 'red');
     this.currentPlayer = this.getRoundFirstPlayer();
@@ -685,7 +717,8 @@ export class Game {
         const rule = mode.actionsPerTurn > 1
           ? `每回合 ${mode.actionsPerTurn} 次行動，同一單位只能行動一次`
           : '每回合 1 次行動';
-        this.message = `${first}先攻：${rule}`;
+        const terrainNote = mode.size >= 4 ? ' · 地圖含隨機機關' : '';
+        this.message = `${first}先攻：${rule}${terrainNote}`;
       } else {
         this.message = `${first}先攻`;
       }
@@ -839,7 +872,7 @@ export class Game {
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return this.narrowToTutorialGoal(getValidMoves(this.board, unit), 'move');
+    return this.narrowToTutorialGoal(getValidMoves(this.board, unit, this.mapProps), 'move');
   }
 
   getHighlightTargets() {
@@ -853,7 +886,7 @@ export class Game {
 
   getHighlightDeploy() {
     if (!this.selectedReserveId) return [];
-    return this.narrowToTutorialGoal(getValidDeployCells(this.board), 'deploy');
+    return this.narrowToTutorialGoal(getValidDeployCells(this.board, this.mapProps), 'deploy');
   }
 
   /** Tutorial uses the finger pointer instead of grid highlights. */
@@ -879,7 +912,7 @@ export class Game {
   tryDeploy(row, col) {
     const reserve = this.getCurrentReserve();
     const unit = reserve.find((u) => u.id === this.selectedReserveId);
-    if (!unit || this.board[row][col]) return;
+    if (!unit || this.board[row][col] || isStoneCell(this.mapProps, row, col)) return;
     if (!this.isTutorialActionAllowed({ type: 'deploy', classId: unit.classId, row, col })) {
       this.rejectTutorialAction();
       return;
@@ -893,21 +926,26 @@ export class Game {
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
     }
 
-    this.endAction(`部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
+    const terrainEvents = this.applyTerrainAfterLanding(unit.id, row, col);
+    const label = `部署 ${CLASSES[unit.classId].name}`;
+    if (this.checkTerrainOutcome(label, terrainEvents)) return;
+    this.endAction(this.appendTerrainToLabel(label, terrainEvents), unit.id, { isDeploy: true });
   }
 
   tryMoveTo(unitId, row, col) {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit) return false;
     if (this.actedUnitIds.has(unitId)) return false;
-    const valid = getValidMoves(this.board, unit);
+    const valid = getValidMoves(this.board, unit, this.mapProps);
     if (!valid.some(([r, c]) => r === row && c === col)) return false;
     const move = { type: 'move', from: { row: unit.row, col: unit.col }, to: { row, col } };
     if (!this.isTutorialActionAllowed(move)) return false;
 
     const result = applyMove(this.board, unit, row, col);
     this.board = result.board;
-    this.endAction('移動', unitId);
+    const terrainEvents = this.applyTerrainAfterLanding(unitId, row, col);
+    if (this.checkTerrainOutcome('移動', terrainEvents)) return true;
+    this.endAction(this.appendTerrainToLabel('移動', terrainEvents), unitId);
     return true;
   }
 
@@ -1064,6 +1102,7 @@ export class Game {
     const action = chooseAiAction(
       {
         board: this.board,
+        mapProps: this.mapProps,
         redReserve: this.redReserve,
         blueReserve: this.blueReserve,
         actedUnitIds: this.actedUnitIds,
@@ -1086,18 +1125,35 @@ export class Game {
 
     if (action.type === 'deploy') {
       const unit = this.redReserve.find((u) => u.id === action.unitId);
+      if (!unit) return;
+      if (isStoneCell(this.mapProps, action.row, action.col)) {
+        this.endAction(`${teamLabel} 略過`, action.unitId);
+        return;
+      }
       const result = applyDeploy(this.board, unit, action.row, action.col);
       this.board = result.board;
       this.redReserve = this.redReserve.filter((u) => u.id !== unit.id);
-      this.endAction(`${teamLabel} 部署 ${CLASSES[unit.classId].name}`, unit.id, { isDeploy: true });
+      const deployLabel = `${teamLabel} 部署 ${CLASSES[unit.classId].name}`;
+      const terrainEvents = this.applyTerrainAfterLanding(unit.id, action.row, action.col);
+      if (this.checkTerrainOutcome(deployLabel, terrainEvents)) return;
+      this.endAction(this.appendTerrainToLabel(deployLabel, terrainEvents), unit.id, { isDeploy: true });
       return;
     }
 
     if (action.type === 'move') {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
+      if (!unit) return;
+      const valid = getValidMoves(this.board, unit, this.mapProps);
+      if (!valid.some(([r, c]) => r === action.row && c === action.col)) {
+        this.endAction(`${teamLabel} 略過`, action.unitId);
+        return;
+      }
       const result = applyMove(this.board, unit, action.row, action.col);
       this.board = result.board;
-      this.endAction(`${teamLabel} 移動`, action.unitId);
+      const moveLabel = `${teamLabel} 移動`;
+      const terrainEvents = this.applyTerrainAfterLanding(action.unitId, action.row, action.col);
+      if (this.checkTerrainOutcome(moveLabel, terrainEvents)) return;
+      this.endAction(this.appendTerrainToLabel(moveLabel, terrainEvents), action.unitId);
       return;
     }
 
@@ -1127,6 +1183,7 @@ export class Game {
     const context = createSearchContext(
       {
         board: this.board,
+        mapProps: this.mapProps,
         blueReserve: this.blueReserve,
         redReserve: this.redReserve,
         actedUnitIds: this.actedUnitIds,
@@ -1191,6 +1248,7 @@ export class Game {
     // thing to retune between games, and it survives so a rematch is one tap away.
     this.phase = 'formation';
     this.board = createEmptyBoard(this.getModeConfig().size);
+    this.mapProps = createEmptyMapProps(this.getModeConfig().size);
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;

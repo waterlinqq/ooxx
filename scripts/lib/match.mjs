@@ -15,6 +15,8 @@ import {
   getValidMoves,
   getValidAttackTargets,
 } from '../../js/rules.js';
+import { generateMapProps, resolveMapPropOnEnter } from '../../js/mapProps.js';
+import { isStoneCell } from '../../js/mapPropUtils.js';
 
 export const MAX_TURNS = 800;
 
@@ -42,13 +44,13 @@ export function createSimReserve(roster, teamId, counterStart) {
   );
 }
 
-export function hasValidActions(board, reserve, team, actedUnitIds) {
-  if (getValidDeployCells(board).length > 0 && reserve.length > 0) return true;
+export function hasValidActions(board, reserve, team, actedUnitIds, mapProps = null) {
+  if (getValidDeployCells(board, mapProps).length > 0 && reserve.length > 0) return true;
 
   for (const row of board) {
     for (const unit of row) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (getValidMoves(board, unit).length > 0) return true;
+      if (getValidMoves(board, unit, mapProps).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
     }
   }
@@ -113,7 +115,20 @@ function triggerPassiveBlessings(state, team, excludePriestIds = []) {
   state.board = blessing.board;
 }
 
+function triggerMapPropAfterLanding(state, row, col, unitId) {
+  const result = resolveMapPropOnEnter(state.board, state.mapProps, row, col, unitId);
+  state.board = result.board;
+  state.mapProps = result.mapProps;
+}
+
 function applyAiAction(state, action, team) {
+  if (
+    (action.type === 'deploy' || action.type === 'move')
+    && isStoneCell(state.mapProps, action.row, action.col)
+  ) {
+    return { label: 'blocked', detail: null, skipped: true };
+  }
+
   const reserves = { blue: state.blueReserve, red: state.redReserve };
   const detail = serializeAction(action, state.board, reserves);
 
@@ -123,6 +138,7 @@ function applyAiAction(state, action, team) {
     state.board = applyDeploy(state.board, unit, action.row, action.col).board;
     if (team === 'blue') state.blueReserve = state.blueReserve.filter((u) => u.id !== unit.id);
     else state.redReserve = state.redReserve.filter((u) => u.id !== unit.id);
+    triggerMapPropAfterLanding(state, action.row, action.col, unit.id);
     triggerPassiveBlessings(state, team, unit.passiveBlessing ? [unit.id] : []);
     return { label: 'deploy', detail, landedAt: { row: action.row, col: action.col } };
   }
@@ -130,6 +146,7 @@ function applyAiAction(state, action, team) {
   if (action.type === 'move') {
     const unit = state.board.flat().find((u) => u?.id === action.unitId);
     state.board = applyMove(state.board, unit, action.row, action.col).board;
+    triggerMapPropAfterLanding(state, action.row, action.col, action.unitId);
     triggerPassiveBlessings(state, team);
     return { label: 'move', detail, landedAt: { row: action.row, col: action.col } };
   }
@@ -185,14 +202,17 @@ export function runMatch({
   rosters = null,
   maxTurns = MAX_TURNS,
   recordMoves = true,
+  mapPropRng = null,
 }) {
   const { size, actionsPerTurn } = mode;
   const blueRoster = rosters?.blue ?? mode.roster;
   const redRoster = rosters?.red ?? mode.roster;
   let unitCounter = unitCounterStart;
+  const propRng = mapPropRng ?? createRng(unitCounterStart + size * 7919);
 
   const state = {
     board: createEmptyBoard(size),
+    mapProps: generateMapProps(size, propRng),
     blueReserve: createSimReserve(blueRoster, 'blue', unitCounter),
     redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length),
     currentPlayer: firstPlayer,
@@ -224,7 +244,7 @@ export function runMatch({
     const team = state.currentPlayer;
     const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
 
-    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds)) {
+    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps)) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
@@ -237,6 +257,7 @@ export function runMatch({
     const action = agent.choose(
       {
         board: state.board,
+        mapProps: state.mapProps,
         blueReserve: state.blueReserve,
         redReserve: state.redReserve,
         actedUnitIds: state.actedUnitIds,
@@ -264,6 +285,13 @@ export function runMatch({
     }
 
     const { landedAt, ...applied } = applyAiAction(state, action, team);
+    if (applied.skipped) {
+      state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.actionsRemaining = actionsPerTurn;
+      state.actedUnitIds = new Set();
+      turn++;
+      continue;
+    }
     state.actedUnitIds.add(action.unitId);
     state.actionsRemaining--;
 
@@ -291,7 +319,7 @@ export function runMatch({
     if (end) return finish(end.winner, end.reason, end.winLine);
 
     const exhausted = state.actionsRemaining <= 0
-      || !hasValidActions(state.board, reserve, team, state.actedUnitIds);
+      || !hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps);
     if (exhausted) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
       state.actionsRemaining = actionsPerTurn;

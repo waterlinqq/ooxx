@@ -5,6 +5,7 @@ import { TileGrid, TILE_PITCH, tileWorldPosition } from './TileGrid.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
+import { MapPropManager } from './MapPropManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
@@ -108,6 +109,7 @@ export class BoardScene {
     this.reserveZone = new ReserveZone3d(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
+    this.mapPropManager = new MapPropManager(this.tileGrid);
     this.tutorialPointer = new TutorialPointer(this.scene);
     this.attackFx = new AttackFx3d({
       scene: this.scene,
@@ -256,6 +258,7 @@ export class BoardScene {
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
     this.bombMarkers.sync(state.pendingBombs ?? []);
+    this.mapPropManager.sync(state.mapProps ?? null);
     this.unitManager.syncBoard(state.board, state);
     this.reserveZone.sync(state);
     // After reserveZone.sync, so a freshly benched unit already has a position to anchor to.
@@ -288,6 +291,7 @@ export class BoardScene {
     this.unitManager.syncBoard([], { actedUnitIds: [], draggingUnitId: null });
     this.highlightSystem.clear();
     this.bombMarkers.clear();
+    this.mapPropManager.clear();
     this.tutorialPointer.hide();
   }
 

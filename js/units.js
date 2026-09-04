@@ -271,6 +271,7 @@ export function createUnit(classId, teamId) {
     poisonOnHit: cls.poisonOnHit ?? false,
     poisoned: false,
     poisonFresh: false,
+    immobilized: false,
     type: cls.type,
     row: -1,
     col: -1,

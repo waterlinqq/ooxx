@@ -1,0 +1,1921 @@
+{
+  "generatedAt": "2026-09-04T04:29:58.251Z",
+  "config": {
+    "games": 3,
+    "boardMode": "4x4",
+    "boardSize": 4,
+    "actionsPerTurn": 1,
+    "seed": 42,
+    "difficulty": "hard",
+    "players": {
+      "blue": "ai",
+      "red": "ai"
+    },
+    "firstPlayerAlternation": true
+  },
+  "summary": {
+    "games": 3,
+    "wins": {
+      "blue": 2,
+      "red": 0
+    },
+    "firstPlayerWins": {
+      "blue": 1,
+      "red": 0
+    },
+    "roundEndReasons": {
+      "line": 2,
+      "elimination": 0,
+      "turn_limit": 1
+    },
+    "uniqueScripts": 3,
+    "avgMovesPerRound": 37
+  },
+  "games": [
+    {
+      "gameId": 1,
+      "boardMode": "4x4",
+      "boardSize": 4,
+      "rounds": [
+        {
+          "round": 1,
+          "firstPlayer": "blue",
+          "winner": null,
+          "reason": "turn_limit",
+          "winLine": null,
+          "totalTurns": 801,
+          "totalMoves": 12,
+          "moves": [
+            {
+              "turn": 1,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 0,
+                "col": 0
+              }
+            },
+            {
+              "turn": 2,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 3,
+                "col": 0
+              }
+            },
+            {
+              "turn": 4,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 3,
+                "col": 3
+              }
+            },
+            {
+              "turn": 5,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "shield",
+                "row": 0,
+                "col": 3
+              }
+            },
+            {
+              "turn": 6,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 1,
+                "col": 1
+              }
+            },
+            {
+              "turn": 7,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 2,
+                "col": 2
+              }
+            },
+            {
+              "turn": 8,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "tower",
+                "row": 3,
+                "col": 1
+              }
+            },
+            {
+              "turn": 9,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 3,
+                "col": 2
+              }
+            },
+            {
+              "turn": 10,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 0,
+                "col": 1
+              }
+            },
+            {
+              "turn": 11,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "bomber",
+                "row": 2,
+                "col": 1
+              }
+            },
+            {
+              "turn": 12,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "swordsman",
+                "row": 1,
+                "col": 2
+              }
+            },
+            {
+              "turn": 13,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 2,
+                "col": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "gameId": 2,
+      "boardMode": "4x4",
+      "boardSize": 4,
+      "rounds": [
+        {
+          "round": 1,
+          "firstPlayer": "red",
+          "winner": "blue",
+          "reason": "line",
+          "winLine": [
+            [
+              2,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "totalTurns": 50,
+          "totalMoves": 50,
+          "moves": [
+            {
+              "turn": 1,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 3,
+                "col": 0
+              }
+            },
+            {
+              "turn": 2,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 3,
+                "col": 3
+              }
+            },
+            {
+              "turn": 3,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "swordsman",
+                "row": 3,
+                "col": 2
+              }
+            },
+            {
+              "turn": 4,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 3
+              }
+            },
+            {
+              "turn": 5,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 0
+              }
+            },
+            {
+              "turn": 6,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 0,
+                "col": 2
+              }
+            },
+            {
+              "turn": 7,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "tower",
+                "row": 3,
+                "col": 1
+              }
+            },
+            {
+              "turn": 8,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "swordsman",
+                "row": 2,
+                "col": 0
+              }
+            },
+            {
+              "turn": 9,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 1,
+                "col": 2
+              }
+            },
+            {
+              "turn": 10,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "shield",
+                "row": 2,
+                "col": 2
+              }
+            },
+            {
+              "turn": 11,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 2,
+                "col": 1
+              }
+            },
+            {
+              "turn": 12,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "target": {
+                  "row": 0,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 13,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "bomber",
+                "row": 1,
+                "col": 1
+              }
+            },
+            {
+              "turn": 14,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "bomber",
+                "row": 0,
+                "col": 1
+              }
+            },
+            {
+              "turn": 15,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "shield",
+                "row": 0,
+                "col": 0
+              }
+            },
+            {
+              "turn": 16,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "priest",
+                "row": 2,
+                "col": 3
+              }
+            },
+            {
+              "turn": 17,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "target": {
+                  "row": 3,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 18,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 3,
+                "col": 3
+              }
+            },
+            {
+              "turn": 19,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "archer",
+                "from": {
+                  "row": 1,
+                  "col": 2
+                },
+                "to": {
+                  "row": 1,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 20,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "priest",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 2,
+                  "col": 3
+                },
+                "target": {
+                  "row": 1,
+                  "col": 3
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 21,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "archer",
+                "targetClassId": "priest",
+                "from": {
+                  "row": 1,
+                  "col": 3
+                },
+                "target": {
+                  "row": 2,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 22,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 0,
+                  "col": 3
+                },
+                "target": {
+                  "row": 1,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 23,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "eagle",
+                "row": 1,
+                "col": 3
+              }
+            },
+            {
+              "turn": 24,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "eagle",
+                "from": {
+                  "row": 0,
+                  "col": 3
+                },
+                "target": {
+                  "row": 1,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 25,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "target": {
+                  "row": 3,
+                  "col": 3
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 26,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "artillery",
+                "from": {
+                  "row": 2,
+                  "col": 0
+                },
+                "target": {
+                  "row": 3,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 27,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "bomber",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "target": {
+                  "row": 0,
+                  "col": 1
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 28,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "eagle",
+                "row": 2,
+                "col": 3
+              }
+            },
+            {
+              "turn": 29,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "target": {
+                  "row": 3,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 30,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "shield",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "target": {
+                  "row": 0,
+                  "col": 0
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 31,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "bomber",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "target": {
+                  "row": 0,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 32,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "artillery",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "to": {
+                  "row": 0,
+                  "col": 1
+                }
+              }
+            },
+            {
+              "turn": 33,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "swordsman",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "to": {
+                  "row": 3,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 34,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 35,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "eagle",
+                "from": {
+                  "row": 3,
+                  "col": 3
+                },
+                "target": {
+                  "row": 2,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 36,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "swordsman",
+                "from": {
+                  "row": 2,
+                  "col": 0
+                },
+                "to": {
+                  "row": 2,
+                  "col": 1
+                }
+              }
+            },
+            {
+              "turn": 37,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "shield",
+                "targetClassId": "artillery",
+                "from": {
+                  "row": 0,
+                  "col": 0
+                },
+                "target": {
+                  "row": 0,
+                  "col": 1
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 38,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "tower",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 3,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 39,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "priest",
+                "row": 3,
+                "col": 0
+              }
+            },
+            {
+              "turn": 40,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "shield",
+                "from": {
+                  "row": 0,
+                  "col": 3
+                },
+                "target": {
+                  "row": 0,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 41,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "swordsman",
+                "from": {
+                  "row": 3,
+                  "col": 3
+                },
+                "to": {
+                  "row": 3,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 42,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 3
+                },
+                "to": {
+                  "row": 1,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 43,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "bomber",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "to": {
+                  "row": 1,
+                  "col": 0
+                }
+              }
+            },
+            {
+              "turn": 44,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
+                "from": {
+                  "row": 1,
+                  "col": 3
+                },
+                "to": {
+                  "row": 2,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 45,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "priest",
+                "from": {
+                  "row": 3,
+                  "col": 0
+                },
+                "to": {
+                  "row": 2,
+                  "col": 0
+                }
+              }
+            },
+            {
+              "turn": 46,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "priest",
+                "from": {
+                  "row": 2,
+                  "col": 3
+                },
+                "target": {
+                  "row": 2,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 47,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "bomber",
+                "from": {
+                  "row": 1,
+                  "col": 0
+                },
+                "to": {
+                  "row": 2,
+                  "col": 0
+                }
+              }
+            },
+            {
+              "turn": 48,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 49,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "swordsman",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "to": {
+                  "row": 3,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 50,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "tower",
+                "row": 2,
+                "col": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "gameId": 3,
+      "boardMode": "4x4",
+      "boardSize": 4,
+      "rounds": [
+        {
+          "round": 1,
+          "firstPlayer": "blue",
+          "winner": "blue",
+          "reason": "line",
+          "winLine": [
+            [
+              2,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "totalTurns": 49,
+          "totalMoves": 49,
+          "moves": [
+            {
+              "turn": 1,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 3,
+                "col": 3
+              }
+            },
+            {
+              "turn": 2,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 3,
+                "col": 0
+              }
+            },
+            {
+              "turn": 3,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "swordsman",
+                "row": 3,
+                "col": 1
+              }
+            },
+            {
+              "turn": 4,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 0
+              }
+            },
+            {
+              "turn": 5,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "mage",
+                "row": 0,
+                "col": 3
+              }
+            },
+            {
+              "turn": 6,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "artillery",
+                "row": 0,
+                "col": 1
+              }
+            },
+            {
+              "turn": 7,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "tower",
+                "row": 3,
+                "col": 2
+              }
+            },
+            {
+              "turn": 8,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "swordsman",
+                "row": 2,
+                "col": 3
+              }
+            },
+            {
+              "turn": 9,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "archer",
+                "row": 2,
+                "col": 1
+              }
+            },
+            {
+              "turn": 10,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 1,
+                "col": 1
+              }
+            },
+            {
+              "turn": 11,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "archer",
+                "targetClassId": "swordsman",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 3
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 12,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 0,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 13,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "archer",
+                "targetClassId": "swordsman",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 14,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "tower",
+                "row": 0,
+                "col": 3
+              }
+            },
+            {
+              "turn": 15,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "bomber",
+                "row": 0,
+                "col": 2
+              }
+            },
+            {
+              "turn": 16,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "bomber",
+                "row": 1,
+                "col": 2
+              }
+            },
+            {
+              "turn": 17,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "assassin",
+                "row": 2,
+                "col": 0
+              }
+            },
+            {
+              "turn": 18,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 19,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "priest",
+                "row": 2,
+                "col": 1
+              }
+            },
+            {
+              "turn": 20,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "eagle",
+                "row": 2,
+                "col": 2
+              }
+            },
+            {
+              "turn": 21,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "tower",
+                "targetClassId": "eagle",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "target": {
+                  "row": 2,
+                  "col": 2
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 22,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "priest",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 2,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 23,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "bomber",
+                "targetClassId": "tower",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "target": {
+                  "row": 0,
+                  "col": 3
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 24,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "shield",
+                "row": 0,
+                "col": 3
+              }
+            },
+            {
+              "turn": 25,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "archer",
+                "from": {
+                  "row": 3,
+                  "col": 1
+                },
+                "target": {
+                  "row": 3,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 26,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "assassin",
+                "from": {
+                  "row": 1,
+                  "col": 1
+                },
+                "to": {
+                  "row": 3,
+                  "col": 0
+                }
+              }
+            },
+            {
+              "turn": 27,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "shield",
+                "row": 2,
+                "col": 1
+              }
+            },
+            {
+              "turn": 28,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "priest",
+                "row": 1,
+                "col": 1
+              }
+            },
+            {
+              "turn": 29,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "bomber",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "target": {
+                  "row": 1,
+                  "col": 2
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 30,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "shield",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 0,
+                  "col": 3
+                },
+                "target": {
+                  "row": 0,
+                  "col": 2
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 31,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "bomber",
+                "targetClassId": "bomber",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "target": {
+                  "row": 1,
+                  "col": 2
+                }
+              },
+              "kills": 1,
+              "selfLosses": 1
+            },
+            {
+              "turn": 32,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "artillery",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "to": {
+                  "row": 0,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 33,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "assassin",
+                "from": {
+                  "row": 2,
+                  "col": 0
+                },
+                "to": {
+                  "row": 0,
+                  "col": 1
+                }
+              }
+            },
+            {
+              "turn": 34,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 0,
+                  "col": 0
+                },
+                "target": {
+                  "row": 0,
+                  "col": 1
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 35,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "assassin",
+                "targetClassId": "priest",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "target": {
+                  "row": 1,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 36,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "mage",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 0,
+                  "col": 0
+                },
+                "target": {
+                  "row": 0,
+                  "col": 1
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 37,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "tower",
+                "targetClassId": "artillery",
+                "from": {
+                  "row": 3,
+                  "col": 2
+                },
+                "target": {
+                  "row": 0,
+                  "col": 2
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 38,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 0
+                },
+                "to": {
+                  "row": 0,
+                  "col": 1
+                }
+              }
+            },
+            {
+              "turn": 39,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 3,
+                  "col": 1
+                },
+                "target": {
+                  "row": 3,
+                  "col": 0
+                }
+              },
+              "kills": 0,
+              "selfLosses": 0
+            },
+            {
+              "turn": 40,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "artillery",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "to": {
+                  "row": 1,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 41,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "swordsman",
+                "targetClassId": "assassin",
+                "from": {
+                  "row": 3,
+                  "col": 1
+                },
+                "target": {
+                  "row": 3,
+                  "col": 0
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 42,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "attack",
+              "detail": {
+                "type": "attack",
+                "classId": "artillery",
+                "targetClassId": "tower",
+                "from": {
+                  "row": 1,
+                  "col": 2
+                },
+                "target": {
+                  "row": 3,
+                  "col": 2
+                }
+              },
+              "kills": 1,
+              "selfLosses": 0
+            },
+            {
+              "turn": 43,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "shield",
+                "from": {
+                  "row": 2,
+                  "col": 1
+                },
+                "to": {
+                  "row": 2,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 44,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "artillery",
+                "from": {
+                  "row": 1,
+                  "col": 2
+                },
+                "to": {
+                  "row": 1,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 45,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "artillery",
+                "from": {
+                  "row": 3,
+                  "col": 3
+                },
+                "to": {
+                  "row": 2,
+                  "col": 3
+                }
+              }
+            },
+            {
+              "turn": 46,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 1
+                },
+                "to": {
+                  "row": 0,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 47,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "deploy",
+              "detail": {
+                "type": "deploy",
+                "classId": "eagle",
+                "row": 2,
+                "col": 0
+              }
+            },
+            {
+              "turn": 48,
+              "team": "red",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "mage",
+                "from": {
+                  "row": 0,
+                  "col": 2
+                },
+                "to": {
+                  "row": 1,
+                  "col": 2
+                }
+              }
+            },
+            {
+              "turn": 49,
+              "team": "blue",
+              "actionRemainingAfter": 0,
+              "label": "move",
+              "detail": {
+                "type": "move",
+                "classId": "swordsman",
+                "from": {
+                  "row": 3,
+                  "col": 1
+                },
+                "to": {
+                  "row": 2,
+                  "col": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

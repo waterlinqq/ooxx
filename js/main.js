@@ -590,6 +590,7 @@ function renderModePicker(state) {
   const canPick = state.phase === 'lobby';
 
   for (const mode of Object.values(BOARD_MODES)) {
+    const minutes = mode.matchDurationMs / 60000;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
