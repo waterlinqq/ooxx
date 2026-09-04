@@ -12,6 +12,7 @@ import {
   remapMessageForView,
   remapTeamForView,
 } from './onlineView.js';
+import { GAME_END_REVEAL_MS } from './game.js';
 
 export class OnlineClient {
   constructor() {
@@ -53,6 +54,9 @@ export class OnlineClient {
     this.onAiFallback = null;
     /** @type {Map<string, { draggingUnitId: string|null, selectedReserveId: string|null }>} */
     this.pendingFire = new Map();
+    this._gameEndRevealGen = 0;
+    this.onAutoReturnHome = null;
+    this.onClearEndSequence = null;
   }
 
   canSend() {
@@ -328,9 +332,27 @@ export class OnlineClient {
     this.pendingFire.clear();
     this.applyGamePayload(payload);
     await this.playSecondaryFxIfNeeded(payload);
-    if (gameEnd && payload.state) {
+
+    if (gameEnd && this.gameState?.phase === 'gameEnd') {
+      const endMessage = this.gameState.message;
+      const revealGen = ++this._gameEndRevealGen;
+      this.gameState.phase = 'battle';
+      this.gameState.message = '';
+      this.animating = true;
+      this.notify();
+      await new Promise((resolve) => setTimeout(resolve, GAME_END_REVEAL_MS));
+      if (revealGen !== this._gameEndRevealGen || !this.gameState) {
+        this.animating = false;
+        this.notify();
+        return;
+      }
       this.gameState.phase = 'gameEnd';
+      this.gameState.message = endMessage;
+      this.animating = false;
+      this.notify();
+      this.onAutoReturnHome?.();
     }
+
     this.notify();
   }
 
@@ -627,6 +649,8 @@ export class OnlineClient {
   }
 
   async leaveOnline() {
+    this._gameEndRevealGen += 1;
+    this.onClearEndSequence?.();
     this.matchmakingGen += 1;
     this.aiFallbackPending = false;
     this.clearMatchmakingWatch();
@@ -644,6 +668,7 @@ export class OnlineClient {
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
+    this.animating = false;
     this.notify();
   }
 }

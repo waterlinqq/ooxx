@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
-    shm_size: 256mb
+    shm_size: 128mb
     environment:
       POSTGRES_DB: ooxx
       POSTGRES_USER: ooxx
@@ -10,9 +10,9 @@ services:
     command:
       - postgres
       - -c
-      - shared_buffers=256MB
+      - shared_buffers=64MB
       - -c
-      - max_connections=50
+      - max_connections=20
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

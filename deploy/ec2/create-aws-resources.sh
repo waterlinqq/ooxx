@@ -8,7 +8,7 @@ PROFILE="${AWS_PROFILE:-personal-water}"
 REGION="${AWS_REGION:-ap-northeast-1}"
 KEY_NAME="${EC2_KEY_NAME:-ooxx}"
 SG_NAME="${EC2_SG_NAME:-ooxx-server-sg}"
-INSTANCE_TYPE="${EC2_INSTANCE_TYPE:-t4g.small}"
+INSTANCE_TYPE="${EC2_INSTANCE_TYPE:-t4g.micro}"
 MY_IP="${MY_IP:-$(curl -s https://checkip.amazonaws.com)}"
 
 if ! aws ec2 describe-key-pairs --profile "$PROFILE" --region "$REGION" \

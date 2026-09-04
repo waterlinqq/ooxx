@@ -56,6 +56,10 @@ import {
   isObstacleCell,
 } from './mapProps.js';
 
+export const GAME_END_REVEAL_MS = 1000;
+export const GAME_END_MODAL_MS = 3000;
+export const GAME_END_FADE_MS = 450;
+
 export class Game {
   constructor() {
     this.boardMode = '3x3';
@@ -88,6 +92,10 @@ export class Game {
     this.itemTargeting = null;
     this.pendingBombs = [];
     this.lastCoinReward = 0;
+    this._endRevealTimer = null;
+    this._endRevealPending = false;
+    this.onAutoReturnHome = null;
+    this.onClearEndSequence = null;
     /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done' } | null} */
     this.tutorial = null;
   }
@@ -163,7 +171,11 @@ export class Game {
   }
 
   backToLobby() {
-    if (this.phase === 'battle') return;
+    const leavingAfterWin = this.phase === 'gameEnd' || this._endRevealPending;
+    if (this.phase === 'battle' && !leavingAfterWin) return;
+
+    this.clearEndSequence();
+    this.animating = false;
     this.tutorial = null;
     this.phase = 'lobby';
     this.board = createEmptyBoard(this.getModeConfig().size);
@@ -390,6 +402,20 @@ export class Game {
     this.itemTargeting = null;
     this.pendingBombs = [];
     this.lastCoinReward = 0;
+    this.clearEndSequence();
+  }
+
+  clearEndSequence() {
+    if (this._endRevealTimer) {
+      clearTimeout(this._endRevealTimer);
+      this._endRevealTimer = null;
+    }
+    this._endRevealPending = false;
+    this.onClearEndSequence?.();
+  }
+
+  clearEndRevealTimer() {
+    this.clearEndSequence();
   }
 
   applyTurnBoundaryEffects(endedTeam) {
@@ -1236,38 +1262,52 @@ export class Game {
   }
 
   handleRoundWin(winner, detail, reason = 'victory') {
-    this.phase = 'gameEnd';
     this.endReason = reason;
+    this.animating = true;
 
+    let endMessage;
     if (this.tutorial) {
       // No coin payout: the tutorial is a fixed script and would otherwise be farmable.
       this.tutorial.stage = 'done';
       this.lastCoinReward = 0;
       markTutorialDone();
-      this.message = winner === 'blue' ? '教學完成！' : detail;
-      this.notify();
-      return;
+      endMessage = winner === 'blue' ? '教學完成！' : detail;
+    } else {
+      const didWin = winner === 'blue';
+      const isDraw = winner === null;
+      const reward = isDraw
+        ? getCoinReward(this.boardMode, false)
+        : getCoinReward(this.boardMode, didWin);
+
+      addCoins(reward);
+      this.lastCoinReward = reward;
+
+      const coinText = reward > 0 ? ` +${reward}` : '';
+      endMessage = winner
+        ? `${TEAM[winner].name}獲勝${coinText}`
+        : `平手${coinText}`;
     }
 
-    const didWin = winner === 'blue';
-    const isDraw = winner === null;
-    const reward = isDraw
-      ? getCoinReward(this.boardMode, false)
-      : getCoinReward(this.boardMode, didWin);
-
-    addCoins(reward);
-    this.lastCoinReward = reward;
-
-    const coinText = reward > 0 ? ` +${reward}` : '';
-    this.message = winner
-      ? `${TEAM[winner].name}獲勝${coinText}`
-      : `平手${coinText}`;
+    this.clearEndSequence();
+    this._endRevealPending = true;
     this.notify();
+
+    this._endRevealTimer = setTimeout(() => {
+      this._endRevealTimer = null;
+      if (!this._endRevealPending) return;
+      this._endRevealPending = false;
+      this.phase = 'gameEnd';
+      this.message = endMessage;
+      this.animating = false;
+      this.notify();
+      this.onAutoReturnHome?.();
+    }, GAME_END_REVEAL_MS);
   }
 
   restartSeries() {
     // Back to formation rather than the mode picker: the lineup is the interesting
     // thing to retune between games, and it survives so a rematch is one tap away.
+    this.clearEndSequence();
     this.phase = 'formation';
     this.board = createEmptyBoard(this.getModeConfig().size);
     this.mapProps = createEmptyMapProps(this.getModeConfig().size);

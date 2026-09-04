@@ -1,7 +1,9 @@
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-// Just off the ground, so the fingertip lands at the foot of whatever it points at.
-const ANCHOR_HEIGHT = 0.12;
+// Default height for empty cells — slightly above the tile surface.
+export const DEFAULT_ANCHOR_HEIGHT = 0.2;
+// Chest height for occupied cells so the finger lands on the unit, not the floor.
+export const UNIT_ANCHOR_HEIGHT = 0.52;
 
 /**
  * The tutorial's "tap here" finger. One shared marker that hops between a reserve unit,
@@ -17,8 +19,7 @@ export class TutorialPointer {
     this.element.innerHTML = '<span class="tutorial-pointer-hand">👆</span>';
 
     this.object = new CSS2DObject(this.element);
-    // Hang the hand below its anchor so the raised fingertip touches the target instead
-    // of the palm covering it.
+    // Pin the bottom edge (fingertip after rotate(180deg)) to the target world position.
     this.object.center.set(0.5, 0);
     this.object.visible = false;
     scene.add(this.object);
@@ -28,8 +29,8 @@ export class TutorialPointer {
     this.object.visible = false;
   }
 
-  pointAt({ x, z }) {
-    this.object.position.set(x, ANCHOR_HEIGHT, z);
+  pointAt({ x, y = DEFAULT_ANCHOR_HEIGHT, z }) {
+    this.object.position.set(x, y, z);
     this.object.visible = true;
   }
 

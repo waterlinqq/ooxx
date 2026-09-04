@@ -1,5 +1,5 @@
 #!/bin/bash
-# EC2 User Data — Amazon Linux 2023 ARM64 (t4g.small)
+# EC2 User Data — Amazon Linux 2023 ARM64 (t4g.micro)
 # 貼到 Launch Instance → Advanced → User data
 
 set -euo pipefail
@@ -49,5 +49,17 @@ server {
 NGINX
 
 systemctl start nginx || true
+
+# 1GB swap（t4g.micro 建議）
+SWAP_FILE=/swapfile
+if [[ ! -f "$SWAP_FILE" ]]; then
+  fallocate -l 1G "$SWAP_FILE" 2>/dev/null || dd if=/dev/zero of="$SWAP_FILE" bs=1M count=1024
+  chmod 600 "$SWAP_FILE"
+  mkswap "$SWAP_FILE"
+  swapon "$SWAP_FILE"
+  echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
+  echo "vm.swappiness=10" > /etc/sysctl.d/99-ooxx-swap.conf
+  sysctl -p /etc/sysctl.d/99-ooxx-swap.conf
+fi
 
 echo "OOXX EC2 bootstrap complete"

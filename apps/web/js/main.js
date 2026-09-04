@@ -1,7 +1,8 @@
-import { Game, CLASSES, BOARD_MODES } from './game.js';
+import { Game, CLASSES, BOARD_MODES, GAME_END_MODAL_MS, GAME_END_FADE_MS } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
+import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass } from './units.js';
@@ -165,15 +166,22 @@ function drainTimerFill(el, remainingMs, maxMs) {
 
   if (!needsRestart) return;
 
+  el.style.transition = 'none';
+  el.style.width = `${pct * 100}%`;
+  void el.offsetWidth;
+  // A CSS width transition started while display:none jumps to 0% and never
+  // restarts (remaining time only decreases). Wait until the bar is laid out.
+  if (el.getClientRects().length === 0) {
+    freezeTimerFill(el, pct);
+    return;
+  }
+
   timerFillAnim.set(el, {
     remainingAtStart: remainingMs,
     startedAt: now,
     paused: false,
   });
 
-  el.style.transition = 'none';
-  el.style.width = `${pct * 100}%`;
-  void el.offsetWidth;
   el.style.transition = `width ${remainingMs}ms linear, background 0.25s ease`;
   el.style.width = '0%';
 }
@@ -339,20 +347,22 @@ function getRosterForMode(modeId) {
   return game.rostersByMode[modeId] ?? [];
 }
 
+function isLocalMatchActive(local = game.getState()) {
+  return local.tutorial
+    || local.phase === 'battle'
+    || local.phase === 'gameEnd'
+    || local.phase === 'formation';
+}
+
 function getAppState() {
+  const local = game.getState();
+  if (isLocalMatchActive(local)) {
+    return local;
+  }
+
   if (onlineClient.gameState || onlineClient.roomState) {
     const state = onlineClient.getDisplayState();
     return { ...state, ...getSaveSnapshot() };
-  }
-
-  const local = game.getState();
-  if (
-    local.tutorial
-    || local.phase === 'battle'
-    || local.phase === 'gameEnd'
-    || local.phase === 'formation'
-  ) {
-    return local;
   }
 
   if (onlineModeActive) {
@@ -378,8 +388,39 @@ function isOnlinePlaying() {
   return onlineModeActive && Boolean(onlineClient.gameState);
 }
 
-function isOnlineGameEnd(state) {
-  return Boolean(state.onlineMode && state.phase === 'gameEnd');
+function returnToHome() {
+  clearGameEndLeaveSequence();
+  if (isOnlinePlaying() || onlineClient.roomState) {
+    onlineClient.leaveOnline().then(() => render(getAppState()));
+    return;
+  }
+  game.backToLobby();
+  render(getAppState());
+}
+
+let gameEndDismissing = false;
+let gameEndMessage = '';
+/** @type {ReturnType<typeof setTimeout>[]} */
+let gameEndLeaveTimers = [];
+
+function clearGameEndLeaveSequence() {
+  for (const timerId of gameEndLeaveTimers) clearTimeout(timerId);
+  gameEndLeaveTimers = [];
+  gameEndDismissing = false;
+  gameEndMessage = '';
+  endPanelEl.classList.remove('dismissing');
+  battleContentEl.classList.remove('game-end-dismissing');
+}
+
+function onGameEndModalShown() {
+  clearGameEndLeaveSequence();
+  gameEndLeaveTimers.push(window.setTimeout(() => {
+    gameEndDismissing = true;
+    render(getAppState());
+    gameEndLeaveTimers.push(window.setTimeout(() => {
+      returnToHome();
+    }, GAME_END_FADE_MS));
+  }, GAME_END_MODAL_MS));
 }
 
 function withOnlineOrLocal(onlineFn, localFn) {
@@ -419,6 +460,10 @@ function showWinConditionToast(winCount) {
 }
 
 const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
+
+function isBottomNavLocked(state) {
+  return state.phase === 'battle' || state.phase === 'onlineWaiting';
+}
 
 function canControlUnit(state, unit) {
   if (state.phase !== 'battle' || state.animating) return false;
@@ -469,6 +514,8 @@ const characterPreview = new CharacterPreviewScene(classPreviewHostEl);
 
 const unitThumbnails = generateUnitThumbnails(Object.keys(CLASSES));
 const itemThumbnails = generateItemThumbnails(ITEM_IDS);
+const navThumbnails = generateNavThumbnails();
+applyNavIcons(bottomNavEl, navThumbnails);
 
 function setUnitIcon(container, classId) {
   const cls = CLASSES[classId];
@@ -489,11 +536,15 @@ game.playBlessFx = (fx) => board3d.playBlessFx(fx);
 onlineClient.playBlessFx = (fx) => board3d.playBlessFx(fx);
 game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
 onlineClient.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
+game.onAutoReturnHome = onGameEndModalShown;
+onlineClient.onAutoReturnHome = onGameEndModalShown;
+game.onClearEndSequence = clearGameEndLeaveSequence;
+onlineClient.onClearEndSequence = clearGameEndLeaveSequence;
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
   const state = getAppState();
-  if (state.onlineMode && state.phase === 'battle' && navId !== 'battle') return;
+  if (isBottomNavLocked(state) && navId !== 'battle') return;
   activeNav = navId;
 
   for (const [id, screen] of Object.entries(NAV_SCREENS)) {
@@ -917,9 +968,10 @@ function syncReserveTutorialPointer(state) {
   }
 
   const barRect = ownReserveBarEl.getBoundingClientRect();
-  const cardRect = card.getBoundingClientRect();
-  reserveTutorialPointerEl.style.left = `${cardRect.left + cardRect.width / 2 - barRect.left}px`;
-  reserveTutorialPointerEl.style.top = `${cardRect.top - barRect.top - 4}px`;
+  const icon = card.querySelector('.reserve-card-icon');
+  const targetRect = (icon ?? card).getBoundingClientRect();
+  reserveTutorialPointerEl.style.left = `${targetRect.left + targetRect.width / 2 - barRect.left}px`;
+  reserveTutorialPointerEl.style.top = `${targetRect.top + targetRect.height / 2 - barRect.top}px`;
 }
 
 function scheduleReserveTutorialPointer(state) {
@@ -1097,34 +1149,27 @@ function renderTutorialPanel(state) {
 
 function renderBattlePanels(state) {
   const inBattle = state.phase === 'battle';
-  const showEnd = state.phase === 'gameEnd';
+  const showEnd = state.phase === 'gameEnd' || gameEndDismissing;
   const inTutorial = Boolean(state.tutorial);
 
   surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
   surrenderBtn.disabled = !inBattle || state.animating;
 
-  const onlineEnd = isOnlineGameEnd(state);
-
   endPanelEl.classList.toggle('hidden', !showEnd);
-  restartBtn.classList.toggle('hidden', !showEnd || inTutorial || onlineEnd);
-  backToLobbyBtn.classList.toggle('hidden', !showEnd);
-
-  if (inTutorial) {
-    backToLobbyBtn.textContent = '開始遊戲';
-  } else if (onlineEnd) {
-    backToLobbyBtn.textContent = '返回大廳';
-  } else {
-    restartBtn.textContent = '再來一局';
-    backToLobbyBtn.textContent = state.onlineMode ? '返回大廳' : '換模式';
-  }
+  endPanelEl.classList.toggle('dismissing', gameEndDismissing);
+  restartBtn.classList.add('hidden');
+  backToLobbyBtn.classList.add('hidden');
 
   if (showEnd) {
-    endResultEl.textContent = state.message;
+    if (state.message) gameEndMessage = state.message;
+    endResultEl.textContent = gameEndMessage || state.message;
   }
 }
 
 function updateBottomNav(state) {
-  const lockNav = state.onlineMode && state.phase === 'battle';
+  const lockNav = isBottomNavLocked(state);
+  bottomNavEl.classList.toggle('hidden', lockNav);
+  bottomNavEl.setAttribute('aria-hidden', lockNav ? 'true' : 'false');
   for (const btn of bottomNavEl.querySelectorAll('.nav-item')) {
     const isBattle = btn.dataset.nav === 'battle';
     btn.disabled = lockNav && !isBattle;
@@ -1132,13 +1177,6 @@ function updateBottomNav(state) {
 }
 
 function render(state) {
-  if (state.onlineMode && state.timers) {
-    syncOnlineTimers(state);
-  } else {
-    syncMatchTimer(state);
-    syncTurnTimer(state);
-  }
-
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
 
@@ -1146,20 +1184,33 @@ function render(state) {
   const inBattle = state.phase === 'battle';
   const inBattleFlow = BATTLE_PHASES.has(state.phase);
   const inOnlineLobby = state.phase === 'onlineLobby' || state.phase === 'onlineWaiting';
-  const inCombat = inBattle && activeNav === 'battle';
 
-  appEl.classList.toggle('in-combat', inCombat);
-  battleContentEl.classList.toggle('in-combat', inCombat);
-  battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
-  battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
-  lobbyContentEl.classList.toggle('hidden', !inOnlineLobby && state.phase !== 'lobby');
-  battleContentEl.classList.toggle('hidden', !inBattleFlow);
-
-  if (state.phase !== lastPhase && inBattleFlow) {
+  if (isBottomNavLocked(state) && activeNav !== 'battle') {
+    switchNav('battle');
+  } else if (state.phase !== lastPhase && inBattleFlow) {
     switchNav('battle');
   }
   if (state.phase !== lastPhase && inFormation) {
     switchNav('formation');
+  }
+
+  const inCombat = inBattle && activeNav === 'battle';
+
+  appEl.classList.toggle('in-combat', inCombat);
+  appEl.classList.toggle('game-end', state.phase === 'gameEnd');
+  battleContentEl.classList.toggle('in-combat', inCombat);
+  battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
+  battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd' || gameEndDismissing);
+  battleContentEl.classList.toggle('game-end-dismissing', gameEndDismissing);
+  lobbyContentEl.classList.toggle('hidden', !inOnlineLobby && state.phase !== 'lobby');
+  battleContentEl.classList.toggle('hidden', !inBattleFlow);
+  if (inBattleFlow) void battleContentEl.offsetWidth;
+
+  if (state.onlineMode && state.timers) {
+    syncOnlineTimers(state);
+  } else {
+    syncMatchTimer(state);
+    syncTurnTimer(state);
   }
   if (state.phase !== lastPhase && state.phase === 'battle' && !state.tutorial) {
     showWinConditionToast(state.winCount);
@@ -1270,13 +1321,7 @@ restartBtn.addEventListener('click', () => {
   if (isOnlinePlaying() || onlineClient.roomState) return;
   game.restartSeries();
 });
-backToLobbyBtn.addEventListener('click', () => {
-  if (isOnlinePlaying() || onlineClient.roomState) {
-    onlineClient.leaveOnline().then(() => render(getAppState()));
-    return;
-  }
-  game.backToLobby();
-});
+backToLobbyBtn.addEventListener('click', () => returnToHome());
 surrenderBtn.addEventListener('click', () => {
   if (isOnlinePlaying()) onlineClient.surrender();
   else game.surrender();
@@ -1294,7 +1339,7 @@ function renderWhenReady() {
 }
 
 game.subscribe(() => {
-  if (!onlineClient.gameState && !onlineClient.roomState) {
+  if (isLocalMatchActive() || (!onlineClient.gameState && !onlineClient.roomState)) {
     renderWhenReady();
   }
 });

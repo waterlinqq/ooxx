@@ -5,7 +5,6 @@ export default defineConfig({
   root: '.',
   resolve: {
     alias: {
-      '@shared': path.resolve(__dirname, '../../shared'),
       '@ooxx/shared': path.resolve(__dirname, '../../shared'),
     },
   },

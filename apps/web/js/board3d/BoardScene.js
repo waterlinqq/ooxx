@@ -8,7 +8,7 @@ import { BombMarkerManager } from './BombMarkerManager.js';
 import { MapPropManager } from './MapPropManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
-import { TutorialPointer } from './TutorialPointer.js';
+import { TutorialPointer, DEFAULT_ANCHOR_HEIGHT, UNIT_ANCHOR_HEIGHT } from './TutorialPointer.js';
 import { attachDevRendererStats } from './DevRendererStats.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
@@ -230,7 +230,10 @@ export class BoardScene {
     }
 
     if (target.kind === 'cell') {
-      this.tutorialPointer.pointAt(tileWorldPosition(target.row, target.col, state.boardSize));
+      const pos = tileWorldPosition(target.row, target.col, state.boardSize);
+      const unit = state.board?.[target.row]?.[target.col] ?? null;
+      const y = unit ? UNIT_ANCHOR_HEIGHT : DEFAULT_ANCHOR_HEIGHT;
+      this.tutorialPointer.pointAt({ x: pos.x, y, z: pos.z });
       return;
     }
 
