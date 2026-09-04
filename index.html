@@ -19,18 +19,13 @@
   <div class="app">
     <header class="status-bar" id="statusBar">
       <span class="status-icon">💰</span>
-      <span class="status-text" id="statusMessage">請選擇棋盤模式</span>
+      <span class="status-text hidden" id="statusMessage"></span>
       <span class="coin-badge" id="coinBalance" aria-label="金幣">0</span>
     </header>
     <main class="game-main" id="gameMain">
       <!-- 戰鬥 -->
       <section class="game-screen active" id="screenBattle" data-screen="battle">
         <div class="screen-scroll" id="lobbyContent">
-          <div class="screen-hero">
-            <div class="screen-hero-icon">⚔️</div>
-            <h2 class="screen-title">選擇對戰模式</h2>
-            <p class="screen-desc">挑戰 AI 紅隊，連成整行或全滅對手即可獲勝</p>
-          </div>
           <div class="mode-buttons" id="modeButtons"></div>
           <button class="btn primary btn-lg" id="confirmRoster" type="button">下一步：選擇編隊</button>
           <button class="btn tutorial-cta" id="startTutorial" type="button">
@@ -43,12 +38,6 @@
         </div>
 
         <div class="screen-scroll hidden" id="formationContent">
-          <div class="screen-hero compact">
-            <div class="screen-hero-icon">🛡️</div>
-            <h2 class="screen-title">選擇你的編隊</h2>
-            <p class="screen-desc" id="formationHint"></p>
-          </div>
-
           <div>
             <div class="section-title">
               我的編隊
@@ -143,11 +132,6 @@
       <!-- 角色 -->
       <section class="game-screen" id="screenCharacters" data-screen="characters">
         <div class="screen-scroll">
-          <div class="screen-hero compact">
-            <div class="screen-hero-icon">🧙</div>
-            <h2 class="screen-title">職業圖鑑</h2>
-            <p class="screen-desc">瀏覽各職業能力與特色</p>
-          </div>
           <div class="class-picker" id="classPicker"></div>
           <div class="class-detail" id="classDetail">
             <div class="detail-preview-host" id="classPreviewHost">
@@ -164,11 +148,6 @@
       <!-- 背包 -->
       <section class="game-screen" id="screenBag" data-screen="bag">
         <div class="screen-scroll">
-          <div class="screen-hero compact">
-            <div class="screen-hero-icon">🎒</div>
-            <h2 class="screen-title">背包</h2>
-            <p class="screen-desc">對戰前在編隊畫面選擇要帶入的道具</p>
-          </div>
           <div class="item-list" id="bagGrid"></div>
         </div>
       </section>
@@ -176,11 +155,6 @@
       <!-- 商店 -->
       <section class="game-screen" id="screenShop" data-screen="shop">
         <div class="screen-scroll">
-          <div class="screen-hero compact">
-            <div class="screen-hero-icon">🏪</div>
-            <h2 class="screen-title">商店</h2>
-            <p class="screen-desc">使用金幣購買消耗品</p>
-          </div>
           <div class="item-list" id="shopGrid"></div>
         </div>
       </section>

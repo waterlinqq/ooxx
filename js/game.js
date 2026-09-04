@@ -68,7 +68,7 @@ export class Game {
     this.redRoster = [];
     this.blueReserve = [];
     this.redReserve = [];
-    this.message = '請選擇棋盤模式';
+    this.message = '';
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
@@ -136,9 +136,6 @@ export class Game {
     // can't carry over.
     this.blueRoster = [];
     this.redRoster = [];
-    const extra = mode.matchFormat === '2v2' ? ' · 2v2 單局' : '';
-    const spec = `每回合 ${mode.actionsPerTurn} 次行動 · 編隊 ${this.getRosterLimit()} 人`;
-    this.message = `已選 ${mode.label} 模式${extra}（${spec}） — 按下一步選擇編隊`;
     this.notify();
   }
 
@@ -146,22 +143,10 @@ export class Game {
     return this.blueRoster.length === this.getRosterLimit();
   }
 
-  getFormationMessage() {
-    const limit = this.getRosterLimit();
-    const picked = this.blueRoster.length;
-    if (picked === 0) {
-      return `選擇 ${limit} 名單位組成你的編隊`;
-    }
-    if (picked < limit) {
-      return `已選 ${picked}/${limit} 人 — 還要 ${limit - picked} 名`;
-    }
-    return `編隊完成 ${picked}/${limit} — 按開始對戰，AI 會隨機編隊應戰`;
-  }
-
   openFormation() {
     if (this.phase !== 'lobby') return;
     this.phase = 'formation';
-    this.message = this.getFormationMessage();
+    this.message = '';
     this.notify();
   }
 
@@ -174,7 +159,7 @@ export class Game {
     this.endReason = null;
     this.finalScores = null;
     this.equippedItem = null;
-    this.message = '請選擇棋盤模式';
+    this.message = '';
     this.notify();
   }
 
@@ -185,18 +170,18 @@ export class Game {
     const existing = this.blueRoster.indexOf(classId);
     if (existing >= 0) {
       this.blueRoster = this.blueRoster.filter((id) => id !== classId);
-      this.message = this.getFormationMessage();
+      this.message = '';
       this.notify();
       return;
     }
 
     if (!canAddToRoster(this.blueRoster, classId, this.boardMode)) {
-      this.message = `編隊已滿 ${this.blueRoster.length}/${this.getRosterLimit()} 人`;
+      this.message = '編隊已滿';
       this.notify();
       return;
     }
     this.blueRoster = sortRosterByClass([...this.blueRoster, classId]);
-    this.message = this.getFormationMessage();
+    this.message = '';
     this.notify();
   }
 
@@ -204,7 +189,7 @@ export class Game {
     if (this.phase !== 'formation') return;
     if (index < 0 || index >= this.blueRoster.length) return;
     this.blueRoster = this.blueRoster.filter((_, i) => i !== index);
-    this.message = this.getFormationMessage();
+    this.message = '';
     this.notify();
   }
 
@@ -213,7 +198,7 @@ export class Game {
 
     if (itemId === null) {
       this.equippedItem = null;
-      this.message = this.getFormationMessage();
+      this.message = '';
       this.notify();
       return;
     }
@@ -228,7 +213,7 @@ export class Game {
     }
 
     this.equippedItem = itemId;
-    this.message = `${this.getFormationMessage()} · 已選 ${item.name}`;
+    this.message = '';
     this.notify();
   }
 
@@ -380,9 +365,6 @@ export class Game {
     const item = getItem(this.equippedItem);
     if (!item || getInventoryCount(this.equippedItem) <= 0) {
       this.equippedItem = null;
-      this.message = item
-        ? `${this.getFormationMessage()} · ${item.name}已不在背包，未帶道具`
-        : `${this.getFormationMessage()} · 未帶道具`;
     }
   }
 
@@ -605,7 +587,7 @@ export class Game {
 
   skipTutorial() {
     if (!this.tutorial) return;
-    this.exitTutorial('已跳過教學 — 請選擇棋盤模式');
+    this.exitTutorial('');
   }
 
   getTutorialStepDef() {
@@ -723,11 +705,7 @@ export class Game {
 
   startBattle() {
     if (this.phase !== 'formation') return;
-    if (!this.isFormationReady()) {
-      this.message = this.getFormationMessage();
-      this.notify();
-      return;
-    }
+    if (!this.isFormationReady()) return;
     this.tutorial = null;
     this.validateEquippedItemForBattle();
     this.redRoster = createRandomRoster(this.boardMode);
@@ -1351,7 +1329,7 @@ export class Game {
     this.finalScores = null;
     this.blueReserve = [];
     this.redReserve = [];
-    this.message = this.getFormationMessage();
+    this.message = '';
     this.notify();
   }
 }

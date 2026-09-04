@@ -22,7 +22,6 @@ const boardWrapEl = document.querySelector('.board-wrap');
 const lobbyContentEl = document.getElementById('lobbyContent');
 const formationContentEl = document.getElementById('formationContent');
 const battleContentEl = document.getElementById('battleContent');
-const formationHintEl = document.getElementById('formationHint');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
 const formationPoolEl = document.getElementById('formationPool');
@@ -458,7 +457,9 @@ function createItemRow(item, { count, price, onBuy }) {
 
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
-  statusMessageEl.textContent = state.message ?? '';
+  const showStatus = state.phase === 'battle';
+  statusMessageEl.textContent = showStatus ? (state.message ?? '') : '';
+  statusMessageEl.classList.toggle('hidden', !showStatus || !state.message);
 
   // In the tutorial the step panel already carries the instruction, so the pill would
   // just repeat it over the board.
@@ -537,7 +538,6 @@ function renderFormation(state) {
   const limit = state.rosterLimit;
   const picked = state.blueRoster;
 
-  formationHintEl.textContent = state.message;
   formationCountEl.textContent = `${picked.length} / ${limit} 人`;
 
   formationLineupEl.classList.toggle('full', picked.length === limit);

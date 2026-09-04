@@ -953,10 +953,9 @@ function viperHoodGeometry() {
 function buildViper(mats) {
   const group = new THREE.Group();
 
-  // Snakes read as green, but a pure green model gives no clue which side owns
-  // it, so the scales are pulled part-way toward the team colour.
-  // Blending the team colour into the scales just turns them to mud, so the
-  // snake stays green and the hood plate carries the team colour instead.
+  // Body stays green so the silhouette still reads as a snake; blending team
+  // colour into the scales turns them to mud. Hood, collar, and saddle carry
+  // the team identity instead.
   const scaleMat = standard(0x2a9147, {
     roughness: 0.5,
     metalness: 0.1,
@@ -973,6 +972,11 @@ function buildViper(mats) {
   const extraMaterials = [scaleMat, scaleDeepMat, bellyMat, poisonMat];
 
   part(group, viperCoilGeometry(), scaleMat);
+  // Dorsal saddle: a flat team-coloured patch on the coil, visible from above.
+  part(group, cached('viper-saddle', () => new THREE.BoxGeometry(0.14, 0.022, 0.18)), mats.armorDeep, {
+    pos: [0.04, 0.175, 0.02],
+    rot: [0, 0.45, 0],
+  });
   part(group, cached('viper-tail', () => new THREE.ConeGeometry(0.052, 0.16, 10)), scaleDeepMat, {
     pos: [0.255, 0.06, -0.055],
     rot: [Math.PI / 2, 0, -0.9],
@@ -982,6 +986,12 @@ function buildViper(mats) {
   torso.position.set(0, 0.15, 0);
   group.add(torso);
   part(torso, viperNeckGeometry(), scaleMat);
+  // Collar ring at the neck base — readable from every camera angle.
+  part(torso, cached('viper-collar', () => new THREE.TorusGeometry(0.058, 0.013, 8, 20)), mats.armor, {
+    pos: [0, 0.02, 0.04],
+    rot: [0.4, 0, 0],
+    shadow: false,
+  });
 
   const head = new THREE.Group();
   head.position.set(0, 0.525, 0.1);
@@ -989,22 +999,20 @@ function buildViper(mats) {
   torso.add(head);
 
   // Flared cobra hood: the single silhouette cue that sells "snake" at tile size.
-  // It sits well behind the skull and rakes backwards so it frames the face
-  // instead of swallowing it.
-  part(head, viperHoodGeometry(), scaleDeepMat, {
+  // Outer hood carries the team colour; a smaller green inset keeps the viper read.
+  part(head, viperHoodGeometry(), mats.armor, {
     pos: [0, 0.005, -0.082],
     rot: [-0.5, 0, 0],
-    scale: [0.88, 0.92, 1],
+    scale: [1.02, 1.06, 1],
   });
-  part(head, viperHoodGeometry(), mats.armor, {
-    pos: [0, 0.008, -0.072],
+  part(head, viperHoodGeometry(), scaleDeepMat, {
+    pos: [0, 0.002, -0.078],
     rot: [-0.5, 0, 0],
-    scale: [0.68, 0.72, 0.6],
-    shadow: false,
+    scale: [0.72, 0.76, 0.65],
   });
-  const markGeo = cached('viper-hood-mark', () => new THREE.RingGeometry(0.014, 0.028, 16));
+  const markGeo = cached('viper-hood-mark', () => new THREE.RingGeometry(0.016, 0.032, 16));
   for (const side of [-1, 1]) {
-    part(head, markGeo, poisonMat, {
+    part(head, markGeo, mats.trim, {
       pos: [side * 0.058, 0.056, -0.052],
       rot: [-0.5, 0, 0],
       shadow: false,
