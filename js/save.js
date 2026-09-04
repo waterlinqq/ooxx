@@ -2,6 +2,7 @@ import { ITEM_IDS, SHOP_PRICES, STARTING_COINS } from './items.js';
 import { CLASS_IDS, CLASSES } from './units.js';
 import { STARTER_CLASSES, getUnlockPrice, isUnlockable } from './unlocks.js';
 import { getAuthToken, ensureGuestToken } from './guestAuth.js';
+import { apiUrl } from './config.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
@@ -93,7 +94,7 @@ export async function initCloudSave() {
   try {
     await ensureGuestToken();
     const token = getAuthToken();
-    const res = await fetch('/api/save', {
+    const res = await fetch(apiUrl('/api/save'), {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return loadSave();
@@ -115,7 +116,7 @@ function scheduleCloudPush() {
     const token = getAuthToken();
     if (!token || !cache) return;
     try {
-      await fetch('/api/save', {
+      await fetch(apiUrl('/api/save'), {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,

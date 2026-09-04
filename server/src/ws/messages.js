@@ -31,6 +31,27 @@ export function bindMatch(guestId, matchId, team) {
   matchGuests.get(matchId).add(guestId);
 }
 
+export function unbindMatch(guestId) {
+  const conn = byGuestId.get(guestId);
+  if (!conn?.matchId) return;
+  const set = matchGuests.get(conn.matchId);
+  if (set) {
+    set.delete(guestId);
+    if (set.size === 0) matchGuests.delete(conn.matchId);
+  }
+  conn.matchId = null;
+  conn.team = null;
+}
+
+/** 解除房間內所有連線的 match 綁定（房主取消房間時使用） */
+export function unbindAllFromMatch(matchId) {
+  const guestIds = matchGuests.get(matchId);
+  if (!guestIds) return;
+  for (const guestId of [...guestIds]) {
+    unbindMatch(guestId);
+  }
+}
+
 export function getConnection(guestId) {
   return byGuestId.get(guestId) ?? null;
 }

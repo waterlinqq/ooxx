@@ -20,10 +20,6 @@ import {
 import { onlineClient } from './online.js';
 
 loadSave();
-initCloudSave()
-  .then(() => onlineClient.tryReconnectOnLoad())
-  .then(() => render(getAppState()))
-  .catch(() => render(getAppState()));
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -60,7 +56,9 @@ const modeButtonsEl = document.getElementById('onlineModeButtons');
 const onlineLobbyActionsEl = document.getElementById('onlineLobbyActions');
 const onlineWaitingEl = document.getElementById('onlineWaiting');
 const waitingRoomCodeEl = document.getElementById('waitingRoomCode');
-const onlineWaitingMsgEl = document.getElementById('onlineWaitingMsg');
+const waitingRoomCodeLineEl = document.getElementById('waitingRoomCodeLine');
+const onlineMatchCountdownEl = document.getElementById('onlineMatchCountdown');
+const findMatchBtn = document.getElementById('findMatchBtn');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const roomCodeInput = document.getElementById('roomCodeInput');
@@ -87,8 +85,6 @@ const startTutorialBtn = document.getElementById('startTutorial');
 const tutorialPanelEl = document.getElementById('tutorialPanel');
 const tutorialStepEl = document.getElementById('tutorialStep');
 const tutorialTitleEl = document.getElementById('tutorialTitle');
-const tutorialTextEl = document.getElementById('tutorialText');
-const tutorialNoteEl = document.getElementById('tutorialNote');
 const tutorialSkipBtn = document.getElementById('tutorialSkip');
 const enemyReserveBarEl = document.getElementById('enemyReserveBar');
 const enemyReserveCardsEl = document.getElementById('enemyReserveCards');
@@ -138,13 +134,54 @@ function clearMatchTimer() {
   matchTimerLastTick = 0;
 }
 
+const timerFillAnim = new WeakMap();
+
+function timerFillPct(remainingMs, maxMs) {
+  return maxMs > 0 ? Math.min(1, Math.max(0, remainingMs / maxMs)) : 0;
+}
+
+function freezeTimerFill(el, pct) {
+  el.style.transition = 'none';
+  el.style.width = `${pct * 100}%`;
+  timerFillAnim.set(el, { remainingAtStart: null, startedAt: 0, paused: true });
+}
+
+function drainTimerFill(el, remainingMs, maxMs) {
+  const pct = timerFillPct(remainingMs, maxMs);
+  if (remainingMs <= 0 || pct <= 0) {
+    freezeTimerFill(el, 0);
+    return;
+  }
+
+  const now = performance.now();
+  const prev = timerFillAnim.get(el);
+  const expectedRemaining = prev && !prev.paused && prev.remainingAtStart != null
+    ? prev.remainingAtStart - (now - prev.startedAt)
+    : null;
+  const increased = expectedRemaining != null && remainingMs > expectedRemaining + 200;
+  const drifted = expectedRemaining != null && Math.abs(expectedRemaining - remainingMs) > 1200;
+  const needsRestart = !prev || prev.paused || expectedRemaining == null || increased || drifted;
+
+  if (!needsRestart) return;
+
+  timerFillAnim.set(el, {
+    remainingAtStart: remainingMs,
+    startedAt: now,
+    paused: false,
+  });
+
+  el.style.transition = 'none';
+  el.style.width = `${pct * 100}%`;
+  void el.offsetWidth;
+  el.style.transition = `width ${remainingMs}ms linear, background 0.25s ease`;
+  el.style.width = '0%';
+}
+
 function updateMatchTimer() {
-  const pct = matchTimerDurationMs > 0
-    ? Math.min(1, matchTimerRemainingMs / matchTimerDurationMs)
-    : 0;
-  matchTimerFillEl.style.width = `${pct * 100}%`;
+  const pct = timerFillPct(matchTimerRemainingMs, matchTimerDurationMs);
   matchTimerTextEl.textContent = formatClock(matchTimerRemainingMs);
   matchTimerEl.classList.toggle('match-timer-low', pct <= 0.1 && pct > 0);
+  drainTimerFill(matchTimerFillEl, matchTimerRemainingMs, matchTimerDurationMs);
 }
 
 function startMatchTimer(durationMs) {
@@ -199,11 +236,13 @@ function clearTurnTimer() {
 }
 
 function updateTurnTimerBar() {
-  const pct = turnTimerBarMaxMs > 0
-    ? Math.min(1, turnTimerRemainingMs / turnTimerBarMaxMs)
-    : 0;
-  turnTimerFillEl.style.width = `${pct * 100}%`;
+  const pct = timerFillPct(turnTimerRemainingMs, turnTimerBarMaxMs);
   turnTimerEl.classList.toggle('turn-timer-low', pct <= 0.25 && pct > 0);
+  if (turnTimerPaused) {
+    freezeTimerFill(turnTimerFillEl, pct);
+    return;
+  }
+  drainTimerFill(turnTimerFillEl, turnTimerRemainingMs, turnTimerBarMaxMs);
 }
 
 function addTurnTimerBonus(actionCount = 1) {
@@ -265,7 +304,10 @@ function syncTurnTimer(state) {
   }
 
   if (state.animating) {
-    turnTimerPaused = true;
+    if (!turnTimerPaused) {
+      turnTimerPaused = true;
+      updateTurnTimerBar();
+    }
     return;
   }
 
@@ -282,7 +324,9 @@ function syncTurnTimer(state) {
     }
   }
 
+  const wasPaused = turnTimerPaused;
   turnTimerPaused = false;
+  if (wasPaused) updateTurnTimerBar();
 }
 
 let onlineModeActive = true;
@@ -290,13 +334,21 @@ let selectedOnlineMode = '3x3';
 let onlineTimerInterval = null;
 
 function getAppState() {
-  if (onlineModeActive && (onlineClient.gameState || onlineClient.roomState)) {
+  if (onlineClient.gameState || onlineClient.roomState) {
     const state = onlineClient.getDisplayState();
     return { ...state, ...getSaveSnapshot() };
   }
-  if (onlineModeActive && onlineClient.roomState) {
-    return { ...onlineClient.getDisplayState(), ...getSaveSnapshot() };
+
+  const local = game.getState();
+  if (
+    local.tutorial
+    || local.phase === 'battle'
+    || local.phase === 'gameEnd'
+    || local.phase === 'formation'
+  ) {
+    return local;
   }
+
   if (onlineModeActive) {
     return {
       phase: 'onlineLobby',
@@ -305,11 +357,20 @@ function getAppState() {
       onlineMode: true,
     };
   }
-  return game.getState();
+  return local;
 }
 
 function isOnlinePlaying() {
   return onlineModeActive && Boolean(onlineClient.gameState);
+}
+
+function isOnlineGameEnd(state) {
+  return Boolean(state.onlineMode && state.phase === 'gameEnd');
+}
+
+function withOnlineOrLocal(onlineFn, localFn) {
+  if (isOnlinePlaying()) onlineFn();
+  else localFn();
 }
 
 let activeNav = 'battle';
@@ -383,7 +444,10 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
     if (isOnlinePlaying()) onlineClient.inspectUnit(unitId);
     else game.inspectUnit(unitId);
   },
-  onItemTarget: (row, col) => game.tryItemTarget(row, col),
+  onItemTarget: (row, col) => {
+    if (isOnlinePlaying()) return;
+    game.tryItemTarget(row, col);
+  },
   canControlUnit,
 });
 
@@ -406,11 +470,16 @@ function setItemIcon(container, item) {
 }
 
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
+onlineClient.playAttackFx = (fx) => board3d.playAttackFx(fx);
 game.playBlessFx = (fx) => board3d.playBlessFx(fx);
+onlineClient.playBlessFx = (fx) => board3d.playBlessFx(fx);
 game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
+onlineClient.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
+  const state = getAppState();
+  if (state.onlineMode && state.phase === 'battle' && navId !== 'battle') return;
   activeNav = navId;
 
   for (const [id, screen] of Object.entries(NAV_SCREENS)) {
@@ -421,7 +490,6 @@ function switchNav(navId) {
     btn.classList.toggle('active', btn.dataset.nav === navId);
   }
 
-  const state = getAppState();
   if (BATTLE_PHASES.has(state.phase)) {
     board3d.setVisible(navId === 'battle');
     if (navId === 'battle') {
@@ -460,7 +528,6 @@ function renderClassDetail(classId) {
 
   classDetailInfoEl.innerHTML = `
     <h2 class="detail-name">${cls.name}</h2>
-    <p class="detail-desc">${cls.desc}</p>
     <dl class="detail-stats">
       <div><dt>HP</dt><dd>${cls.hp}</dd></div>
       <div><dt>ATK</dt><dd>${cls.atk}</dd></div>
@@ -502,7 +569,7 @@ function createItemChip(item, { count, equipped, onSelect }) {
 
   const owned = count ?? 0;
   if (item.id !== null && owned <= 0) chip.disabled = true;
-  chip.title = item.desc ?? item.name ?? '';
+  chip.title = item.name ?? '';
 
   const label = item.id === null ? '無' : item.name;
   const badge = item.id !== null && owned > 0 ? `<span class="item-chip-badge">${owned}</span>` : '';
@@ -530,10 +597,7 @@ function createClassUnlockRow(cls, { onBuy }) {
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
-  body.innerHTML = `
-    <span class="item-row-name">${cls.name}</span>
-    <span class="item-row-desc">${cls.desc}</span>
-  `;
+  body.innerHTML = `<span class="item-row-name">${cls.name}</span>`;
 
   row.append(iconWrap, body);
 
@@ -564,10 +628,7 @@ function createItemRow(item, { count, price, onBuy }) {
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
-  body.innerHTML = `
-    <span class="item-row-name">${item.name}</span>
-    <span class="item-row-desc">${item.desc}</span>
-  `;
+  body.innerHTML = `<span class="item-row-name">${item.name}</span>`;
 
   row.append(iconWrap, body);
   if (count != null) {
@@ -599,12 +660,8 @@ function createItemRow(item, { count, price, onBuy }) {
 
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
-  const showStatus = state.phase === 'battle';
-  statusMessageEl.textContent = showStatus ? (state.message ?? '') : '';
-  statusMessageEl.classList.toggle('hidden', !showStatus || !state.message);
+  statusMessageEl.classList.add('hidden');
 
-  // In the tutorial the step panel already carries the instruction, so the pill would
-  // just repeat it over the board.
   const inBattle = state.phase === 'battle' && !state.tutorial;
   battleStatusPillEl.classList.toggle('hidden', !inBattle);
   if (inBattle) {
@@ -615,7 +672,7 @@ function renderCoinBalance(state) {
 function renderFormationItems(state) {
   formationItemsEl.innerHTML = '';
 
-  const noneItem = { id: null, name: '無', icon: '➖', desc: '不帶道具' };
+  const noneItem = { id: null, name: '無', icon: '➖' };
   formationItemsEl.appendChild(createItemChip(noneItem, {
     equipped: state.equippedItem === null,
     onSelect: (id) => game.selectEquippedItem(id),
@@ -713,12 +770,7 @@ function renderFormation(state) {
   formationLineupEl.classList.toggle('full', picked.length === limit);
   formationLineupEl.innerHTML = '';
 
-  if (picked.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'roster-lineup-empty';
-    empty.textContent = '尚未選擇任何單位';
-    formationLineupEl.appendChild(empty);
-  } else {
+  if (picked.length > 0) {
     picked.forEach((classId, index) => {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -814,10 +866,19 @@ function createReserveCard(unit, { side, state }) {
   card.append(iconWrap, nameEl, hpBar, vitals);
 
   if (side === 'enemy') {
-    card.addEventListener('click', () => game.inspectUnit(unit.id));
+    card.addEventListener('click', () => {
+      withOnlineOrLocal(
+        () => onlineClient.inspectUnit(unit.id),
+        () => game.inspectUnit(unit.id),
+      );
+    });
   } else {
     card.addEventListener('click', () => {
-      if (selectable) game.selectReserve(unit.id);
+      if (!selectable) return;
+      withOnlineOrLocal(
+        () => onlineClient.selectReserve(unit.id),
+        () => game.selectReserve(unit.id),
+      );
     });
   }
 
@@ -871,6 +932,10 @@ function renderReserveBars(state) {
   scheduleReserveTutorialPointer(state);
 }
 
+function refreshOnlineTimerRemaining() {
+  onlineClient.refreshTimerRemaining();
+}
+
 function syncOnlineTimers(state) {
   if (!state.onlineMode || !state.timers || state.phase !== 'battle') {
     if (onlineTimerInterval) {
@@ -882,35 +947,38 @@ function syncOnlineTimers(state) {
     return;
   }
 
+  refreshOnlineTimerRemaining();
+
   const update = () => {
     const t = state.timers;
     if (!t) return;
 
-    const turnPct = state.turnDurationMs > 0
-      ? Math.min(1, t.turnRemainingMs / state.turnDurationMs)
-      : 0;
-    turnTimerFillEl.style.width = `${turnPct * 100}%`;
+    const paused = Boolean(t.timersPaused);
+    const turnMaxMs = Math.max(state.turnDurationMs || 0, t.turnRemainingMs);
+    const turnPct = timerFillPct(t.turnRemainingMs, turnMaxMs);
     turnTimerEl.classList.remove('hidden');
     turnTimerEl.setAttribute('aria-hidden', 'false');
+    turnTimerEl.classList.toggle('turn-timer-low', turnPct <= 0.25 && turnPct > 0);
+    if (paused) freezeTimerFill(turnTimerFillEl, turnPct);
+    else drainTimerFill(turnTimerFillEl, t.turnRemainingMs, turnMaxMs);
 
-    const matchPct = state.matchDurationMs > 0
-      ? Math.min(1, t.matchRemainingMs / state.matchDurationMs)
-      : 0;
-    matchTimerFillEl.style.width = `${matchPct * 100}%`;
+    const matchPct = timerFillPct(t.matchRemainingMs, state.matchDurationMs);
     matchTimerTextEl.textContent = formatClock(t.matchRemainingMs);
     matchTimerEl.classList.remove('hidden');
     matchTimerEl.setAttribute('aria-hidden', 'false');
+    matchTimerEl.classList.toggle('match-timer-low', matchPct <= 0.1 && matchPct > 0);
+    if (paused) freezeTimerFill(matchTimerFillEl, matchPct);
+    else drainTimerFill(matchTimerFillEl, t.matchRemainingMs, state.matchDurationMs);
   };
 
   update();
   if (!onlineTimerInterval) {
     onlineTimerInterval = setInterval(() => {
-      if (onlineClient.timers) {
-        onlineClient.timers.turnRemainingMs = Math.max(0, onlineClient.timers.turnRemainingMs - 1000);
-        onlineClient.timers.matchRemainingMs = Math.max(0, onlineClient.timers.matchRemainingMs - 1000);
+      if (onlineClient.timers && !onlineClient.timers.timersPaused) {
+        refreshOnlineTimerRemaining();
       }
       render(getAppState());
-    }, 1000);
+    }, 250);
   }
 }
 
@@ -919,14 +987,10 @@ function renderModePicker(state) {
   const canPick = state.phase === 'onlineLobby' || state.phase === 'onlineWaiting';
 
   for (const mode of Object.values(BOARD_MODES)) {
-    const minutes = mode.matchDurationMs / 60000;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (selectedOnlineMode === mode.id ? ' active' : '');
-    btn.innerHTML = `
-      <span class="mode-btn-label">${mode.label}</span>
-      <span class="mode-btn-sub">限時 ${minutes} 分鐘</span>
-    `;
+    btn.innerHTML = `<span class="mode-btn-label">${mode.label}</span>`;
     btn.disabled = !canPick;
     btn.addEventListener('click', () => {
       selectedOnlineMode = mode.id;
@@ -944,16 +1008,22 @@ function renderOnlineLobby(state) {
   onlineWaitingEl.classList.toggle('hidden', !waiting);
 
   if (waiting) {
-    waitingRoomCodeEl.textContent = state.roomCode ?? '';
-    const players = state.roomState?.players ?? [];
-    onlineWaitingMsgEl.textContent = players.length >= 2
-      ? '對手已加入，開局中…'
-      : '等待對手加入…（分享房間碼）';
+    const matching = Boolean(state.matchmaking);
+    waitingRoomCodeLineEl.classList.toggle('hidden', matching);
+    onlineMatchCountdownEl.classList.toggle('hidden', !matching);
+
+    if (matching) {
+      const remainSec = Math.max(0, Math.ceil((state.matchmakingRemainingMs ?? 0) / 1000));
+      onlineMatchCountdownEl.textContent = String(remainSec);
+    } else {
+      waitingRoomCodeEl.textContent = state.roomCode ?? '';
+    }
   }
 }
 
 function renderLobbyFooter(state) {
-  startTutorialBtn.classList.toggle('hidden', true);
+  const inLobby = state.phase === 'onlineLobby' || state.phase === 'lobby';
+  startTutorialBtn.classList.toggle('hidden', !(inLobby && !isTutorialDone()));
   if (confirmRosterBtn) confirmRosterBtn.classList.add('hidden');
 }
 
@@ -964,12 +1034,8 @@ function renderTutorialPanel(state) {
   if (!show) return;
 
   tutorialStepEl.textContent = `${tutorial.stepNumber} / ${tutorial.totalSteps}`;
-  tutorialTitleEl.textContent = tutorial.title;
-  tutorialTextEl.textContent = tutorial.waitingForEnemy ? '紅隊行動中…' : tutorial.text;
+  tutorialTitleEl.textContent = tutorial.waitingForEnemy ? '…' : tutorial.title;
   tutorialPanelEl.classList.toggle('waiting', tutorial.waitingForEnemy);
-
-  tutorialNoteEl.classList.toggle('hidden', !tutorial.note);
-  tutorialNoteEl.textContent = tutorial.note ?? '';
 }
 
 function renderBattlePanels(state) {
@@ -978,24 +1044,33 @@ function renderBattlePanels(state) {
   const inTutorial = Boolean(state.tutorial);
 
   surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
-  surrenderBtn.disabled = !inBattle || state.animating || !state.isHumanTurn;
+  surrenderBtn.disabled = !inBattle || state.animating;
+
+  const onlineEnd = isOnlineGameEnd(state);
 
   endPanelEl.classList.toggle('hidden', !showEnd);
-  restartBtn.classList.toggle('hidden', !showEnd || inTutorial);
+  restartBtn.classList.toggle('hidden', !showEnd || inTutorial || onlineEnd);
   backToLobbyBtn.classList.toggle('hidden', !showEnd);
 
-  if (!inTutorial) {
+  if (inTutorial) {
+    backToLobbyBtn.textContent = '開始遊戲';
+  } else if (onlineEnd) {
+    backToLobbyBtn.textContent = '返回大廳';
+  } else {
     restartBtn.textContent = '再來一局';
     backToLobbyBtn.textContent = state.onlineMode ? '返回大廳' : '換模式';
-  } else {
-    backToLobbyBtn.textContent = '開始遊戲';
   }
 
   if (showEnd) {
-    const coinLine = state.lastCoinReward > 0
-      ? `\n💰 +${state.lastCoinReward} 金幣`
-      : '';
-    endResultEl.textContent = state.message + coinLine;
+    endResultEl.textContent = state.message;
+  }
+}
+
+function updateBottomNav(state) {
+  const lockNav = state.onlineMode && state.phase === 'battle';
+  for (const btn of bottomNavEl.querySelectorAll('.nav-item')) {
+    const isBattle = btn.dataset.nav === 'battle';
+    btn.disabled = lockNav && !isBattle;
   }
 }
 
@@ -1064,6 +1139,7 @@ function render(state) {
 
   renderModePicker(state);
   renderClassPicker();
+  updateBottomNav(state);
 
   const showCharacterPreview = activeNav === 'characters';
   characterPreview.setVisible(showCharacterPreview);
@@ -1077,6 +1153,18 @@ bottomNavEl.addEventListener('click', (e) => {
   if (!btn || btn.disabled) return;
   switchNav(btn.dataset.nav);
   render(getAppState());
+});
+
+findMatchBtn.addEventListener('click', async () => {
+  findMatchBtn.disabled = true;
+  try {
+    await onlineClient.findMatch(selectedOnlineMode);
+    render(getAppState());
+  } catch (e) {
+    alert(e.message ?? '匹配失敗');
+  } finally {
+    findMatchBtn.disabled = false;
+  }
 });
 
 createRoomBtn.addEventListener('click', async () => {
@@ -1108,25 +1196,19 @@ joinRoomBtn.addEventListener('click', async () => {
 });
 
 cancelRoomBtn.addEventListener('click', () => {
-  onlineClient.leaveOnline();
-  render(getAppState());
+  onlineClient.leaveOnline().then(() => render(getAppState()));
 });
 
 if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => game.openFormation());
 formationBackBtn.addEventListener('click', () => game.backToLobby());
 startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => {
-  if (isOnlinePlaying() || onlineClient.roomState) {
-    onlineClient.leaveOnline();
-    render(getAppState());
-    return;
-  }
+  if (isOnlinePlaying() || onlineClient.roomState) return;
   game.restartSeries();
 });
 backToLobbyBtn.addEventListener('click', () => {
-  if (onlineModeActive) {
-    onlineClient.leaveOnline();
-    render(getAppState());
+  if (isOnlinePlaying() || onlineClient.roomState) {
+    onlineClient.leaveOnline().then(() => render(getAppState()));
     return;
   }
   game.backToLobby();
@@ -1140,11 +1222,32 @@ cancelItemBtn.addEventListener('click', () => game.cancelItemTargeting());
 startTutorialBtn.addEventListener('click', () => game.startTutorial());
 tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 
-game.subscribe((state) => {
-  if (!isOnlinePlaying() && !onlineClient.roomState) render(state);
+let appReady = false;
+
+function renderWhenReady() {
+  if (!appReady) return;
+  render(getAppState());
+}
+
+game.subscribe(() => {
+  if (!onlineClient.gameState && !onlineClient.roomState) {
+    renderWhenReady();
+  }
 });
-onlineClient.subscribe(() => render(getAppState()));
-render(getAppState());
+initCloudSave()
+  .then(() => onlineClient.tryReconnectOnLoad())
+  .then(() => {
+    appReady = true;
+    render(getAppState());
+  })
+  .catch(() => {
+    appReady = true;
+    render(getAppState());
+  });
+onlineClient.onAiFallback = (boardMode) => {
+  game.startQuickAiBattle(boardMode);
+};
+onlineClient.subscribe(() => renderWhenReady());
 
 window.addEventListener('resize', () => {
   scheduleReserveTutorialPointer(getAppState());

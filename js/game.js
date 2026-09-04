@@ -86,7 +86,7 @@ export class Game {
     this.itemTargeting = null;
     this.pendingBombs = [];
     this.lastCoinReward = 0;
-    /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done', lastNote: string|null } | null} */
+    /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done' } | null} */
     this.tutorial = null;
   }
 
@@ -259,10 +259,8 @@ export class Game {
     this.inspectedUnitId = null;
 
     this.itemTargeting = this.equippedItem;
-    const hint = item.targeting === 'friendly_unit'
-      ? '點選要治療的己方單位'
-      : '點選空格放置炸彈';
-    this.message = `${item.icon} ${item.name}：${hint}`;
+    const hint = item.targeting === 'friendly_unit' ? '選單位' : '選空格';
+    this.message = `${item.icon} ${hint}`;
     this.notify();
   }
 
@@ -308,7 +306,7 @@ export class Game {
     this.itemTargeting = null;
 
     if (!this.checkWinAfterItemEffect(label)) {
-      this.message = `${label} — 還可行動 ${this.actionsRemaining}/${this.getActionsPerTurn()} 次`;
+      this.message = `${label} · ${this.actionsRemaining}/${this.getActionsPerTurn()}`;
       this.notify();
     }
   }
@@ -318,7 +316,7 @@ export class Game {
       const winLine = checkWin(this.board, team, this.mapProps);
       if (winLine) {
         this.lastWinLine = winLine;
-        this.handleRoundWin(team, `${detail}後連成 ${this.getWinCountLabel()} 子！`);
+        this.handleRoundWin(team, `連 ${this.getWinCountLabel()} 子`);
         return true;
       }
     }
@@ -328,7 +326,7 @@ export class Game {
       const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
       if (isTeamEliminated(this.board, enemy, enemyReserve)) {
         this.lastWinLine = null;
-        this.handleRoundWin(team, `${detail}後全滅對手！`);
+        this.handleRoundWin(team, '全滅');
         return true;
       }
     }
@@ -482,19 +480,11 @@ export class Game {
 
   getPlayerTurnMessage() {
     const mode = this.getModeConfig();
-    if (this.tutorial) {
-      if (this.tutorial.stage === 'enemy') return '紅隊行動中…';
-      const step = this.getTutorialStepDef();
-      if (!step) return '教學完成';
-      return `步驟 ${this.tutorial.stepIndex + 1}／${TUTORIAL_STEP_COUNT} · ${step.title}：${step.text}`;
-    }
+    if (this.tutorial) return '';
 
     const team = TEAM[this.currentPlayer];
-    const actionsPerTurn = mode.actionsPerTurn;
-    if (this.currentPlayer === 'blue') {
-      return `藍隊回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）：拖曳單位移動或攻擊，點後備區再點空格部署，點敵方單位查看資訊`;
-    }
-    return `${team.name}回合（剩餘 ${this.actionsRemaining}/${actionsPerTurn} 次行動）`;
+    const remain = `${this.actionsRemaining}/${mode.actionsPerTurn}`;
+    return `${team.name} ${remain}`;
   }
 
   hasValidActionsForTeam(team = this.currentPlayer) {
@@ -544,7 +534,7 @@ export class Game {
     this.redRoster = [...TUTORIAL_RED_ROSTER];
     this.equippedItem = null;
     this.animating = false;
-    this.tutorial = { stepIndex: 0, stage: 'player', lastNote: null };
+    this.tutorial = { stepIndex: 0, stage: 'player' };
     this.startRound();
   }
 
@@ -593,7 +583,7 @@ export class Game {
   rejectTutorialAction() {
     this.draggingUnitId = null;
     this.selectedReserveId = null;
-    this.message = `照著教學做：${this.getTutorialStepDef()?.text ?? ''}`;
+    this.message = '';
     this.notify();
   }
 
@@ -634,8 +624,6 @@ export class Game {
       stepNumber: Math.min(this.tutorial.stepIndex + 1, TUTORIAL_STEP_COUNT),
       totalSteps: TUTORIAL_STEP_COUNT,
       title: done ? '教學完成' : step?.title ?? '',
-      text: done ? '你已經學會部署、攻擊與連線，去挑戰 AI 吧！' : step?.text ?? '',
-      note: this.tutorial.lastNote,
       waitingForEnemy: this.tutorial.stage === 'enemy',
       done,
     };
@@ -646,7 +634,6 @@ export class Game {
       this.tutorial.stage = 'enemy';
       return;
     }
-    this.tutorial.lastNote = this.getTutorialStepDef()?.enemy?.note ?? null;
     this.tutorial.stepIndex += 1;
     this.tutorial.stage = 'player';
   }
@@ -700,11 +687,26 @@ export class Game {
     this.startRound();
   }
 
+  /** 匹配逾時：用該模式預設編隊立刻開打 AI */
+  startQuickAiBattle(boardMode) {
+    if (!BOARD_MODES[boardMode]) return;
+    this.tutorial = null;
+    this.boardMode = boardMode;
+    this.equippedItem = null;
+    this.itemUsed = false;
+    this.itemTargeting = null;
+    this.pendingBombs = [];
+    this.animating = false;
+    this.blueRoster = [...this.getModeConfig().roster];
+    this.redRoster = createRandomRoster(this.boardMode);
+    this.startRound({ vsAi: true });
+  }
+
   getRoundFirstPlayer() {
     return 'blue';
   }
 
-  startRound() {
+  startRound({ vsAi = false } = {}) {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
     this.mapProps = generateMapProps(mode.size);
@@ -722,18 +724,10 @@ export class Game {
     this.resetBattleItemState();
 
     if (this.tutorial) {
-      this.message = this.getPlayerTurnMessage();
+      this.message = '';
     } else {
-      const first = TEAM[this.currentPlayer].name;
-      if (this.currentPlayer === 'blue') {
-        const rule = mode.actionsPerTurn > 1
-          ? `每回合 ${mode.actionsPerTurn} 次行動，同一單位只能行動一次`
-          : '每回合 1 次行動';
-        const terrainNote = mode.size >= 4 ? ' · 地圖含隨機機關' : '';
-        this.message = `${first}先攻：${rule}${terrainNote}`;
-      } else {
-        this.message = `${first}先攻`;
-      }
+      this.message = `${TEAM[this.currentPlayer].name}先攻`;
+      if (vsAi) this.message += ' · 對戰 AI';
     }
 
     this.notify();
@@ -766,7 +760,7 @@ export class Game {
     this.draggingUnitId = null;
     this.inspectedUnitId = null;
     this.selectedReserveId = unitId;
-    this.message = `點選空格部署 ${CLASSES[unit.classId].name}`;
+    this.message = `部署 ${CLASSES[unit.classId].name}`;
     this.notify();
   }
 
@@ -780,9 +774,7 @@ export class Game {
     } else {
       this.inspectedUnitId = unitId;
       const cls = CLASSES[unit.classId];
-      const onBoard = this.board.flat().some((u) => u?.id === unitId);
-      const where = onBoard ? '場上' : '後備';
-      this.message = `${cls.name}（${where}）HP ${unit.hp}/${unit.maxHp} · ATK ${unit.atk}`;
+      this.message = `${cls.name} ${unit.hp}/${unit.maxHp} · ${unit.atk}`;
     }
     this.notify();
   }
@@ -812,7 +804,7 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.draggingUnitId = unitId;
-    this.message = '點選或拖曳至綠格移動、紅格攻擊';
+    this.message = '選目標格';
     this.notify();
   }
 
@@ -1069,24 +1061,24 @@ export class Game {
 
     if (winLine) {
       this.lastWinLine = winLine;
-      this.handleRoundWin(this.currentPlayer, `${team.name} ${actionLabel}後連成 ${this.getWinCountLabel()} 子！`);
+      this.handleRoundWin(this.currentPlayer, `連 ${this.getWinCountLabel()} 子`);
       return;
     }
 
     if (isTeamEliminated(this.board, enemy, enemyReserve)) {
       this.lastWinLine = null;
-      this.handleRoundWin(this.currentPlayer, `${team.name} ${actionLabel}後全滅對手！`);
+      this.handleRoundWin(this.currentPlayer, '全滅');
       return;
     }
 
     if (this.actionsRemaining > 0) {
       if (!this.hasValidActionsForTeam()) {
-        this.message = `${actionLabel} — 無更多可行動，換 ${TEAM[enemy].name}回合`;
+        this.message = `換 ${TEAM[enemy].name}`;
         this.notify();
         this.switchPlayer();
         return;
       }
-      this.message = `${actionLabel} — 還可行動 ${this.actionsRemaining} 次`;
+      this.message = `剩 ${this.actionsRemaining}`;
       this.notify();
       if (this.currentPlayer === 'red') {
         setTimeout(() => this.runAiTurn(), 500);
@@ -1228,7 +1220,7 @@ export class Game {
     this.endReason = 'timeout';
     this.finalScores = { blue: blueScore, red: redScore };
 
-    const detail = `時間到 · 最終分數：藍隊 ${blueScore}｜紅隊 ${redScore}`;
+    const detail = `時間到 ${blueScore}:${redScore}`;
     this.handleRoundWin(winner, detail, 'timeout');
   }
 
@@ -1241,9 +1233,7 @@ export class Game {
       this.tutorial.stage = 'done';
       this.lastCoinReward = 0;
       markTutorialDone();
-      this.message = winner === 'blue'
-        ? '🎉 教學完成！你已經學會部署、攻擊與連線'
-        : detail;
+      this.message = winner === 'blue' ? '教學完成！' : detail;
       this.notify();
       return;
     }
@@ -1257,10 +1247,10 @@ export class Game {
     addCoins(reward);
     this.lastCoinReward = reward;
 
-    const coinText = reward > 0 ? ` · +${reward} 金幣` : '';
+    const coinText = reward > 0 ? ` +${reward}` : '';
     this.message = winner
-      ? `${detail} — ${TEAM[winner].name}獲勝！${coinText}`
-      : `${detail} — 平手！${coinText}`;
+      ? `${TEAM[winner].name}獲勝${coinText}`
+      : `平手${coinText}`;
     this.notify();
   }
 

@@ -23,6 +23,7 @@ import {
   resolveDeathExplosions,
 } from '../../../shared/rules.js';
 import { isObstacleCell } from '../../../shared/mapPropUtils.js';
+import { MATCHMAKING_TIMEOUT_MS } from '../../../shared/protocol.js';
 import { pool } from '../db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,7 @@ async function loadAiEvaluate() {
 
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const WAITING_TTL_MS = 10 * 60 * 1000;
+const MATCHMAKING_TTL_MS = MATCHMAKING_TIMEOUT_MS + 5000;
 const FINISHED_TTL_MS = 24 * 60 * 60 * 1000;
 const RECONNECT_WINDOW_MS = 30 * 60 * 1000;
 
@@ -134,7 +136,21 @@ function applyTerrainAfterLanding(state, unitId, row, col) {
   const result = resolveMapPropOnEnter(state.board, state.mapProps, row, col, unitId);
   state.board = result.board;
   state.mapProps = result.mapProps;
-  return result.events ?? [];
+  return { events: result.events ?? [], trigger: result.trigger ?? null };
+}
+
+function packActionFx(terrainTrigger, blessingFx) {
+  return {
+    terrain: terrainTrigger ?? null,
+    blessing: blessingFx ?? null,
+  };
+}
+
+function buildBlessingFx(targets) {
+  if (!targets?.length) return null;
+  return {
+    targets: targets.map((t) => ({ row: t.row, col: t.col, amount: 1 })),
+  };
 }
 
 function checkWinAfterEffect(state, detail) {
@@ -214,10 +230,13 @@ function endAction(state, actionLabel, unitId, { isDeploy = false } = {}) {
   const actingUnit = state.board.flat().find((u) => u?.id === unitId);
   const excludePriestIds = isDeploy && actingUnit?.passiveBlessing ? [unitId] : [];
   const blessing = applyTeamPriestBlessings(state.board, team, excludePriestIds);
+  const blessingFx = buildBlessingFx(blessing.targets);
   if (blessing.targets.length > 0) {
     actionLabel += ` · 祝福 ${blessing.targets.length} 名友軍`;
     state.board = blessing.board;
   }
+
+  const withFx = (result) => ({ ...result, actionFx: packActionFx(null, blessingFx) });
 
   state.actedUnitIds.push(unitId);
   state.actionsRemaining -= 1;
@@ -226,28 +245,28 @@ function endAction(state, actionLabel, unitId, { isDeploy = false } = {}) {
   if (winLine) {
     state.lastWinLine = winLine;
     finishGame(state, team, `${TEAM[team].name} ${actionLabel}後連成 ${getMode(state).size} 子！`, 'line');
-    return { ok: true, ended: true };
+    return withFx({ ok: true, ended: true });
   }
 
   if (isTeamEliminated(state.board, enemy, enemyReserve)) {
     state.lastWinLine = null;
     finishGame(state, team, `${TEAM[team].name} ${actionLabel}後全滅對手！`, 'elimination');
-    return { ok: true, ended: true };
+    return withFx({ ok: true, ended: true });
   }
 
   if (state.actionsRemaining > 0) {
     if (!hasValidActionsForTeam(state, team)) {
       state.message = `${actionLabel} — 無更多可行動，換 ${TEAM[enemy].name}回合`;
       switchPlayer(state);
-      return { ok: true, ended: state.phase === 'gameEnd', turnEnded: true };
+      return withFx({ ok: true, ended: state.phase === 'gameEnd', turnEnded: true });
     }
     state.message = `${actionLabel} — 還可行動 ${state.actionsRemaining} 次`;
-    return { ok: true, ended: false };
+    return withFx({ ok: true, ended: false });
   }
 
   state.message = actionLabel;
   switchPlayer(state);
-  return { ok: true, ended: state.phase === 'gameEnd', turnEnded: true };
+  return withFx({ ok: true, ended: state.phase === 'gameEnd', turnEnded: true });
 }
 
 export function applyGameAction(state, action, team) {
@@ -275,11 +294,17 @@ export function applyGameAction(state, action, team) {
       state.redReserve = state.redReserve.filter((u) => u.id !== unit.id);
     }
 
-    const terrainEvents = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
+    const terrain = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
     const label = `部署 ${CLASSES[unit.classId].name}`;
-    const detail = terrainEvents.length > 0 ? `${label} · ${terrainEvents.join('、')}` : label;
-    if (checkWinAfterEffect(state, detail)) return { ok: true, ended: true };
-    return endAction(state, detail, unit.id, { isDeploy: true });
+    const detail = terrain.events.length > 0 ? `${label} · ${terrain.events.join('、')}` : label;
+    if (checkWinAfterEffect(state, detail)) {
+      return { ok: true, ended: true, actionFx: packActionFx(terrain.trigger, null) };
+    }
+    const endResult = endAction(state, detail, unit.id, { isDeploy: true });
+    return {
+      ...endResult,
+      actionFx: packActionFx(terrain.trigger, endResult.actionFx?.blessing),
+    };
   }
 
   if (action.type === 'move') {
@@ -294,10 +319,16 @@ export function applyGameAction(state, action, team) {
 
     const result = applyMove(state.board, unit, action.row, action.col);
     state.board = result.board;
-    const terrainEvents = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
-    const detail = terrainEvents.length > 0 ? `移動 · ${terrainEvents.join('、')}` : '移動';
-    if (checkWinAfterEffect(state, detail)) return { ok: true, ended: true };
-    return endAction(state, detail, unit.id);
+    const terrain = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
+    const detail = terrain.events.length > 0 ? `移動 · ${terrain.events.join('、')}` : '移動';
+    if (checkWinAfterEffect(state, detail)) {
+      return { ok: true, ended: true, actionFx: packActionFx(terrain.trigger, null) };
+    }
+    const endResult = endAction(state, detail, unit.id);
+    return {
+      ...endResult,
+      actionFx: packActionFx(terrain.trigger, endResult.actionFx?.blessing),
+    };
   }
 
   if (action.type === 'attack') {
@@ -343,6 +374,13 @@ export function surrender(state, team) {
   if (state.phase !== 'battle') return { ok: false, error: '對局已結束' };
   const winner = team === 'blue' ? 'red' : 'blue';
   finishGame(state, winner, `${TEAM[team].name}投降`, 'surrender');
+  return { ok: true, ended: true };
+}
+
+export function forfeitDisconnect(state, team) {
+  if (state.phase !== 'battle') return { ok: false, error: '對局已結束' };
+  const winner = team === 'blue' ? 'red' : 'blue';
+  finishGame(state, winner, `${TEAM[team].name}斷線逾時`, 'disconnect');
   return { ok: true, ended: true };
 }
 
@@ -409,12 +447,13 @@ export function resetTurnDeadline(mode, actedCount = 0) {
   };
 }
 
-export async function createWaitingRoom(guestId, boardMode, nickname) {
+export async function createWaitingRoom(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
+  const { matchmaking = false, q = pool } = options;
 
   let roomCode = generateRoomCode();
   for (let attempt = 0; attempt < 10; attempt++) {
-    const existing = await pool.query(
+    const existing = await q.query(
       "SELECT id FROM matches WHERE room_code = $1 AND status = 'waiting'",
       [roomCode],
     );
@@ -422,10 +461,11 @@ export async function createWaitingRoom(guestId, boardMode, nickname) {
     roomCode = generateRoomCode();
   }
 
-  const expiresAt = new Date(Date.now() + WAITING_TTL_MS);
-  const state = { waiting: true, hostGuestId: guestId, boardMode };
+  const ttl = matchmaking ? MATCHMAKING_TTL_MS : WAITING_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttl);
+  const state = { waiting: true, hostGuestId: guestId, boardMode, matchmaking };
 
-  const { rows } = await pool.query(
+  const { rows } = await q.query(
     `INSERT INTO matches (room_code, board_mode, status, blue_guest_id, state, expires_at)
      VALUES ($1, $2, 'waiting', $3, $4, $5)
      RETURNING *`,
@@ -433,16 +473,16 @@ export async function createWaitingRoom(guestId, boardMode, nickname) {
   );
 
   if (nickname) {
-    await pool.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
+    await q.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
   }
 
   return rows[0];
 }
 
-export async function joinRoom(guestId, roomCode, nickname) {
+export async function joinRoom(guestId, roomCode, nickname, q = pool) {
   await ensureDeps();
 
-  const { rows } = await pool.query(
+  const { rows } = await q.query(
     "SELECT * FROM matches WHERE room_code = $1 AND status = 'waiting' FOR UPDATE",
     [roomCode.toUpperCase()],
   );
@@ -452,15 +492,14 @@ export async function joinRoom(guestId, roomCode, nickname) {
   if (match.red_guest_id) return { ok: false, error: '房間已滿' };
 
   if (nickname) {
-    await pool.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
+    await q.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
   }
 
   const seed = crypto.createHash('sha256').update(match.id).digest();
   const seedNum = seed.readUInt32BE(0);
   const rng = seededRng(seedNum);
-  const blueFirst = rng() < 0.5;
-  const blueGuestId = blueFirst ? match.blue_guest_id : guestId;
-  const redGuestId = blueFirst ? guestId : match.blue_guest_id;
+  const blueGuestId = match.blue_guest_id;
+  const redGuestId = guestId;
 
   const gameState = createGameState(match.board_mode, rng);
   const mode = getBoardMode(match.board_mode);
@@ -468,7 +507,7 @@ export async function joinRoom(guestId, roomCode, nickname) {
   const matchDeadline = new Date(now.getTime() + mode.matchDurationMs);
   const turnFields = resetTurnDeadline(mode, 0);
 
-  const { rows: updated } = await pool.query(
+  const { rows: updated } = await q.query(
     `UPDATE matches SET
        status = 'playing',
        blue_guest_id = $1,
@@ -506,6 +545,65 @@ export async function joinRoom(guestId, roomCode, nickname) {
   };
 }
 
+export async function findMatch(guestId, boardMode, nickname) {
+  await ensureDeps();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `SELECT id FROM matches
+       WHERE status IN ('waiting', 'playing')
+         AND (blue_guest_id = $1 OR red_guest_id = $1)
+       LIMIT 1`,
+      [guestId],
+    );
+    if (existing.rows[0]) {
+      await client.query('ROLLBACK');
+      return { ok: false, error: '你已在其他房間' };
+    }
+
+    const { rows } = await client.query(
+      `SELECT * FROM matches
+       WHERE status = 'waiting'
+         AND board_mode = $1
+         AND (state->>'matchmaking') = 'true'
+         AND blue_guest_id IS DISTINCT FROM $2
+         AND red_guest_id IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED`,
+      [boardMode, guestId],
+    );
+
+    if (rows[0]) {
+      const result = await joinRoom(guestId, rows[0].room_code, nickname, client);
+      if (!result.ok) {
+        await client.query('ROLLBACK');
+        return result;
+      }
+      await client.query('COMMIT');
+      return result;
+    }
+
+    const match = await createWaitingRoom(guestId, boardMode, nickname, {
+      matchmaking: true,
+      q: client,
+    });
+    await client.query('COMMIT');
+    return { ok: true, waiting: true, match };
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // already rolled back or connection lost
+    }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getMatchById(matchId) {
   const { rows } = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
   return rows[0] ?? null;
@@ -521,6 +619,30 @@ export async function getActiveMatchForGuest(guestId) {
     [guestId],
   );
   return rows[0] ?? null;
+}
+
+/** 取消 waiting 房間（房主刪除房間；加入者僅解除綁定） */
+export async function cancelWaitingRoom(guestId) {
+  const match = await getActiveMatchForGuest(guestId);
+  if (!match) return { ok: true, hadRoom: false };
+  if (match.status !== 'waiting') {
+    return { ok: false, error: '對局進行中，無法取消房間' };
+  }
+
+  if (match.blue_guest_id === guestId) {
+    await pool.query('DELETE FROM matches WHERE id = $1 AND status = $2', [match.id, 'waiting']);
+    return { ok: true, hadRoom: true, matchId: match.id, cancelled: true };
+  }
+
+  if (match.red_guest_id === guestId) {
+    await pool.query(
+      'UPDATE matches SET red_guest_id = NULL WHERE id = $1 AND status = $2',
+      [match.id, 'waiting'],
+    );
+    return { ok: true, hadRoom: true, matchId: match.id, leftAsGuest: true };
+  }
+
+  return { ok: true, hadRoom: false };
 }
 
 export async function updateMatchState(matchId, state, extra = {}) {

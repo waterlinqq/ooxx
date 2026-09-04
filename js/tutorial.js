@@ -22,45 +22,38 @@ export const TUTORIAL_RED_ROSTER = ['archer', 'shield'];
 export const TUTORIAL_STEPS = [
   {
     title: '部署單位',
-    text: '點下方後備區的劍士，再點棋盤中央亮起的格子，把它放上場。',
     goal: { type: 'deploy', classId: 'swordsman', row: 1, col: 1 },
     enemy: {
       type: 'deploy',
       classId: 'archer',
       row: 1,
       col: 2,
-      label: '紅隊部署弓箭手',
-      note: '紅隊也部署了一名弓箭手，正好落在你的劍士右邊。',
+      label: '紅隊部署',
     },
   },
   {
     title: '攻擊',
-    text: '點你的劍士選起來，再點紅格上的弓箭手。劍士攻擊力 3，剛好一擊消滅生命值 3 的弓箭手。',
     goal: { type: 'attack', from: { row: 1, col: 1 }, to: { row: 1, col: 2 } },
     enemy: {
       type: 'deploy',
       classId: 'shield',
       row: 2,
       col: 1,
-      label: '紅隊部署盾牌手',
-      note: '紅隊補上盾牌手：生命值 8 很難打死，但攻擊力只有 1。',
+      label: '紅隊部署',
     },
   },
   {
     title: '搶下第二格',
-    text: '把盾牌手部署到中間橫排的最左邊，開始佈置你的連線。',
     goal: { type: 'deploy', classId: 'shield', row: 1, col: 0 },
     enemy: {
       type: 'attack',
       from: { row: 2, col: 1 },
       to: { row: 1, col: 1 },
-      label: '紅隊盾牌手攻擊',
-      note: '盾牌手只打掉 1 點生命 — 你的劍士還有 4 點，沒有陣亡。',
+      label: '紅隊攻擊',
     },
   },
   {
     title: '連成一線',
-    text: '把弓箭手部署到中間橫排最右邊的空格。三個單位連成一線，你就獲勝了！',
     goal: { type: 'deploy', classId: 'archer', row: 1, col: 2 },
     enemy: null,
   },

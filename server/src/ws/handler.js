@@ -4,10 +4,13 @@ import * as room from './messages.js';
 import {
   joinRoom,
   createWaitingRoom,
+  findMatch,
   getActiveMatchForGuest,
   getMatchById,
+  cancelWaitingRoom,
   applyGameAction,
   surrender,
+  forfeitDisconnect,
   endTurnEarly,
   endMatchByTime,
   persistActionResult,
@@ -24,6 +27,8 @@ const timerLoops = new Map();
 /** @type {Map<string, number>} disconnectedAt guestId -> timestamp */
 const disconnectedAt = new Map();
 
+const DISCONNECT_FORFEIT_MS = 90_000;
+
 function parseState(match) {
   if (typeof match.state === 'string') return JSON.parse(match.state);
   return match.state ?? {};
@@ -34,6 +39,7 @@ function err(ws, message, code = 'ERROR', reqId) {
 }
 
 function roomStatePayload(match, guests) {
+  const st = parseState(match);
   const players = [];
   if (match.blue_guest_id) {
     const g = guests.find((x) => x.id === match.blue_guest_id);
@@ -48,7 +54,26 @@ function roomStatePayload(match, guests) {
     boardMode: match.board_mode,
     status: match.status,
     players,
+    matchmaking: Boolean(st.matchmaking),
+    createdAt: match.created_at,
   };
+}
+
+async function startPlayingMatch(match, teams, reqId, joiningGuestId) {
+  const state = parseState(match);
+  for (const [guestId, team] of Object.entries(teams)) {
+    room.bindMatch(guestId, match.id, team);
+    await onReconnectBind(guestId, match.id);
+  }
+  ensureTimerLoop(match.id);
+  for (const conn of room.getMatchConnections(match.id)) {
+    room.send(
+      conn.ws,
+      MSG.GAME_START,
+      gamePayload(match, state, conn.team),
+      conn.guestId === joiningGuestId ? reqId : undefined,
+    );
+  }
 }
 
 async function fetchGuestNicknames(match) {
@@ -139,6 +164,8 @@ function ensureTimerLoop(matchId) {
         return;
       }
 
+      if (await checkDisconnectForfeit(matchId)) return;
+
       if (match.timers_paused) return;
 
       const state = parseState(match);
@@ -192,6 +219,45 @@ async function onReconnectBind(guestId, matchId) {
   }
 }
 
+async function checkDisconnectForfeit(matchId) {
+  const match = await getMatchById(matchId);
+  if (!match || match.status !== 'playing') return false;
+
+  const guestIds = [match.blue_guest_id, match.red_guest_id].filter(Boolean);
+  const now = Date.now();
+
+  for (const guestId of guestIds) {
+    const since = disconnectedAt.get(guestId);
+    if (!since || now - since < DISCONNECT_FORFEIT_MS) continue;
+
+    const conn = room.getConnection(guestId);
+    if (conn?.ws?.readyState === conn.ws.OPEN) {
+      disconnectedAt.delete(guestId);
+      continue;
+    }
+
+    const team = guestTeam(match, guestId);
+    if (!team) continue;
+
+    const state = parseState(match);
+    const result = forfeitDisconnect(state, team);
+    if (!result.ok) return false;
+
+    const updated = await persistActionResult(matchId, state, { ended: true });
+    stopTimerLoop(matchId);
+    disconnectedAt.delete(guestId);
+
+    room.broadcastMatch(matchId, MSG.GAME_OVER, (c) => ({
+      ...gamePayload(updated, state, c.team),
+      winner: state.winner,
+      reason: state.endReason,
+    }));
+    return true;
+  }
+
+  return false;
+}
+
 export async function handleWsMessage(ws, guest, raw) {
   let msg;
   try {
@@ -226,6 +292,38 @@ export async function handleWsMessage(ws, guest, raw) {
       break;
     }
 
+    case MSG.FIND_MATCH: {
+      const boardMode = payload.boardMode;
+      if (!['3x3', '4x4', '5x5'].includes(boardMode)) {
+        err(ws, '無效的棋盤模式', 'INVALID_MODE', reqId);
+        return;
+      }
+
+      const existing = await getActiveMatchForGuest(guest.id);
+      if (existing) {
+        err(ws, '你已在其他房間', 'ALREADY_IN_ROOM', reqId);
+        return;
+      }
+
+      if (payload.nickname) await updateGuestNickname(guest.id, payload.nickname);
+
+      const result = await findMatch(guest.id, boardMode, payload.nickname);
+      if (!result.ok) {
+        err(ws, result.error, 'FIND_FAILED', reqId);
+        return;
+      }
+
+      if (result.waiting) {
+        room.bindMatch(guest.id, result.match.id, null);
+        const guests = await fetchGuestNicknames(result.match);
+        room.send(ws, MSG.ROOM_STATE, roomStatePayload(result.match, guests), reqId);
+        break;
+      }
+
+      await startPlayingMatch(result.match, result.teams, reqId, guest.id);
+      break;
+    }
+
     case MSG.JOIN_ROOM: {
       const code = String(payload.roomCode ?? '').toUpperCase();
       if (!code) {
@@ -245,24 +343,7 @@ export async function handleWsMessage(ws, guest, raw) {
         return;
       }
 
-      const { match, teams } = result;
-      const state = parseState(match);
-
-      for (const [guestId, team] of Object.entries(teams)) {
-        room.bindMatch(guestId, match.id, team);
-        await onReconnectBind(guestId, match.id);
-      }
-
-      ensureTimerLoop(match.id);
-
-      for (const conn of room.getMatchConnections(match.id)) {
-        room.send(
-          conn.ws,
-          MSG.GAME_START,
-          gamePayload(match, state, conn.team),
-          conn.guestId === guest.id ? reqId : undefined,
-        );
-      }
+      await startPlayingMatch(result.match, result.teams, reqId, guest.id);
       break;
     }
 
@@ -297,6 +378,8 @@ export async function handleWsMessage(ws, guest, raw) {
           ...gamePayload(updated, state, c.team),
           winner: state.winner,
           reason: state.endReason,
+          lastAction: payload.action,
+          actionFx: result.actionFx ?? null,
         }));
         break;
       }
@@ -304,6 +387,7 @@ export async function handleWsMessage(ws, guest, raw) {
       room.broadcastMatch(conn.matchId, MSG.GAME_UPDATE, (c) => ({
         ...gamePayload(updated, state, c.team),
         lastAction: payload.action,
+        actionFx: result.actionFx ?? null,
       }));
       break;
     }
@@ -331,6 +415,36 @@ export async function handleWsMessage(ws, guest, raw) {
         winner: state.winner,
         reason: state.endReason,
       }));
+      break;
+    }
+
+    case MSG.LEAVE_ROOM: {
+      const result = await cancelWaitingRoom(guest.id);
+      if (!result.ok) {
+        err(ws, result.error, 'LEAVE_FAILED', reqId);
+        return;
+      }
+      if (result.hadRoom) {
+        if (result.cancelled) {
+          stopTimerLoop(result.matchId);
+          for (const conn of room.getMatchConnections(result.matchId)) {
+            if (conn.guestId !== guest.id) {
+              room.send(conn.ws, MSG.ROOM_STATE, { left: true });
+            }
+          }
+          room.unbindAllFromMatch(result.matchId);
+        } else {
+          room.unbindMatch(guest.id);
+          if (result.leftAsGuest) {
+            const match = await getMatchById(result.matchId);
+            if (match) {
+              const guests = await fetchGuestNicknames(match);
+              room.broadcastMatch(result.matchId, MSG.ROOM_STATE, roomStatePayload(match, guests));
+            }
+          }
+        }
+      }
+      room.send(ws, MSG.ROOM_STATE, { left: true }, reqId);
       break;
     }
 

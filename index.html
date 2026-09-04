@@ -27,19 +27,18 @@
       <section class="game-screen active" id="screenBattle" data-screen="battle">
         <div class="screen-scroll" id="lobbyContent">
           <div class="online-section">
-            <div class="section-title">線上對戰</div>
-            <p class="section-hint online-hint">選模式 → 建立或加入房間（房間碼 6 位）</p>
             <div class="mode-buttons" id="onlineModeButtons"></div>
             <div class="online-actions" id="onlineLobbyActions">
-              <button class="btn primary btn-lg" id="createRoomBtn" type="button">建立房間</button>
+              <button class="btn primary btn-lg" id="findMatchBtn" type="button">開始匹配</button>
+              <button class="btn btn-lg" id="createRoomBtn" type="button">建立房間</button>
               <div class="online-join-row">
                 <input class="online-room-input" id="roomCodeInput" type="text" maxlength="6" placeholder="房間碼" autocomplete="off" />
                 <button class="btn primary" id="joinRoomBtn" type="button">加入</button>
               </div>
             </div>
             <div class="online-waiting hidden" id="onlineWaiting">
-              <p class="online-room-code">房間碼：<strong id="waitingRoomCode"></strong></p>
-              <p class="online-waiting-msg" id="onlineWaitingMsg">等待對手加入…</p>
+              <p class="online-match-countdown hidden" id="onlineMatchCountdown">10</p>
+              <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
               <button class="btn" id="cancelRoomBtn" type="button">取消</button>
             </div>
           </div>
@@ -47,7 +46,6 @@
             <span class="tutorial-cta-icon">🎓</span>
             <span class="tutorial-cta-body">
               <span class="tutorial-cta-title">新手教學</span>
-              <span class="tutorial-cta-sub">九宮格 · 4 步學會部署、攻擊與連線</span>
             </span>
           </button>
         </div>
@@ -62,18 +60,12 @@
           </div>
 
           <div id="formationItemSection">
-            <div class="section-title section-title-compact">
-              本場道具
-              <span class="section-hint">一場限 1 次</span>
-            </div>
+            <div class="section-title section-title-compact">本場道具</div>
             <div class="item-picker" id="formationItems"></div>
           </div>
 
           <div>
-            <div class="section-title">
-              可選職業
-              <span class="section-hint">點卡片加入 · 點編隊中的單位移除</span>
-            </div>
+            <div class="section-title">可選職業</div>
             <div class="class-grid" id="formationPool"></div>
           </div>
 
@@ -125,8 +117,6 @@
                       <span class="tutorial-panel-title" id="tutorialTitle"></span>
                       <button class="btn tutorial-skip" id="tutorialSkip" type="button">跳過</button>
                     </div>
-                    <p class="tutorial-panel-text" id="tutorialText"></p>
-                    <p class="tutorial-panel-note hidden" id="tutorialNote"></p>
                   </div>
                   <button class="btn danger battle-fab hidden" id="surrender" type="button" title="投降">🏳️</button>
                   <div class="item-battle-bar hidden" id="itemBattleBar">

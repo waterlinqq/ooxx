@@ -1,15 +1,17 @@
-import { MSG } from '../shared/protocol.js';
-import { ensureGuestToken } from './guestAuth.js';
+import { MSG, MATCHMAKING_TIMEOUT_MS } from '../shared/protocol.js';
+import { ensureGuestToken, refreshGuestToken } from './guestAuth.js';
+import { wsUrl } from './config.js';
 import {
   getValidMoves,
   getValidAttackTargets,
   getValidDeployCells,
 } from './rules.js';
-
-function wsUrl() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/ws`;
-}
+import { buildAttackFx } from './actionFx.js';
+import {
+  remapBoardForView,
+  remapMessageForView,
+  remapTeamForView,
+} from './onlineView.js';
 
 export class OnlineClient {
   constructor() {
@@ -32,6 +34,29 @@ export class OnlineClient {
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
+    this.animating = false;
+    this.playAttackFx = null;
+    this.playMapPropFx = null;
+    this.playBlessFx = null;
+    /** @type {Promise<void>|null} */
+    this.connecting = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    this.reconnectTimer = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    this.matchmakingTimer = null;
+    /** @type {ReturnType<typeof setInterval>|null} */
+    this.matchmakingTick = null;
+    this.matchmakingUntil = 0;
+    this.matchmakingGen = 0;
+    this.aiFallbackPending = false;
+    /** @type {((boardMode: string) => void)|null} */
+    this.onAiFallback = null;
+    /** @type {Map<string, { draggingUnitId: string|null, selectedReserveId: string|null }>} */
+    this.pendingFire = new Map();
+  }
+
+  canSend() {
+    return this.ws?.readyState === WebSocket.OPEN && this.authenticated;
   }
 
   subscribe(fn) {
@@ -44,20 +69,69 @@ export class OnlineClient {
   }
 
   async connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (this.canSend()) return;
+    if (this.connecting) return this.connecting;
 
-    const token = await ensureGuestToken();
+    this.connecting = this._connectOnce();
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
+    }
+  }
+
+  async _connectOnce() {
+    if (this.ws?.readyState === WebSocket.CONNECTING) {
+      await new Promise((resolve, reject) => {
+        const ws = this.ws;
+        const onOpen = () => { cleanup(); resolve(); };
+        const onError = () => { cleanup(); reject(new Error('WebSocket 連線失敗')); };
+        const cleanup = () => {
+          ws.removeEventListener('open', onOpen);
+          ws.removeEventListener('error', onError);
+        };
+        ws.addEventListener('open', onOpen);
+        ws.addEventListener('error', onError);
+      });
+      if (this.canSend()) return;
+    }
+
+    if (this.ws?.readyState === WebSocket.OPEN && !this.authenticated) {
+      // stale socket — fall through to re-auth
+    } else if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.close();
+    }
+
+    let token = await ensureGuestToken();
     await new Promise((resolve, reject) => {
       this.ws = new WebSocket(wsUrl());
       this.ws.onopen = () => resolve();
       this.ws.onerror = () => reject(new Error('WebSocket 連線失敗'));
       this.ws.onclose = () => {
         this.authenticated = false;
-        setTimeout(() => this.reconnect().catch(() => {}), 2000);
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnect().catch(() => {});
+        }, 2000);
       };
       this.ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
 
+    try {
+      await this._auth(token);
+    } catch (e) {
+      const msg = e?.message ?? '';
+      if (msg.includes('無效') || msg.includes('token')) {
+        token = await refreshGuestToken();
+        await this._auth(token);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  async _auth(token) {
     await this.send(MSG.AUTH, { token });
   }
 
@@ -69,6 +143,9 @@ export class OnlineClient {
   }
 
   send(type, payload) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('連線中，請稍後再試'));
+    }
     const reqId = crypto.randomUUID();
     return new Promise((resolve, reject) => {
       this.pending.set(reqId, { resolve, reject });
@@ -83,8 +160,21 @@ export class OnlineClient {
   }
 
   fire(type, payload) {
+    if (!this.canSend()) {
+      this.notifyError('連線中，請稍後再試');
+      return null;
+    }
     const reqId = crypto.randomUUID();
     this.ws.send(JSON.stringify({ type, payload, reqId }));
+    return reqId;
+  }
+
+  restorePendingInteraction(reqId) {
+    const snap = this.pendingFire.get(reqId);
+    if (!snap) return;
+    this.draggingUnitId = snap.draggingUnitId;
+    this.selectedReserveId = snap.selectedReserveId;
+    this.pendingFire.delete(reqId);
   }
 
   handleMessage(raw) {
@@ -102,6 +192,7 @@ export class OnlineClient {
         this.pending.get(reqId).reject(new Error(payload.message ?? '錯誤'));
         this.pending.delete(reqId);
       }
+      if (reqId) this.restorePendingInteraction(reqId);
       this.notifyError(payload.message);
       return;
     }
@@ -118,21 +209,31 @@ export class OnlineClient {
         this.nickname = payload.nickname;
         break;
       case MSG.ROOM_STATE:
-        this.roomState = payload;
-        this.roomCode = payload.roomCode;
+        if (payload.left) {
+          this.roomState = null;
+          this.roomCode = null;
+          this.clearMatchmakingWatch();
+          this.gameState = null;
+          if (this.aiFallbackPending) return;
+        } else {
+          this.roomState = payload;
+          this.roomCode = payload.roomCode;
+          if (payload.matchmaking) this.startMatchmakingWatch(payload);
+          else this.clearMatchmakingWatch();
+        }
         this.gameState = null;
         break;
       case MSG.GAME_START:
+        this.aiFallbackPending = false;
+        this.clearMatchmakingWatch();
+        this.applyGamePayload(payload);
+        break;
       case MSG.GAME_UPDATE:
-        this.applyGamePayload(payload);
-        break;
+        this.handleGamePayload(payload).catch(console.error);
+        return;
       case MSG.GAME_OVER:
-        this.applyGamePayload(payload);
-        if (payload.state) {
-          this.gameState = payload.state;
-          this.gameState.phase = 'gameEnd';
-        }
-        break;
+        this.handleGamePayload(payload, { gameEnd: true }).catch(console.error);
+        return;
       default:
         break;
     }
@@ -143,9 +244,78 @@ export class OnlineClient {
   applyGamePayload(payload) {
     this.gameState = payload.state;
     this.yourTeam = payload.yourTeam;
-    this.timers = payload.timers;
+    if (payload.timers) {
+      const now = Date.now();
+      this.timers = {
+        ...payload.timers,
+        turnDeadlineAt: now + payload.timers.turnRemainingMs,
+        matchDeadlineAt: now + payload.timers.matchRemainingMs,
+      };
+    } else {
+      this.timers = null;
+    }
     this.roomCode = payload.roomCode ?? this.roomCode;
     this.roomState = null;
+  }
+
+  refreshTimerRemaining() {
+    if (!this.timers) return;
+    const now = Date.now();
+    this.timers.turnRemainingMs = Math.max(0, this.timers.turnDeadlineAt - now);
+    this.timers.matchRemainingMs = Math.max(0, this.timers.matchDeadlineAt - now);
+  }
+
+  async playAttackAnimationIfNeeded(payload) {
+    const lastAction = payload.lastAction;
+    if (!lastAction || lastAction.type !== 'attack' || !this.gameState?.board || !this.playAttackFx) {
+      return;
+    }
+
+    const fx = buildAttackFx(this.gameState.board, lastAction);
+    if (!fx) return;
+
+    const attacker = this.gameState.board.flat().find((u) => u?.id === lastAction.unitId);
+    if (attacker) {
+      fx.team = remapTeamForView(attacker.team, this.yourTeam ?? 'blue');
+    }
+
+    this.animating = true;
+    this.notify();
+    try {
+      await this.playAttackFx(fx);
+    } finally {
+      this.animating = false;
+    }
+  }
+
+  async playSecondaryFxIfNeeded(payload) {
+    const fx = payload.actionFx;
+    if (!fx) return;
+
+    if (fx.terrain && this.playMapPropFx) {
+      this.playMapPropFx(fx.terrain);
+    }
+
+    if (fx.blessing?.targets?.length && this.playBlessFx) {
+      this.animating = true;
+      this.notify();
+      try {
+        await this.playBlessFx(fx.blessing);
+      } finally {
+        this.animating = false;
+      }
+    }
+  }
+
+  async handleGamePayload(payload, { gameEnd = false } = {}) {
+    await this.playAttackAnimationIfNeeded(payload);
+    this.pendingFire.clear();
+    this.applyGamePayload(payload);
+    await this.playSecondaryFxIfNeeded(payload);
+    if (gameEnd && payload.state) {
+      this.gameState.phase = 'gameEnd';
+    }
+    this.notify();
   }
 
   notifyError(message) {
@@ -187,6 +357,10 @@ export class OnlineClient {
         roomCode: this.roomCode,
         message: this.lastError ?? '',
         onlineMode: true,
+        matchmaking: Boolean(this.roomState?.matchmaking),
+        matchmakingRemainingMs: this.roomState?.matchmaking
+          ? Math.max(0, this.matchmakingUntil - Date.now())
+          : 0,
       };
     }
 
@@ -197,8 +371,12 @@ export class OnlineClient {
 
     return {
       ...gs,
+      board: remapBoardForView(gs.board, myTeam),
+      currentPlayer: remapTeamForView(gs.currentPlayer, myTeam),
+      winner: gs.winner ? remapTeamForView(gs.winner, myTeam) : gs.winner,
+      message: remapMessageForView(gs.message, myTeam),
       onlineMode: true,
-      yourTeam: myTeam,
+      yourTeam: 'blue',
       isHumanTurn: gs.currentPlayer === myTeam && gs.phase === 'battle',
       blueReserve: gs[ownReserveKey] ?? gs.blueReserve,
       redReserve: gs[enemyReserveKey] ?? gs.redReserve,
@@ -210,7 +388,7 @@ export class OnlineClient {
       draggingUnitId: this.draggingUnitId,
       selectedReserveId: this.selectedReserveId,
       inspectedUnitId: this.inspectedUnitId,
-      animating: false,
+      animating: this.animating,
       timers: this.timers,
       roomCode: this.roomCode,
       itemsDisabled: true,
@@ -231,6 +409,75 @@ export class OnlineClient {
     this.notify();
   }
 
+  async findMatch(boardMode, nickname) {
+    this.selectedBoardMode = boardMode;
+    await this.connect();
+    this.lastError = null;
+    await this.send(MSG.FIND_MATCH, { boardMode, nickname });
+    if (this.gameState) return;
+    if (this.roomState?.matchmaking) this.startMatchmakingWatch(this.roomState);
+    this.notify();
+  }
+
+  clearMatchmakingWatch() {
+    if (this.matchmakingTimer) {
+      clearTimeout(this.matchmakingTimer);
+      this.matchmakingTimer = null;
+    }
+    if (this.matchmakingTick) {
+      clearInterval(this.matchmakingTick);
+      this.matchmakingTick = null;
+    }
+  }
+
+  startMatchmakingWatch(payload) {
+    const created = payload.createdAt ? new Date(payload.createdAt).getTime() : Date.now();
+    const until = created + MATCHMAKING_TIMEOUT_MS;
+    if (this.matchmakingTimer && this.matchmakingUntil === until) return;
+
+    this.clearMatchmakingWatch();
+    this.matchmakingUntil = until;
+    this.matchmakingGen += 1;
+    const gen = this.matchmakingGen;
+    const remaining = until - Date.now();
+    if (remaining <= 0) {
+      this.handleMatchmakingTimeout(gen);
+      return;
+    }
+    this.matchmakingTimer = setTimeout(() => this.handleMatchmakingTimeout(gen), remaining);
+    this.matchmakingTick = setInterval(() => this.notify(), 1000);
+  }
+
+  async handleMatchmakingTimeout(gen) {
+    this.clearMatchmakingWatch();
+    if (gen !== this.matchmakingGen) return;
+    if (this.gameState) return;
+    if (!this.roomState?.matchmaking) return;
+
+    const boardMode = this.roomState.boardMode ?? this.selectedBoardMode ?? '3x3';
+    this.aiFallbackPending = true;
+    let leaveBlocked = false;
+    try {
+      await this.send(MSG.LEAVE_ROOM, {});
+    } catch (e) {
+      leaveBlocked = String(e?.message ?? '').includes('進行中');
+    }
+
+    if (gen !== this.matchmakingGen) {
+      this.aiFallbackPending = false;
+      return;
+    }
+    if (this.gameState || leaveBlocked) {
+      this.aiFallbackPending = false;
+      return;
+    }
+
+    this.roomState = null;
+    this.roomCode = null;
+    this.aiFallbackPending = false;
+    this.onAiFallback?.(boardMode);
+  }
+
   async joinRoom(roomCode, nickname) {
     await this.connect();
     this.lastError = null;
@@ -249,7 +496,12 @@ export class OnlineClient {
   }
 
   submitAction(action) {
-    this.fire(MSG.SUBMIT_ACTION, { action });
+    const reqId = this.fire(MSG.SUBMIT_ACTION, { action });
+    if (!reqId) return;
+    this.pendingFire.set(reqId, {
+      draggingUnitId: this.draggingUnitId,
+      selectedReserveId: this.selectedReserveId,
+    });
   }
 
   surrender() {
@@ -285,6 +537,9 @@ export class OnlineClient {
     if (!state.isHumanTurn || state.phase !== 'battle') return;
 
     if (this.selectedReserveId) {
+      const valid = this.getHighlightDeploy();
+      if (!valid.some(([r, c]) => r === row && c === col)) return;
+
       this.submitAction({
         type: 'deploy',
         unitId: this.selectedReserveId,
@@ -292,6 +547,7 @@ export class OnlineClient {
         col,
       });
       this.selectedReserveId = null;
+      this.notify();
       return;
     }
   }
@@ -313,6 +569,7 @@ export class OnlineClient {
         row,
         col,
       });
+      this.draggingUnitId = null;
     } else if (moves.some(([r, c]) => r === row && c === col)) {
       this.submitAction({
         type: 'move',
@@ -320,18 +577,30 @@ export class OnlineClient {
         row,
         col,
       });
+      this.draggingUnitId = null;
     }
 
-    this.draggingUnitId = null;
     this.notify();
   }
 
-  leaveOnline() {
+  async leaveOnline() {
+    this.matchmakingGen += 1;
+    this.aiFallbackPending = false;
+    this.clearMatchmakingWatch();
+    try {
+      await this.connect();
+      await this.send(MSG.LEAVE_ROOM, {});
+    } catch {
+      // 可能本來就沒有房間，仍清除本地狀態
+    }
     this.roomState = null;
     this.gameState = null;
     this.roomCode = null;
     this.yourTeam = null;
     this.lastError = null;
+    this.draggingUnitId = null;
+    this.selectedReserveId = null;
+    this.inspectedUnitId = null;
     this.notify();
   }
 }

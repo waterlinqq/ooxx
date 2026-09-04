@@ -112,7 +112,9 @@ export class InputController {
 
   isEnemyUnit(unitId) {
     const unit = this.state.board.flat().find((u) => u?.id === unitId);
-    return unit?.team === 'red';
+    if (!unit) return false;
+    const myTeam = this.state.yourTeam ?? 'blue';
+    return unit.team !== myTeam;
   }
 
   onContextMenu = (event) => {
