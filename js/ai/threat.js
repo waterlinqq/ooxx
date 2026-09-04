@@ -5,7 +5,7 @@
 // cell, the strongest single hit the given team could land on a unit standing there.
 //
 // Reach mirrors js/rules.js exactly:
-//   melee/support - four neighbouring cells; the bomber keeps all eight
+//   melee/support - four neighbouring cells (death explosions are separate)
 //   ranged - four rays, up to `range` steps, stopping at the first occupied cell
 //   artillery - four orthogonal cells exactly two steps away (no melee on adjacent cells)
 //   tower  - four orthogonal rays, up to `range` steps, stopping at the first occupied cell
@@ -66,8 +66,7 @@ export function buildThreatMap(ctx, attackerTeam) {
       if (!unit || unit.team !== attackerTeam) continue;
 
       if (unit.type === 'melee' || unit.type === 'support') {
-        const directions = unit.classId === 'bomber' ? ALL_DIRS : ORTHOGONAL_DIRS;
-        for (const [dr, dc] of directions) {
+        for (const [dr, dc] of ORTHOGONAL_DIRS) {
           const nr = r + dr;
           const nc = c + dc;
           if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;

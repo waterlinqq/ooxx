@@ -84,7 +84,7 @@ export const CLASSES = {
     range: 1,
     type: 'melee',
     deathExplosion: 2,
-    desc: '八向近戰，被擊殺時自爆反擊相鄰敵人',
+    desc: '上下左右近戰，被擊殺時自爆反擊周圍八格敵人',
   },
   eagle: {
     id: 'eagle',

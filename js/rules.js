@@ -235,10 +235,7 @@ export function getValidAttackTargets(board, unit) {
   const type = unitAttackType(unit);
 
   if (type === 'melee' || type === 'support') {
-    const attackCells = unit.classId === 'bomber'
-      ? getAdjacentCells8(unit.row, unit.col, size)
-      : getAdjacentCells(unit.row, unit.col, size);
-    for (const [r, c] of attackCells) {
+    for (const [r, c] of getAdjacentCells(unit.row, unit.col, size)) {
       const target = board[r][c];
       if (target && canAttackTarget(unit, target)) targets.push(target);
     }

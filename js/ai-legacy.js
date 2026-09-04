@@ -231,7 +231,6 @@ function countAdjacentEnemies(board, row, col, team) {
   let count = 0;
   for (const [dr, dc] of [
     [0, 1], [0, -1], [1, 0], [-1, 0],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
   ]) {
     const r = row + dr;
     const c = col + dc;
@@ -282,7 +281,6 @@ function scoreBomberPosition(board, row, col, team, unit) {
 
   for (const [dr, dc] of [
     [0, 1], [0, -1], [1, 0], [-1, 0],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
   ]) {
     const r = row + dr;
     const c = col + dc;

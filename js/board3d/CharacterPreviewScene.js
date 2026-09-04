@@ -10,12 +10,6 @@ const PREVIEW_TILE_SIZE = 0.25;
 const PREVIEW_TILE_PITCH = 0.29;
 const RANGE_Y = 0.047;
 
-const ALL_DIRECTIONS = [
-  [-1, -1], [-1, 0], [-1, 1],
-  [0, -1], [0, 1],
-  [1, -1], [1, 0], [1, 1],
-];
-
 const ORTHOGONAL_DIRECTIONS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
 ];
@@ -29,7 +23,6 @@ function previewTilePosition(row, col) {
 }
 
 function getAttackRangeCells(unit) {
-  const directions = unit.classId === 'bomber' ? ALL_DIRECTIONS : ORTHOGONAL_DIRECTIONS;
   const cells = [];
 
   if (unit.type === 'artillery') {
@@ -45,7 +38,7 @@ function getAttackRangeCells(unit) {
       ? PREVIEW_BOARD_SIZE
       : unit.range;
 
-  for (const [dr, dc] of directions) {
+  for (const [dr, dc] of ORTHOGONAL_DIRECTIONS) {
     for (let step = 1; step <= maxRange; step++) {
       const row = unit.row + dr * step;
       const col = unit.col + dc * step;
