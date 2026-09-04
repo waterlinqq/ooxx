@@ -1,4 +1,4 @@
-/** @typedef {'potion'|'spikes'|'web'|'stone'} MapPropKind */
+/** @typedef {'potion'|'spikes'|'web'|'stone'|'flag'} MapPropKind */
 
 /** @typedef {{ kind: MapPropKind }} MapProp */
 
@@ -17,6 +17,15 @@ export function getMapPropAt(mapProps, row, col) {
 
 export function isStoneCell(mapProps, row, col) {
   return getMapPropAt(mapProps, row, col)?.kind === 'stone';
+}
+
+export function isFlagCell(mapProps, row, col) {
+  return getMapPropAt(mapProps, row, col)?.kind === 'flag';
+}
+
+export function isObstacleCell(mapProps, row, col) {
+  const kind = getMapPropAt(mapProps, row, col)?.kind;
+  return kind === 'stone' || kind === 'flag';
 }
 
 export function isMapPropsEnabled(size) {

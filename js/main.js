@@ -2,8 +2,19 @@ import { Game, CLASSES, BOARD_MODES } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
-import { ITEMS, SHOP_PRICES } from './items.js';
-import { loadSave, buyItem, canAfford, isTutorialDone } from './save.js';
+import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
+import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
+import { CLASS_IDS } from './units.js';
+import { isUnlockable } from './unlocks.js';
+import {
+  loadSave,
+  buyItem,
+  buyClass,
+  canAfford,
+  canAffordClass,
+  isClassOwned,
+  isTutorialDone,
+} from './save.js';
 
 loadSave();
 
@@ -64,6 +75,11 @@ const tutorialTitleEl = document.getElementById('tutorialTitle');
 const tutorialTextEl = document.getElementById('tutorialText');
 const tutorialNoteEl = document.getElementById('tutorialNote');
 const tutorialSkipBtn = document.getElementById('tutorialSkip');
+const enemyReserveBarEl = document.getElementById('enemyReserveBar');
+const enemyReserveCardsEl = document.getElementById('enemyReserveCards');
+const ownReserveBarEl = document.getElementById('ownReserveBar');
+const ownReserveCardsEl = document.getElementById('ownReserveCards');
+const reserveTutorialPointerEl = document.getElementById('reserveTutorialPointer');
 
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
@@ -274,7 +290,7 @@ function clearWinConditionToast() {
 
 function showWinConditionToast(winCount) {
   clearWinConditionToast();
-  winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手 · 時間到比總分`;
+  winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手`;
   winConditionToastEl.classList.remove('hidden', 'dismissing');
 
   winConditionHideTimer = setTimeout(() => {
@@ -313,14 +329,24 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
 const characterPreview = new CharacterPreviewScene(classPreviewHostEl);
 
 const unitThumbnails = generateUnitThumbnails(Object.keys(CLASSES));
+const itemThumbnails = generateItemThumbnails(ITEM_IDS);
 
 function setUnitIcon(container, classId) {
   const cls = CLASSES[classId];
   fillUnitIcon(container, classId, unitThumbnails, cls?.icon ?? '?', cls?.name ?? classId);
 }
 
+function setItemIcon(container, item) {
+  if (!item?.id) {
+    container.textContent = item?.icon ?? '➖';
+    return;
+  }
+  fillItemIcon(container, item.id, itemThumbnails, item.icon ?? '?', item.name ?? item.id);
+}
+
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
 game.playBlessFx = (fx) => board3d.playBlessFx(fx);
+game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
@@ -361,6 +387,10 @@ function formatClassTrait(cls) {
   if (cls.type === 'tower') return `上下左右齊射 · 射程 ${cls.range}`;
   if (cls.passiveBlessing) return '上下左右祝福 · 恢復 1 生命';
   return '上下左右近戰';
+}
+
+function isClassOwnedInState(state, classId) {
+  return state.ownedClasses?.includes(classId) ?? isClassOwned(classId);
 }
 
 function renderClassDetail(classId) {
@@ -416,13 +446,49 @@ function createItemChip(item, { count, equipped, onSelect }) {
   const label = item.id === null ? '無' : item.name;
   const badge = item.id !== null && owned > 0 ? `<span class="item-chip-badge">${owned}</span>` : '';
 
-  chip.innerHTML = `
-    <span class="item-chip-icon">${item.icon ?? '➖'}</span>
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'item-chip-icon';
+  setItemIcon(iconWrap, item);
+
+  chip.append(iconWrap);
+  chip.insertAdjacentHTML('beforeend', `
     <span class="item-chip-label">${label}</span>
     ${badge}
-  `;
+  `);
   chip.addEventListener('click', () => onSelect(item.id));
   return chip;
+}
+
+function createClassUnlockRow(cls, { onBuy }) {
+  const row = document.createElement('div');
+  row.className = 'item-row';
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'item-row-icon item-row-icon-unit';
+  setUnitIcon(iconWrap, cls.id);
+
+  const body = document.createElement('div');
+  body.className = 'item-row-body';
+  body.innerHTML = `
+    <span class="item-row-name">${cls.name}</span>
+    <span class="item-row-desc">${cls.desc}</span>
+  `;
+
+  row.append(iconWrap, body);
+
+  const canBuy = canAffordClass(cls.id);
+  if (onBuy) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn item-row-btn';
+    btn.textContent = '購買';
+    btn.disabled = !canBuy;
+    if (!canBuy) btn.title = '金幣不足';
+    btn.addEventListener('click', () => onBuy(cls.id));
+    row.appendChild(btn);
+  }
+
+  return row;
 }
 
 function createItemRow(item, { count, price, onBuy }) {
@@ -430,15 +496,31 @@ function createItemRow(item, { count, price, onBuy }) {
   row.className = 'item-row';
 
   const canBuy = price != null && canAfford(item.id);
-  row.innerHTML = `
-    <span class="item-row-icon">${item.icon}</span>
-    <div class="item-row-body">
-      <span class="item-row-name">${item.name}</span>
-      <span class="item-row-desc">${item.desc}</span>
-    </div>
-    ${count != null ? `<span class="item-row-meta">×${count}</span>` : ''}
-    ${price != null ? `<span class="item-row-meta">💰 ${price}</span>` : ''}
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'item-row-icon item-row-icon-unit';
+  setItemIcon(iconWrap, item);
+
+  const body = document.createElement('div');
+  body.className = 'item-row-body';
+  body.innerHTML = `
+    <span class="item-row-name">${item.name}</span>
+    <span class="item-row-desc">${item.desc}</span>
   `;
+
+  row.append(iconWrap, body);
+  if (count != null) {
+    const meta = document.createElement('span');
+    meta.className = 'item-row-meta';
+    meta.textContent = `×${count}`;
+    row.appendChild(meta);
+  }
+  if (price != null) {
+    const meta = document.createElement('span');
+    meta.className = 'item-row-meta';
+    meta.textContent = `💰 ${price}`;
+    row.appendChild(meta);
+  }
 
   if (onBuy) {
     const btn = document.createElement('button');
@@ -500,6 +582,33 @@ function renderBag(state) {
 function renderShop(state) {
   shopGridEl.innerHTML = '';
 
+  const unlockable = CLASS_IDS.filter((classId) => {
+    if (!isUnlockable(classId)) return false;
+    return !isClassOwnedInState(state, classId);
+  });
+
+  if (unlockable.length > 0) {
+    const unlockTitle = document.createElement('div');
+    unlockTitle.className = 'section-title section-title-compact';
+    unlockTitle.textContent = '角色解鎖';
+    shopGridEl.appendChild(unlockTitle);
+
+    for (const classId of unlockable) {
+      const cls = CLASSES[classId];
+      shopGridEl.appendChild(createClassUnlockRow(cls, {
+        onBuy: (id) => {
+          const result = buyClass(id);
+          if (result.ok) game.notify();
+        },
+      }));
+    }
+  }
+
+  const itemTitle = document.createElement('div');
+  itemTitle.className = 'section-title section-title-compact';
+  itemTitle.textContent = '消耗品';
+  shopGridEl.appendChild(itemTitle);
+
   for (const item of Object.values(ITEMS)) {
     shopGridEl.appendChild(createItemRow(item, {
       price: SHOP_PRICES[item.id],
@@ -516,7 +625,8 @@ function renderBattleItem(state) {
   itemBattleBarEl.classList.toggle('hidden', !show);
   if (!show) return;
 
-  itemBattleIconEl.textContent = state.itemDef.icon;
+  itemBattleIconEl.className = 'item-battle-icon item-battle-icon-thumb';
+  setItemIcon(itemBattleIconEl, state.itemDef);
   itemBattleNameEl.textContent = state.itemDef.name;
 
   const targeting = Boolean(state.itemTargeting);
@@ -561,6 +671,8 @@ function renderFormation(state) {
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
+    if (!isClassOwnedInState(state, cls.id)) continue;
+
     const selected = picked.includes(cls.id);
     const soldOut = !selected && picked.length >= limit;
 
@@ -583,6 +695,111 @@ function renderFormation(state) {
   }
 
   startBattleBtn.disabled = !state.formationReady;
+}
+
+function tutorialAllowsReserve(state, unit) {
+  const allowed = state.tutorialSelectableClassIds;
+  return !allowed || allowed.includes(unit.classId);
+}
+
+function createReserveCard(unit, { side, state }) {
+  const cls = CLASSES[unit.classId];
+  const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
+  const selected = state.selectedReserveId === unit.id;
+  const inspected = state.inspectedUnitId === unit.id;
+  const selectable = side === 'blue' && state.isHumanTurn && tutorialAllowsReserve(state, unit);
+
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'reserve-card';
+  card.dataset.unitId = unit.id;
+  if (side === 'enemy') card.classList.add('reserve-card-enemy');
+  card.classList.toggle('selected', selected);
+  card.classList.toggle('inspected', inspected);
+  card.classList.toggle('disabled', side === 'blue' && !selectable);
+  card.classList.toggle(
+    'tutorial-focus',
+    side === 'blue' && selectable && !selected && state.tutorialSelectableClassIds != null,
+  );
+  if (side === 'blue' && !selectable) card.disabled = true;
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'reserve-card-icon';
+  setUnitIcon(iconWrap, unit.classId);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'reserve-card-name';
+  nameEl.textContent = cls.name;
+
+  const hpBar = document.createElement('div');
+  hpBar.className = 'reserve-card-hp-bar';
+  const hpFill = document.createElement('div');
+  hpFill.className = 'reserve-card-hp-fill';
+  hpFill.style.width = `${pct}%`;
+  hpBar.appendChild(hpFill);
+
+  const hpText = document.createElement('span');
+  hpText.className = 'reserve-card-hp-text';
+  hpText.textContent = `${unit.hp}/${unit.maxHp}`;
+
+  card.append(iconWrap, nameEl, hpBar, hpText);
+
+  if (side === 'enemy') {
+    card.addEventListener('click', () => game.inspectUnit(unit.id));
+  } else {
+    card.addEventListener('click', () => {
+      if (selectable) game.selectReserve(unit.id);
+    });
+  }
+
+  return card;
+}
+
+function syncReserveTutorialPointer(state) {
+  const target = state.tutorialPointer;
+  const show = Boolean(target?.kind === 'reserve') && state.phase === 'battle';
+  reserveTutorialPointerEl.classList.toggle('hidden', !show);
+  if (!show) return;
+
+  const card = ownReserveCardsEl.querySelector(`[data-unit-id="${CSS.escape(target.unitId)}"]`);
+  if (!card) {
+    reserveTutorialPointerEl.classList.add('hidden');
+    return;
+  }
+
+  const barRect = ownReserveBarEl.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  reserveTutorialPointerEl.style.left = `${cardRect.left + cardRect.width / 2 - barRect.left}px`;
+  reserveTutorialPointerEl.style.top = `${cardRect.top - barRect.top - 4}px`;
+}
+
+function scheduleReserveTutorialPointer(state) {
+  requestAnimationFrame(() => {
+    syncReserveTutorialPointer(state);
+    requestAnimationFrame(() => syncReserveTutorialPointer(state));
+  });
+}
+
+function renderReserveBars(state) {
+  const inBattle = state.phase === 'battle';
+  const showEnemy = inBattle && state.redReserve.length > 0;
+  const showOwn = inBattle && state.blueReserve.length > 0;
+
+  enemyReserveBarEl.classList.toggle('hidden', !showEnemy);
+  ownReserveBarEl.classList.toggle('hidden', !showOwn);
+  if (!inBattle) return;
+
+  enemyReserveCardsEl.replaceChildren();
+  for (const unit of state.redReserve) {
+    enemyReserveCardsEl.appendChild(createReserveCard(unit, { side: 'enemy', state }));
+  }
+
+  ownReserveCardsEl.replaceChildren();
+  for (const unit of state.blueReserve) {
+    ownReserveCardsEl.appendChild(createReserveCard(unit, { side: 'blue', state }));
+  }
+
+  scheduleReserveTutorialPointer(state);
 }
 
 function renderModePicker(state) {
@@ -669,6 +886,7 @@ function render(state) {
 
   appEl.classList.toggle('in-combat', inCombat);
   battleContentEl.classList.toggle('in-combat', inCombat);
+  battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
   battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
   lobbyContentEl.classList.toggle('hidden', state.phase !== 'lobby');
   formationContentEl.classList.toggle('hidden', !inFormation);
@@ -693,6 +911,7 @@ function render(state) {
     renderFormationItems(state);
   }
   if (inBattleFlow) renderBattleItem(state);
+  if (inBattleFlow) renderReserveBars(state);
   if (activeNav === 'bag') renderBag(state);
   if (activeNav === 'shop') renderShop(state);
 
@@ -701,6 +920,7 @@ function render(state) {
 
   if (showBoard) {
     board3d.sync(state);
+    scheduleReserveTutorialPointer(state);
     if (inCombat !== lastInCombat) {
       board3d.scheduleResize();
     }
@@ -739,6 +959,10 @@ tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 
 game.subscribe(render);
 render(game.getState());
+
+window.addEventListener('resize', () => {
+  scheduleReserveTutorialPointer(game.getState());
+});
 
 // First-time players land straight in the scripted tutorial instead of the mode picker.
 if (!isTutorialDone()) {

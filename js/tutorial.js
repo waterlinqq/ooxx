@@ -16,7 +16,7 @@
 
 export const TUTORIAL_BOARD_MODE = '3x3';
 
-export const TUTORIAL_BLUE_ROSTER = ['archer', 'swordsman', 'swordsman'];
+export const TUTORIAL_BLUE_ROSTER = ['archer', 'swordsman', 'shield'];
 export const TUTORIAL_RED_ROSTER = ['archer', 'shield'];
 
 export const TUTORIAL_STEPS = [
@@ -48,8 +48,8 @@ export const TUTORIAL_STEPS = [
   },
   {
     title: '搶下第二格',
-    text: '把第二名劍士部署到中間橫排的最左邊，開始佈置你的連線。',
-    goal: { type: 'deploy', classId: 'swordsman', row: 1, col: 0 },
+    text: '把盾牌手部署到中間橫排的最左邊，開始佈置你的連線。',
+    goal: { type: 'deploy', classId: 'shield', row: 1, col: 0 },
     enemy: {
       type: 'attack',
       from: { row: 2, col: 1 },

@@ -8,13 +8,12 @@ import { BombMarkerManager } from './BombMarkerManager.js';
 import { MapPropManager } from './MapPropManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
-import { ReserveZone3d, reserveExtentPoints } from './ReserveZone3d.js';
 import { TutorialPointer } from './TutorialPointer.js';
 import { attachDevRendererStats } from './DevRendererStats.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
-const FRAME_PADDING = 0.08;
+const FRAME_PADDING = 0.02;
 const TMP_VIEW = new THREE.Vector3();
 
 export class BoardScene {
@@ -106,7 +105,6 @@ export class BoardScene {
 
     this.tileGrid = new TileGrid(this.scene);
     this.unitManager = new UnitMeshManager(this.scene);
-    this.reserveZone = new ReserveZone3d(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
     this.mapPropManager = new MapPropManager(this.tileGrid);
@@ -125,13 +123,11 @@ export class BoardScene {
       camera: this.camera,
       tileGrid: this.tileGrid,
       unitManager: this.unitManager,
-      reserveZone: this.reserveZone,
       callbacks,
     });
 
     this.clock = new THREE.Clock();
     this.boardSize = 0;
-    this.maxReserveUnits = 0;
     this.visible = true;
     this.devStats = import.meta.env.DEV ? attachDevRendererStats(this.renderer) : null;
 
@@ -161,7 +157,6 @@ export class BoardScene {
       new THREE.Vector3(half, 0, -half),
       new THREE.Vector3(half, 0, half),
     ];
-    points.push(...reserveExtentPoints(size, this.maxReserveUnits || undefined));
     return points;
   }
 
@@ -239,29 +234,20 @@ export class BoardScene {
       return;
     }
 
-    const anchor = this.reserveZone.getUnitAnchor(target.unitId);
-    if (anchor) {
-      this.tutorialPointer.pointAt(anchor);
-    } else {
-      this.tutorialPointer.hide();
-    }
+    this.tutorialPointer.hide();
   }
 
   sync(state) {
     if (state.animating) return;
 
     this.boardSize = state.boardSize;
-    this.maxReserveUnits = state.rosterLimit;
     this.tileGrid.ensureSize(state.boardSize);
     this.unitManager.setBoardSize(state.boardSize);
-    this.reserveZone.setBoardSize(state.boardSize);
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
     this.bombMarkers.sync(state.pendingBombs ?? []);
     this.mapPropManager.sync(state.mapProps ?? null);
     this.unitManager.syncBoard(state.board, state);
-    this.reserveZone.sync(state);
-    // After reserveZone.sync, so a freshly benched unit already has a position to anchor to.
     this.syncTutorialPointer(state);
     this.input.setState(state);
     this.updateTurnAmbience(state);
@@ -277,6 +263,27 @@ export class BoardScene {
 
   playBlessFx(fx) {
     return this.attackFx.playBlessing(fx);
+  }
+
+  // Fired when a unit enters a cell holding a prop. The state has already been
+  // resolved, so this is purely presentation and is deliberately not awaited by
+  // the game loop.
+  playMapPropFx(fx) {
+    const arrived = this.unitManager.waitForArrival(fx.unitId, fx.row, fx.col);
+    this.mapPropManager.trigger(fx, arrived);
+
+    arrived.then(() => {
+      if (fx.kind === 'potion' && fx.heal > 0) {
+        // Same green flash the priest blessing uses, so healing reads the same
+        // way wherever it comes from.
+        this.attackFx.flashTile(fx.row, fx.col, 0x86efac, 340);
+        this.attackFx.showTerrainHeal(fx.row, fx.col, fx.heal);
+      } else if (fx.kind === 'spikes' && fx.damage > 0) {
+        this.attackFx.showTerrainDamage(fx.row, fx.col, fx.damage, fx.killed);
+      } else if (fx.kind === 'web') {
+        this.attackFx.flashTile(fx.row, fx.col, 0xcbd5e1, 320);
+      }
+    });
   }
 
   setVisible(show) {
@@ -301,6 +308,7 @@ export class BoardScene {
     const elapsed = this.clock.elapsedTime;
     if (this.visible) {
       this.unitManager.tick(delta, elapsed);
+      this.mapPropManager.tick();
       this.devStats?.begin();
       this.renderer.render(this.scene, this.camera);
       this.devStats?.end();
@@ -315,7 +323,7 @@ export class BoardScene {
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.unitManager.dispose();
-    this.reserveZone.dispose();
+    this.mapPropManager.clear();
     this.tutorialPointer.dispose();
     this.tileGrid.clear();
     this.highlightSystem.clear();

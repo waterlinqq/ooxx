@@ -11,10 +11,12 @@ export {
   cloneMapProps,
   getMapPropAt,
   isStoneCell,
+  isFlagCell,
+  isObstacleCell,
   isMapPropsEnabled,
 } from './mapPropUtils.js';
 
-export const MAP_PROP_KINDS = ['potion', 'spikes', 'web', 'stone'];
+export const MAP_PROP_KINDS = ['potion', 'spikes', 'web', 'stone', 'flag'];
 
 export const MAP_PROPS = {
   potion: {
@@ -41,9 +43,15 @@ export const MAP_PROPS = {
     icon: '🪨',
     desc: '佔格，無法部署或走入',
   },
+  flag: {
+    kind: 'flag',
+    name: '紅藍旗',
+    icon: '🚩',
+    desc: '佔格且無法進入，可同時作為雙方連線',
+  },
 };
 
-const SPAWN_RATE = 0.03;
+const SPAWN_RATE = 0.02;
 
 export function generateMapProps(size, rng = Math.random) {
   const props = createEmptyMapProps(size);
@@ -56,6 +64,7 @@ export function generateMapProps(size, rng = Math.random) {
       else if (roll < SPAWN_RATE * 2) props[r][c] = { kind: 'spikes' };
       else if (roll < SPAWN_RATE * 3) props[r][c] = { kind: 'web' };
       else if (roll < SPAWN_RATE * 4) props[r][c] = { kind: 'stone' };
+      else if (roll < SPAWN_RATE * 5) props[r][c] = { kind: 'flag' };
     }
   }
 
@@ -64,30 +73,36 @@ export function generateMapProps(size, rng = Math.random) {
 
 /**
  * Apply terrain when a unit enters a cell (move or deploy).
- * @returns {{ board: import('./units.js').Board, mapProps: import('./mapPropUtils.js').MapProp[][], events: string[], killed: object[] }}
+ * `trigger` describes what the prop did, for the 3D layer to animate.
+ * @returns {{ board: import('./units.js').Board, mapProps: import('./mapPropUtils.js').MapProp[][], events: string[], killed: object[], trigger: object|null }}
  */
 export function resolveMapPropOnEnter(board, mapProps, row, col, unitId) {
   const prop = getMapPropAt(mapProps, row, col);
   if (!prop) {
-    return { board, mapProps, events: [], killed: [] };
+    return { board, mapProps, events: [], killed: [], trigger: null };
   }
 
   const nextProps = cloneMapProps(mapProps);
   const events = [];
   const killed = [];
+  const trigger = { kind: prop.kind, row, col, unitId };
 
   if (prop.kind === 'potion') {
+    const before = board[row][col]?.hp ?? 0;
     const healed = healUnitAt(board, row, col, 2);
     nextProps[row][col] = null;
+    trigger.heal = healed.unit ? healed.unit.hp - before : 0;
     if (healed.unit) {
       events.push(`${MAP_PROPS.potion.icon} 紅藥水 +2`);
     }
-    return { board: healed.board, mapProps: nextProps, events, killed };
+    return { board: healed.board, mapProps: nextProps, events, killed, trigger };
   }
 
   if (prop.kind === 'spikes') {
     const damaged = applyTrapDamage(board, row, col, 2);
     nextProps[row][col] = null;
+    trigger.damage = damaged.hit ? 2 : 0;
+    trigger.killed = Boolean(damaged.killed);
     if (damaged.hit) {
       events.push(`${MAP_PROPS.spikes.icon} 尖刺 -2`);
     }
@@ -104,7 +119,7 @@ export function resolveMapPropOnEnter(board, mapProps, row, col, unitId) {
         }
       }
     }
-    return { board: nextBoard, mapProps: nextProps, events, killed };
+    return { board: nextBoard, mapProps: nextProps, events, killed, trigger };
   }
 
   if (prop.kind === 'web') {
@@ -115,8 +130,8 @@ export function resolveMapPropOnEnter(board, mapProps, row, col, unitId) {
       }),
     );
     events.push(`${MAP_PROPS.web.icon} 纏網無法移動`);
-    return { board: nextBoard, mapProps: nextProps, events, killed };
+    return { board: nextBoard, mapProps: nextProps, events, killed, trigger };
   }
 
-  return { board, mapProps, events, killed };
+  return { board, mapProps, events, killed, trigger: null };
 }

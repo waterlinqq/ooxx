@@ -39,6 +39,7 @@ import {
   getInventoryCount,
   consumeItem,
   markTutorialDone,
+  isClassOwned,
 } from './save.js';
 import {
   TUTORIAL_BOARD_MODE,
@@ -52,7 +53,7 @@ import {
   createEmptyMapProps,
   generateMapProps,
   resolveMapPropOnEnter,
-  isStoneCell,
+  isObstacleCell,
 } from './mapProps.js';
 
 export class Game {
@@ -78,6 +79,7 @@ export class Game {
     this.actedUnitIds = new Set();
     this.playAttackFx = null;
     this.playBlessFx = null;
+    this.playMapPropFx = null;
     this.listeners = [];
     this.equippedItem = null;
     this.itemUsed = false;
@@ -170,6 +172,12 @@ export class Game {
     if (existing >= 0) {
       this.blueRoster = this.blueRoster.filter((id) => id !== classId);
       this.message = '';
+      this.notify();
+      return;
+    }
+
+    if (!isClassOwned(classId)) {
+      this.message = '尚未解鎖此職業';
       this.notify();
       return;
     }
@@ -307,7 +315,7 @@ export class Game {
 
   checkWinAfterItemEffect(detail) {
     for (const team of ['blue', 'red']) {
-      const winLine = checkWin(this.board, team);
+      const winLine = checkWin(this.board, team, this.mapProps);
       if (winLine) {
         this.lastWinLine = winLine;
         this.handleRoundWin(team, `${detail}後連成 ${this.getWinCountLabel()} 子！`);
@@ -447,6 +455,7 @@ export class Game {
       pendingBombs: this.pendingBombs.map((b) => ({ ...b })),
       coins: save.coins,
       inventory: save.inventory,
+      ownedClasses: save.ownedClasses,
       lastCoinReward: this.lastCoinReward,
       canUseItem: this.canUseItem(),
       itemDef: equippedItem ? getItem(equippedItem) : null,
@@ -507,6 +516,9 @@ export class Game {
     const result = resolveMapPropOnEnter(this.board, this.mapProps, row, col, unitId);
     this.board = result.board;
     this.mapProps = result.mapProps;
+    // The trap animation waits for the unit's mesh to finish walking in, so this
+    // runs alongside the rest of the turn instead of blocking it.
+    if (result.trigger) this.playMapPropFx?.(result.trigger);
     return result.events;
   }
 
@@ -889,10 +901,19 @@ export class Game {
     return this.narrowToTutorialGoal(getValidDeployCells(this.board, this.mapProps), 'deploy');
   }
 
-  /** Tutorial uses the finger pointer instead of grid highlights. */
+  /** During tutorial, only highlight the one cell the current step asks for. */
   narrowToTutorialGoal(cells, actionType) {
     if (!this.tutorial) return cells;
-    return [];
+    const goal = this.getTutorialGoal();
+    if (!goal || goal.type !== actionType) return [];
+
+    if (actionType === 'deploy') {
+      const match = cells.filter(([r, c]) => r === goal.row && c === goal.col);
+      return match.length > 0 ? match : cells;
+    }
+
+    const match = cells.filter(([r, c]) => r === goal.to.row && c === goal.to.col);
+    return match.length > 0 ? match : cells;
   }
 
   clickCell(row, col) {
@@ -912,7 +933,7 @@ export class Game {
   tryDeploy(row, col) {
     const reserve = this.getCurrentReserve();
     const unit = reserve.find((u) => u.id === this.selectedReserveId);
-    if (!unit || this.board[row][col] || isStoneCell(this.mapProps, row, col)) return;
+    if (!unit || this.board[row][col] || isObstacleCell(this.mapProps, row, col)) return;
     if (!this.isTutorialActionAllowed({ type: 'deploy', classId: unit.classId, row, col })) {
       this.rejectTutorialAction();
       return;
@@ -1044,7 +1065,7 @@ export class Game {
 
     if (this.tutorial) this.advanceTutorial();
 
-    const winLine = checkWin(this.board, this.currentPlayer);
+    const winLine = checkWin(this.board, this.currentPlayer, this.mapProps);
 
     if (winLine) {
       this.lastWinLine = winLine;
@@ -1126,7 +1147,7 @@ export class Game {
     if (action.type === 'deploy') {
       const unit = this.redReserve.find((u) => u.id === action.unitId);
       if (!unit) return;
-      if (isStoneCell(this.mapProps, action.row, action.col)) {
+      if (isObstacleCell(this.mapProps, action.row, action.col)) {
         this.endAction(`${teamLabel} 略過`, action.unitId);
         return;
       }

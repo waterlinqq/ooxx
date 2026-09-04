@@ -1,84 +1,38 @@
-import * as THREE from 'three';
-import { TILE_SIZE } from './TileGrid.js';
+import { Group } from 'three';
 import { MAP_PROPS } from '../mapProps.js';
+import { buildMapPropModel } from './MapPropModels.js';
+
+// Props sit on the tile surface, matching the ground plane the unit models use.
+const PROP_BASE_Y = 0.072;
 
 function cellKey(r, c) {
   return `${r},${c}`;
 }
 
-function createPropMesh(kind) {
-  let mesh;
-
-  if (kind === 'potion') {
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(TILE_SIZE * 0.1, TILE_SIZE * 0.12, TILE_SIZE * 0.22, 10),
-      new THREE.MeshStandardMaterial({
-        color: 0xef4444,
-        emissive: 0x991b1b,
-        emissiveIntensity: 0.35,
-        roughness: 0.35,
-        metalness: 0.15,
-      }),
-    );
-    body.position.y = 0;
-    mesh = new THREE.Group();
-    mesh.add(body);
-  } else if (kind === 'spikes') {
-    mesh = new THREE.Mesh(
-      new THREE.ConeGeometry(TILE_SIZE * 0.14, TILE_SIZE * 0.24, 4),
-      new THREE.MeshStandardMaterial({
-        color: 0x475569,
-        emissive: 0x1e293b,
-        emissiveIntensity: 0.25,
-        roughness: 0.55,
-        metalness: 0.35,
-      }),
-    );
-  } else if (kind === 'web') {
-    mesh = new THREE.Mesh(
-      new THREE.CircleGeometry(TILE_SIZE * 0.28, 16),
-      new THREE.MeshStandardMaterial({
-        color: 0xe2e8f0,
-        emissive: 0x94a3b8,
-        emissiveIntensity: 0.2,
-        transparent: true,
-        opacity: 0.55,
-        side: THREE.DoubleSide,
-        roughness: 0.9,
-        metalness: 0,
-      }),
-    );
-    mesh.rotation.x = -Math.PI / 2;
-  } else if (kind === 'stone') {
-    mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(TILE_SIZE * 0.42, TILE_SIZE * 0.28, TILE_SIZE * 0.42),
-      new THREE.MeshStandardMaterial({
-        color: 0x64748b,
-        emissive: 0x334155,
-        emissiveIntensity: 0.12,
-        roughness: 0.85,
-        metalness: 0.05,
-      }),
-    );
-  } else {
-    return null;
-  }
-
-  mesh.userData.mapPropKind = kind;
-  mesh.renderOrder = 2;
-  return mesh;
+// Stable per-cell seed, so a boulder keeps its shape across re-syncs.
+function cellSeed(row, col) {
+  return (Math.imul(row + 1, 73856093) ^ Math.imul(col + 1, 19349663)) >>> 0;
 }
 
 export class MapPropManager {
   constructor(tileGrid) {
     this.tileGrid = tileGrid;
-    this.group = new THREE.Group();
+    this.group = new Group();
     this.group.name = 'map-props';
     tileGrid.group.parent.add(this.group);
     this.markers = new Map();
+    this.effects = new Set();
+    this.boardSize = 0;
   }
 
   sync(mapProps = null) {
+    // Tile world positions shift when the board resizes, so surviving markers
+    // cannot be reused as-is.
+    if (this.boardSize !== this.tileGrid.boardSize) {
+      this.clear();
+      this.boardSize = this.tileGrid.boardSize;
+    }
+
     const desired = new Map();
 
     if (mapProps) {
@@ -97,7 +51,7 @@ export class MapPropManager {
 
     for (const [key, kind] of desired) {
       const existing = this.markers.get(key);
-      if (existing?.userData.mapPropKind === kind) continue;
+      if (existing?.kind === kind) continue;
       if (existing) this.removeMarker(key);
       const [row, col] = key.split(',').map(Number);
       this.addMarker(key, row, col, kind);
@@ -108,39 +62,94 @@ export class MapPropManager {
     const tile = this.tileGrid.getTile(row, col);
     if (!tile) return;
 
-    const mesh = createPropMesh(kind);
-    if (!mesh) return;
+    const seed = cellSeed(row, col);
+    const model = buildMapPropModel(kind, seed);
+    if (!model) return;
 
-    mesh.position.copy(tile.position);
-    if (kind === 'potion') {
-      mesh.position.y = TILE_SIZE * 0.14;
-    } else if (kind === 'spikes') {
-      mesh.position.y = TILE_SIZE * 0.14;
-    } else if (kind === 'web') {
-      mesh.position.y = 0.04;
-    } else if (kind === 'stone') {
-      mesh.position.y = TILE_SIZE * 0.16;
+    const { root } = model;
+    root.position.set(tile.position.x, PROP_BASE_Y, tile.position.z);
+    root.userData.mapPropKind = kind;
+    root.userData.mapPropLabel = MAP_PROPS[kind]?.name ?? kind;
+
+    this.group.add(root);
+    this.markers.set(key, {
+      kind,
+      root,
+      activate: model.activate ?? null,
+      activateMs: model.activateMs ?? 0,
+      persistent: model.persistent ?? false,
+      effect: null,
+      discard: false,
+    });
+  }
+
+  /**
+   * Play a prop's trigger animation. `ready` is awaited first so the trap fires
+   * as the unit lands on it rather than the moment the move is committed.
+   */
+  trigger({ kind, row, col }, ready = Promise.resolve()) {
+    const key = cellKey(row, col);
+    const marker = this.markers.get(key);
+    if (!marker?.activate || marker.kind !== kind) return;
+
+    // A consumed prop is already gone from the game state, so take it out of the
+    // synced set now: otherwise the next sync deletes the mesh mid-animation.
+    if (!marker.persistent) this.markers.delete(key);
+    marker.effect = { start: null };
+    this.effects.add(marker);
+
+    ready.then(() => {
+      if (marker.effect) marker.effect.start = performance.now();
+    });
+  }
+
+  tick() {
+    if (this.effects.size === 0) return;
+    const now = performance.now();
+
+    for (const marker of [...this.effects]) {
+      const { start } = marker.effect;
+      if (start === null) continue;
+
+      const p = Math.min(1, (now - start) / marker.activateMs);
+      marker.activate(p);
+      if (p < 1) continue;
+
+      this.effects.delete(marker);
+      marker.effect = null;
+      if (!marker.persistent || marker.discard) this.disposeMarker(marker);
     }
-    mesh.userData.mapPropKind = kind;
-    mesh.userData.mapPropLabel = MAP_PROPS[kind]?.name ?? kind;
-    this.group.add(mesh);
-    this.markers.set(key, mesh);
   }
 
   removeMarker(key) {
-    const mesh = this.markers.get(key);
-    if (!mesh) return;
-    this.group.remove(mesh);
-    mesh.traverse((child) => {
-      if (child.geometry) child.geometry.dispose();
+    const marker = this.markers.get(key);
+    if (!marker) return;
+    this.markers.delete(key);
+    // A marker mid-trigger owns itself until the animation ends.
+    if (marker.effect) {
+      marker.discard = true;
+      return;
+    }
+    this.disposeMarker(marker);
+  }
+
+  disposeMarker(marker) {
+    this.group.remove(marker.root);
+    // Geometry is cached and reused between props; materials never are, because
+    // each prop drives its own emissive and opacity during a trigger.
+    marker.root.traverse((child) => {
+      if (child.geometry && !child.geometry.userData?.shared) child.geometry.dispose();
       if (child.material) child.material.dispose();
     });
-    this.markers.delete(key);
   }
 
   clear() {
-    for (const key of [...this.markers.keys()]) {
-      this.removeMarker(key);
+    // A persistent prop mid-trigger sits in both collections.
+    for (const marker of new Set([...this.markers.values(), ...this.effects])) {
+      marker.effect = null;
+      this.disposeMarker(marker);
     }
+    this.markers.clear();
+    this.effects.clear();
   }
 }

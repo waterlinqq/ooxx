@@ -1,5 +1,5 @@
 import { CLASSES, createEmptyBoard, cloneBoard } from './units.js';
-import { isStoneCell } from './mapPropUtils.js';
+import { isFlagCell, isObstacleCell } from './mapPropUtils.js';
 
 export function getWinLines(size, winLength = size) {
   const lines = [];
@@ -97,7 +97,7 @@ export function getValidMoves(board, unit, mapProps = null) {
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (board[r][c] || (r === unit.row && c === unit.col)) continue;
-        if (isStoneCell(mapProps, r, c)) continue;
+        if (isObstacleCell(mapProps, r, c)) continue;
         if (chebyshev(unit.row, unit.col, r, c) <= maxJump) moves.push([r, c]);
       }
     }
@@ -116,7 +116,7 @@ export function getValidMoves(board, unit, mapProps = null) {
       for (const [nr, nc] of getAdjacentCells(r, c, size)) {
         const key = `${nr},${nc}`;
         if (board[nr][nc] || visited.has(key)) continue;
-        if (isStoneCell(mapProps, nr, nc)) continue;
+        if (isObstacleCell(mapProps, nr, nc)) continue;
         visited.add(key);
         moves.push([nr, nc]);
         nextFrontier.push([nr, nc, steps + 1]);
@@ -308,18 +308,20 @@ export function getValidDeployCells(board, mapProps = null) {
   const cells = [];
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
-      if (!board[r][c] && !isStoneCell(mapProps, r, c)) cells.push([r, c]);
+      if (!board[r][c] && !isObstacleCell(mapProps, r, c)) cells.push([r, c]);
     }
   }
   return cells;
 }
 
-export function checkWin(board, team) {
+export function checkWin(board, team, mapProps = null) {
   const size = boardSize(board);
   const winLength = size;
   for (const line of getWinLines(size, winLength)) {
-    const units = line.map(([r, c]) => board[r][c]).filter(Boolean);
-    if (units.length === winLength && units.every((u) => u.team === team)) {
+    const completed = line.every(([r, c]) => (
+      board[r][c]?.team === team || isFlagCell(mapProps, r, c)
+    ));
+    if (completed) {
       return line;
     }
   }
@@ -568,11 +570,17 @@ export function applyAttack(board, attacker, target) {
     if (victimIdx >= 0) {
       const victim = killed[victimIdx];
       applyPossession(attackerOnBoard, victim);
-      next[attacker.row][attacker.col] = null;
-      next[victim.row][victim.col] = attackerOnBoard;
+      const fromRow = attacker.row;
+      const fromCol = attacker.col;
+      const toRow = target.row;
+      const toCol = target.col;
+      next[fromRow][fromCol] = null;
+      attackerOnBoard.row = toRow;
+      attackerOnBoard.col = toCol;
+      next[toRow][toCol] = attackerOnBoard;
       killed.splice(victimIdx, 1);
       possessed.push({
-        from: { row: attacker.row, col: attacker.col },
+        from: { row: fromRow, col: fromCol },
         unit: attackerOnBoard,
         victimClassId: victim.classId,
       });

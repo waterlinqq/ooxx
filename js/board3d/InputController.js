@@ -3,12 +3,11 @@ import * as THREE from 'three';
 const DRAG_THRESHOLD = 8;
 
 export class InputController {
-  constructor({ domElement, camera, tileGrid, unitManager, reserveZone, callbacks }) {
+  constructor({ domElement, camera, tileGrid, unitManager, callbacks }) {
     this.domElement = domElement;
     this.camera = camera;
     this.tileGrid = tileGrid;
     this.unitManager = unitManager;
-    this.reserveZone = reserveZone;
     this.callbacks = callbacks;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -42,7 +41,7 @@ export class InputController {
     let obj = object;
     while (obj) {
       const kind = obj.userData?.kind;
-      if (kind === 'tile' || kind === 'unit' || kind === 'reserve') {
+      if (kind === 'tile' || kind === 'unit') {
         return obj;
       }
       obj = obj.parent;
@@ -66,10 +65,6 @@ export class InputController {
       }
     });
 
-    if (this.reserveZone) {
-      targets.push(...this.reserveZone.getPickTargets());
-    }
-
     this.tileGrid.group.traverse((obj) => {
       if (obj.isMesh && obj.userData?.kind === 'tile') {
         targets.push(obj);
@@ -85,15 +80,6 @@ export class InputController {
     for (const hit of hits) {
       const root = this.findInteractiveRoot(hit.object);
       if (!root) continue;
-
-      if (root.userData.kind === 'reserve') {
-        return {
-          kind: 'reserve',
-          unitId: root.userData.unitId,
-          side: root.userData.side,
-          selectable: root.userData.selectable,
-        };
-      }
 
       if (root.userData.kind === 'tile') {
         return { kind: 'tile', row: root.userData.row, col: root.userData.col, unitId: null };
@@ -113,7 +99,7 @@ export class InputController {
 
   pickCell(event) {
     const pick = this.pickTarget(event);
-    if (!pick || pick.kind === 'reserve') return null;
+    if (!pick) return null;
     return pick;
   }
 
@@ -197,15 +183,6 @@ export class InputController {
     if (!pick) {
       if (this.state.draggingUnitId) {
         this.callbacks.onDragCancel();
-      }
-      return;
-    }
-
-    if (pick.kind === 'reserve') {
-      if (pick.side === 'blue' && pick.selectable) {
-        this.callbacks.onReserveSelect(pick.unitId);
-      } else if (pick.side === 'red') {
-        this.callbacks.onUnitInspect(pick.unitId);
       }
       return;
     }

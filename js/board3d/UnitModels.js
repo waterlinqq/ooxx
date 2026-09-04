@@ -555,6 +555,16 @@ function buildBomb(mats) {
   return { group: bomb, spark };
 }
 
+export function buildItemBombModel() {
+  const mats = createMaterialSet('red');
+  const { group } = buildBomb(mats);
+  const root = new THREE.Group();
+  root.add(group);
+  group.position.set(0, 0.08, 0);
+  group.rotation.set(-0.2, 0.35, 0);
+  return root;
+}
+
 function buildSwordsman(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);

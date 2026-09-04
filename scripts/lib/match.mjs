@@ -16,7 +16,7 @@ import {
   getValidAttackTargets,
 } from '../../js/rules.js';
 import { generateMapProps, resolveMapPropOnEnter } from '../../js/mapProps.js';
-import { isStoneCell } from '../../js/mapPropUtils.js';
+import { isObstacleCell } from '../../js/mapPropUtils.js';
 
 export const MAX_TURNS = 800;
 
@@ -124,7 +124,7 @@ function triggerMapPropAfterLanding(state, row, col, unitId) {
 function applyAiAction(state, action, team) {
   if (
     (action.type === 'deploy' || action.type === 'move')
-    && isStoneCell(state.mapProps, action.row, action.col)
+    && isObstacleCell(state.mapProps, action.row, action.col)
   ) {
     return { label: 'blocked', detail: null, skipped: true };
   }
@@ -171,7 +171,7 @@ function applyAiAction(state, action, team) {
 function checkRoundEnd(state, actingTeam) {
   const enemy = actingTeam === 'blue' ? 'red' : 'blue';
   const enemyReserve = enemy === 'blue' ? state.blueReserve : state.redReserve;
-  const winLine = checkWin(state.board, actingTeam);
+  const winLine = checkWin(state.board, actingTeam, state.mapProps);
 
   if (winLine) return { winner: actingTeam, reason: 'line', winLine };
   if (isTeamEliminated(state.board, enemy, enemyReserve)) {

@@ -7,6 +7,7 @@
 // out of the resulting board for free.
 import { enemyOf, hasCompletedLine, isEliminated, getWinLinesForSize } from './board.js';
 import { buildThreatMap, isLethalAt, coverageAt, damageAt } from './threat.js';
+import { isFlagCell } from '../mapPropUtils.js';
 
 export const WIN_SCORE = 1000000;
 
@@ -139,8 +140,10 @@ function scoreLines(ctx, team, myThreat, theirThreat) {
       const [row, col] = coords[cell];
       const unit = board[row][col];
       if (!unit) {
-        empty++;
-        lastEmptyCell = cell;
+        if (!isFlagCell(ctx.mapProps, row, col)) {
+          empty++;
+          lastEmptyCell = cell;
+        }
       } else if (unit.team === team) {
         mine++;
         theirClearCost += clearCost(unit.hp, damageAt(theirThreat, cell));

@@ -341,6 +341,26 @@ export class AttackFx3d {
     return entry ? entry.root.userData.unitId : null;
   }
 
+  // Terrain hits have no attacker to animate, so they only need the readout: a
+  // number over the cell plus the usual impact cues.
+  async showTerrainDamage(row, col, amount, killed) {
+    this.flashTile(row, col, 0xf87171, 260);
+    this.shakeUnit(row, col);
+    if (killed) this.fadeOutUnit(row, col);
+
+    const c = this.cellCenter(row, col);
+    const el = spawnDamageNumber(this.fxLayer, this.worldToScreen(c.x, c.y, c.z), amount, killed);
+    await wait(DAMAGE_LINGER);
+    el.remove();
+  }
+
+  async showTerrainHeal(row, col, amount) {
+    const c = this.cellCenter(row, col);
+    const el = spawnHealNumber(this.fxLayer, this.worldToScreen(c.x, c.y, c.z), amount);
+    await wait(BLESS_HEAL_LINGER);
+    el.remove();
+  }
+
   async playBlessing(fx) {
     const targets = fx.targets ?? [];
     if (targets.length === 0) return;

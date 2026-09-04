@@ -70,6 +70,11 @@
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
           <section class="board-wrap">
+            <div class="reserve-bar reserve-bar-enemy hidden" id="enemyReserveBar">
+              <div class="reserve-bar-scroll">
+                <div class="reserve-bar-cards" id="enemyReserveCards"></div>
+              </div>
+            </div>
             <div class="board-area">
               <div class="board-container">
                 <div class="board-hud" id="boardHud">
@@ -123,6 +128,14 @@
                     <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
                   </div>
                 </div>
+              </div>
+            </div>
+            <div class="reserve-bar reserve-bar-own hidden" id="ownReserveBar">
+              <div class="reserve-bar-scroll">
+                <div class="reserve-bar-cards" id="ownReserveCards"></div>
+              </div>
+              <div class="reserve-tutorial-pointer hidden" id="reserveTutorialPointer" aria-hidden="true">
+                <span class="tutorial-pointer-hand">👆</span>
               </div>
             </div>
           </section>

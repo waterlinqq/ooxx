@@ -342,6 +342,37 @@ export class UnitMeshManager {
     return this.units.get(unitId)?.root ?? null;
   }
 
+  /**
+   * Resolves once the unit is standing still on the given cell. The board state
+   * changes the instant an action is committed, while the mesh still has to walk
+   * or drop into place, so terrain effects wait on this to stay in step. Also
+   * resolves if the unit never gets there (killed, or already gone).
+   */
+  waitForArrival(unitId, row, col, timeout = 1200) {
+    const deadline = performance.now() + timeout;
+
+    return new Promise((resolve) => {
+      const check = () => {
+        const entry = this.units.get(unitId);
+        if (!entry || performance.now() >= deadline) {
+          resolve();
+          return;
+        }
+
+        const placed = entry.root.userData.row === row && entry.root.userData.col === col;
+        const settled =
+          placed &&
+          !entry.leap &&
+          !entry.spawn &&
+          entry.displayPos.distanceToSquared(entry.targetPos) < 0.0004;
+
+        if (settled) resolve();
+        else requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    });
+  }
+
   getUnitAt(row, col) {
     for (const entry of this.units.values()) {
       if (entry.root.userData.row === row && entry.root.userData.col === col) {

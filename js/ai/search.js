@@ -24,6 +24,7 @@ import {
   getEnemiesOnLine,
   getTowerTargets,
 } from '../rules.js';
+import { getMapPropAt } from '../mapPropUtils.js';
 
 const EXACT = 0;
 const LOWER = 1;
@@ -34,6 +35,13 @@ const UPPER = 2;
 const CANDIDATE_CAP = [Infinity, 36, 26, 20, 16, 14, 12, 10];
 
 const TT_LIMIT = 300000;
+
+// Depth is counted in actions, so on a one-action board every odd depth leaves the leaf
+// with the opponent still to move: a unit placed on the last ply looks safe because the
+// reply that kills it sits just past the horizon. Iterative deepening returns whichever
+// depth finished last, odd or even, so roughly half of all decisions used to be read off
+// such a leaf. Extending leaves by the kills still on the table removes that blind spot.
+const MAX_QUIESCENCE_PLIES = 6;
 
 const DIFFICULTY = {
   easy: { maxDepth: 2, timeFactor: 0.15, noise: 160 },
@@ -57,7 +65,7 @@ function generateActions(ctx) {
 
   const reserve = ctx.reserves[team];
   if (reserve.length > 0) {
-    const deployCells = getValidDeployCells(ctx.board);
+    const deployCells = getValidDeployCells(ctx.board, ctx.mapProps);
     if (deployCells.length > 0) {
       const seenClasses = new Set();
       for (const unit of reserve) {
@@ -78,7 +86,7 @@ function generateActions(ctx) {
       if (!unit || unit.team !== team) continue;
       if (ctx.acted.has(unit.searchIndex)) continue;
 
-      for (const [row, col] of getValidMoves(board, unit)) {
+      for (const [row, col] of getValidMoves(board, unit, ctx.mapProps)) {
         actions.push({ type: 'move', unitId: unit.id, row, col });
       }
       const attackTargets = getValidAttackTargets(board, unit);
@@ -101,20 +109,24 @@ function sameAction(a, b) {
   return a.row === b.row && a.col === b.col;
 }
 
+/** Everything one attack actually lands on, mirroring makeAction's own resolution. */
+function resolveHits(ctx, attacker, target) {
+  if (attacker.type === 'mage') {
+    return getEnemiesOnLine(ctx.board, attacker, target.row, target.col);
+  }
+  if (attacker.type === 'tower') {
+    return getTowerTargets(ctx.board, attacker);
+  }
+  return [target];
+}
+
 function scoreAttackOrder(ctx, action, team) {
   const attacker = ctx.unitsById.get(action.unitId);
   const target = ctx.unitsById.get(action.targetId);
   if (!attacker || !target) return -Infinity;
 
   let score = 500;
-  let hits;
-  if (attacker.type === 'mage') {
-    hits = getEnemiesOnLine(ctx.board, attacker, target.row, target.col);
-  } else if (attacker.type === 'tower') {
-    hits = getTowerTargets(ctx.board, attacker);
-  } else {
-    hits = [target];
-  }
+  const hits = resolveHits(ctx, attacker, target);
 
   for (const hit of hits) {
     if (hit.hp <= attacker.atk) {
@@ -122,7 +134,9 @@ function scoreAttackOrder(ctx, action, team) {
       // Killing a blocker on a line we have otherwise filled empties the cell we need.
       const cell = hit.row * ctx.size + hit.col;
       for (const lineIdx of ctx.linesByCell[cell]) {
-        if (ctx.lineCount[team][lineIdx] === ctx.winLength - 1) score += 900;
+        if (ctx.lineCount[team][lineIdx] + ctx.flagLineCount[lineIdx] === ctx.winLength - 1) {
+          score += 900;
+        }
       }
     } else {
       score += attacker.atk * 8;
@@ -138,19 +152,23 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   let score = 0;
 
   for (const lineIdx of ctx.linesByCell[cell]) {
+    const flags = ctx.flagLineCount[lineIdx];
     const mine = ctx.lineCount[team][lineIdx];
     const theirs = ctx.lineCount[enemy][lineIdx];
-    if (theirs === 0 && mine === ctx.winLength - 1) score += 4000;
-    else if (mine === 0 && theirs === ctx.winLength - 1) score += 1500;
-    else if (theirs === 0) score += mine * 30;
+    const myProgress = mine + flags;
+    const theirProgress = theirs + flags;
+    if (theirs === 0 && myProgress === ctx.winLength - 1) score += 4000;
+    else if (mine === 0 && theirProgress === ctx.winLength - 1) score += 1500;
+    else if (theirs === 0) score += myProgress * 30;
   }
 
   if (action.type === 'move') {
     // Leaving a line we were building on has a real cost the destination must justify.
     const from = unit.row * ctx.size + unit.col;
     for (const lineIdx of ctx.linesByCell[from]) {
-      if (ctx.lineCount[enemy][lineIdx] === 0 && ctx.lineCount[team][lineIdx] >= 2) {
-        score -= ctx.lineCount[team][lineIdx] * 25;
+      const progress = ctx.lineCount[team][lineIdx] + ctx.flagLineCount[lineIdx];
+      if (ctx.lineCount[enemy][lineIdx] === 0 && progress >= 2) {
+        score -= progress * 25;
       }
     }
   }
@@ -158,8 +176,12 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
   score += weights[cell] * 4;
   // Landing somewhere the opponent can kill outright is almost never worth it. The leaf
   // evaluation is what confirms that; this only keeps such moves from filling the
-  // candidate cap ahead of better ones.
-  if (isLethalAt(hostile, cell, unit.hp)) {
+  // candidate cap ahead of better ones. Spikes bite before the opponent replies, so the
+  // hp that matters is what is left after the landing.
+  const landingHp = getMapPropAt(ctx.mapProps, action.row, action.col)?.kind === 'spikes'
+    ? unit.hp - 2
+    : unit.hp;
+  if (isLethalAt(hostile, cell, landingHp)) {
     score -= 300 + materialValue(unit);
   }
 
@@ -204,6 +226,84 @@ function ttMove(action) {
   };
 }
 
+/**
+ * Attacks that kill something, best material first.
+ *
+ * Only kills qualify: chip damage never settles a position, so extending on it would let
+ * the quiescence tree run away without changing what the leaf is worth.
+ */
+function generateKills(ctx) {
+  const { board, size } = ctx;
+  const team = ctx.turn;
+  const scored = [];
+
+  for (let r = 0; r < size; r++) {
+    const boardRow = board[r];
+    for (let c = 0; c < size; c++) {
+      const unit = boardRow[c];
+      if (!unit || unit.team !== team) continue;
+      if (ctx.acted.has(unit.searchIndex)) continue;
+
+      const targets = getValidAttackTargets(board, unit);
+      const unique = unit.type === 'tower' ? targets.slice(0, 1) : targets;
+      for (const target of unique) {
+        let gain = 0;
+        for (const hit of resolveHits(ctx, unit, target)) {
+          if (hit.hp <= unit.atk) gain += materialValue(hit);
+        }
+        if (gain <= 0) continue;
+        scored.push({ gain, action: { type: 'attack', unitId: unit.id, targetId: target.id } });
+      }
+    }
+  }
+
+  scored.sort((a, b) => b.gain - a.gain);
+  return scored.map((entry) => entry.action);
+}
+
+/**
+ * Plays out the kills available from a leaf so the score reflects a settled position.
+ *
+ * Standing pat is always legal — declining to attack is a real option here — so the
+ * side to move can only improve on the static score, exactly as in a normal quiescence.
+ */
+function quiescence(engine, ply, quietPly, alphaIn, beta) {
+  const { ctx } = engine;
+
+  engine.nodes++;
+  if ((engine.nodes & 255) === 0 && performance.now() > engine.deadline) throw engine.abort;
+
+  const terminal = terminalScore(ctx, ctx.turn);
+  if (terminal !== null) {
+    if (terminal > 0) return WIN_SCORE - ply;
+    if (terminal < 0) return -WIN_SCORE + ply;
+    return 0;
+  }
+
+  const standPat = evaluate(ctx, ctx.turn);
+  if (quietPly >= MAX_QUIESCENCE_PLIES) return standPat;
+
+  let alpha = alphaIn;
+  if (standPat > alpha) alpha = standPat;
+  if (alpha >= beta) return standPat;
+
+  let best = standPat;
+  for (const action of generateKills(ctx)) {
+    const undo = makeAction(ctx, action);
+    const sameSide = ctx.turn === undo.turn;
+    const score = sameSide
+      ? quiescence(engine, ply + 1, quietPly + 1, alpha, beta)
+      : -quiescence(engine, ply + 1, quietPly + 1, -beta, -alpha);
+    unmakeAction(ctx, undo);
+
+    if (score > best) best = score;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) break;
+  }
+
+  return best;
+}
+
 function negamax(engine, depth, ply, alphaIn, beta) {
   const { ctx } = engine;
   let alpha = alphaIn;
@@ -218,7 +318,7 @@ function negamax(engine, depth, ply, alphaIn, beta) {
     if (terminal < 0) return -WIN_SCORE + ply;
     return 0;
   }
-  if (depth <= 0) return evaluate(ctx, ctx.turn);
+  if (depth <= 0) return quiescence(engine, ply, 0, alphaIn, beta);
 
   const key = hashKey(ctx);
   const entry = engine.tt.get(key);

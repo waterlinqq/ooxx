@@ -7,6 +7,7 @@
 // js/rules.js reads. Win lines and the cells that feed them are memoized per board size
 // and the per-line occupancy counters are maintained incrementally.
 import { CLASSES, CLASS_IDS } from '../units.js';
+import { isFlagCell, cloneMapProps, getMapPropAt } from '../mapPropUtils.js';
 import {
   getWinLines,
   getAdjacentCells,
@@ -120,6 +121,7 @@ function cloneUnit(unit, searchIndex) {
     poisonOnHit: unit.poisonOnHit ?? false,
     poisoned: unit.poisoned ?? false,
     poisonFresh: unit.poisonFresh ?? false,
+    immobilized: unit.immobilized ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -130,7 +132,7 @@ function cloneUnit(unit, searchIndex) {
 /**
  * Snapshots a public game state into a mutable search context.
  *
- * @param {{board: Array, blueReserve: Array, redReserve: Array, actedUnitIds: Set<string>}} state
+ * @param {{board: Array, mapProps?: Array, blueReserve: Array, redReserve: Array, actedUnitIds: Set<string>}} state
  * @param {{team: string, actionsPerTurn: number}} options
  */
 export function createSearchContext(state, { team, actionsPerTurn }) {
@@ -169,6 +171,8 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
   const ctx = {
     size,
     board,
+    // Cloned, not shared: potions and spikes are consumed as the search tries actions.
+    mapProps: state.mapProps ? cloneMapProps(state.mapProps) : null,
     reserves,
     unitsById,
     lines,
@@ -180,6 +184,7 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
       blue: new Int8Array(lines.length),
       red: new Int8Array(lines.length),
     },
+    flagLineCount: new Int8Array(lines.length),
     onBoard: { blue: 0, red: 0 },
     turn: team,
     actionsPerTurn,
@@ -196,6 +201,10 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
     for (let c = 0; c < size; c++) {
       const unit = board[r][c];
       if (unit) registerOnBoard(ctx, unit);
+      if (isFlagCell(ctx.mapProps, r, c)) {
+        const cell = r * size + c;
+        for (const lineIdx of linesByCell[cell]) ctx.flagLineCount[lineIdx]++;
+      }
     }
   }
 
@@ -236,10 +245,12 @@ function unitAttackKey(ctx, unit, row, col) {
   return [mix32(seed), mix32(seed ^ 0x27d4eb2f)];
 }
 
-function unitPoisonKey(ctx, unit, row, col) {
-  if (!unit.poisoned && !unit.poisonFresh) return [0, 0];
+function unitStateKey(ctx, unit, row, col) {
+  const flags = (unit.poisoned ? 1 : 0)
+    | (unit.poisonFresh ? 2 : 0)
+    | (unit.immobilized ? 4 : 0);
+  if (flags === 0) return [0, 0];
   const cell = row * ctx.size + col;
-  const flags = (unit.poisoned ? 1 : 0) | (unit.poisonFresh ? 2 : 0);
   const seed = Math.imul(cell + 1, 0x9e3779b9)
     ^ Math.imul(flags + 1, 0x85ebca6b);
   return [mix32(seed), mix32(seed ^ 0x27d4eb2f)];
@@ -248,7 +259,16 @@ function unitPoisonKey(ctx, unit, row, col) {
 function xorUnitHash(ctx, unit, row, col) {
   xorHash(ctx, unitCellKey(ctx, unit, row, col));
   xorHash(ctx, unitAttackKey(ctx, unit, row, col));
-  xorHash(ctx, unitPoisonKey(ctx, unit, row, col));
+  xorHash(ctx, unitStateKey(ctx, unit, row, col));
+}
+
+const CONSUMED_PROP_KINDS = ['potion', 'spikes', 'web'];
+
+/** Marks a cell whose one-shot prop has been used up, so transpositions stay distinct. */
+function xorPropHash(ctx, cell, kind) {
+  const seed = Math.imul(cell + 1, 0x2545f491)
+    ^ Math.imul(CONSUMED_PROP_KINDS.indexOf(kind) + 1, 0xc2b2ae35);
+  xorHash(ctx, [mix32(seed), mix32(seed ^ 0x165667b1)]);
 }
 
 function reserveCountKey(ctx, team, classId, count) {
@@ -309,6 +329,17 @@ function damage(ctx, unit, amount) {
   return true;
 }
 
+/** Restores hp in place, returning the amount actually gained. */
+function heal(ctx, unit, amount) {
+  const next = Math.min(unit.maxHp, unit.hp + amount);
+  if (next === unit.hp) return 0;
+  xorUnitHash(ctx, unit, unit.row, unit.col);
+  const gained = next - unit.hp;
+  unit.hp = next;
+  xorUnitHash(ctx, unit, unit.row, unit.col);
+  return gained;
+}
+
 function restoreDamaged(ctx, record) {
   const { unit, prevHp, row, col, died } = record;
   if (died) {
@@ -328,9 +359,16 @@ function restoreDamaged(ctx, record) {
 }
 
 /** Reverses poison ticks (and any chained blasts) applied when the turn ended. */
-function restoreEndOfTurnEffects(ctx, undo) {
+/** Reverses damage the action itself dealt: attacks, blast chains and spike landings. */
+function restoreActionDamage(ctx, undo) {
   for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
     restoreDamaged(ctx, undo.damageRecords[i]);
+  }
+}
+
+function restoreEndOfTurnEffects(ctx, undo) {
+  for (let i = undo.turnEndDamage.length - 1; i >= 0; i--) {
+    restoreDamaged(ctx, undo.turnEndDamage[i]);
   }
   for (const rec of undo.poisonSkipRecords) {
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
@@ -382,6 +420,68 @@ function resolveExplosions(ctx, directKills, records, casualties) {
       record.died = damage(ctx, victim, bomber.deathExplosion);
       records.push(record);
       if (record.died) casualties.push(victim);
+    }
+  }
+}
+
+/**
+ * Terrain the unit just walked into, mirroring resolveMapPropOnEnter in js/mapProps.js.
+ *
+ * Without this the search reads a fresh 3 hp archer dropped onto spikes as a healthy
+ * unit, when the board hands it over at 1 hp for the opponent to pick off. Spike damage
+ * goes into `damageRecords` so it unwinds in the same LIFO pass as everything else that
+ * hurt a unit during this action.
+ */
+function applyTerrainOnEnter(ctx, unit, undo) {
+  const prop = getMapPropAt(ctx.mapProps, unit.row, unit.col);
+  if (!prop) return;
+
+  const { row, col } = unit;
+  const cell = row * ctx.size + col;
+  const { kind } = prop;
+
+  if (kind === 'potion') {
+    const gained = heal(ctx, unit, 2);
+    undo.terrainRecords.push({ kind, row, col, prop, unit, gained });
+  } else if (kind === 'spikes') {
+    const record = { unit, prevHp: unit.hp, row, col, died: false };
+    record.died = damage(ctx, unit, 2);
+    undo.damageRecords.push(record);
+    if (record.died) {
+      undo.selfLosses.push(unit);
+      resolveExplosions(ctx, [unit], undo.damageRecords, undo.selfLosses);
+    }
+    undo.terrainRecords.push({ kind, row, col, prop, unit, gained: 0 });
+  } else if (kind === 'web') {
+    xorUnitHash(ctx, unit, row, col);
+    unit.immobilized = true;
+    xorUnitHash(ctx, unit, row, col);
+    undo.terrainRecords.push({ kind, row, col, prop, unit, gained: 0 });
+  } else {
+    // stone and flag are impassable, so getValidDeployCells/getValidMoves never land here.
+    return;
+  }
+
+  ctx.mapProps[row][col] = null;
+  xorPropHash(ctx, cell, kind);
+}
+
+function restoreTerrain(ctx, undo) {
+  for (let i = undo.terrainRecords.length - 1; i >= 0; i--) {
+    const record = undo.terrainRecords[i];
+    const { kind, row, col, prop, unit } = record;
+
+    ctx.mapProps[row][col] = prop;
+    xorPropHash(ctx, row * ctx.size + col, kind);
+
+    if (kind === 'potion' && record.gained > 0) {
+      xorUnitHash(ctx, unit, unit.row, unit.col);
+      unit.hp -= record.gained;
+      xorUnitHash(ctx, unit, unit.row, unit.col);
+    } else if (kind === 'web') {
+      xorUnitHash(ctx, unit, row, col);
+      unit.immobilized = false;
+      xorUnitHash(ctx, unit, row, col);
     }
   }
 }
@@ -466,6 +566,11 @@ export function makeAction(ctx, action) {
     fromRow: actor.row,
     fromCol: actor.col,
     damageRecords: [],
+    // Kept apart from damageRecords: the poison tick lands *after* priest blessings, so a
+    // unit that was blessed and then ticked only unwinds to the right hp if the tick is
+    // reversed before the blessing.
+    turnEndDamage: [],
+    terrainRecords: [],
     blessRecords: [],
     possessUndo: null,
     poisonRecords: [],
@@ -477,9 +582,11 @@ export function makeAction(ctx, action) {
   if (action.type === 'deploy') {
     undo.reserveIndex = removeFromReserve(ctx, actor);
     place(ctx, actor, action.row, action.col);
+    applyTerrainOnEnter(ctx, actor, undo);
   } else if (action.type === 'move') {
     lift(ctx, actor);
     place(ctx, actor, action.row, action.col);
+    applyTerrainOnEnter(ctx, actor, undo);
   } else if (action.type === 'attack') {
     const target = ctx.unitsById.get(action.targetId);
     let hits;
@@ -509,17 +616,22 @@ export function makeAction(ctx, action) {
       const killIdx = directKills.findIndex((k) => k.id === target.id);
       if (killIdx >= 0) {
         const victim = directKills[killIdx];
+        const victimRow = victim.deadRow;
+        const victimCol = victim.deadCol;
+        // Lift first: applyPossession rewrites the ghost's class, hp and atk, and the
+        // hash keys are keyed on those, so xoring it out afterwards would remove an
+        // identity that was never xored in.
+        lift(ctx, actor);
         undo.possessUndo = {
           actorPrev: applyPossession(actor, victim),
           fromRow: undo.fromRow,
           fromCol: undo.fromCol,
-          victimRow: victim.deadRow,
-          victimCol: victim.deadCol,
+          victimRow,
+          victimCol,
         };
         directKills.splice(killIdx, 1);
         undo.enemyKills = undo.enemyKills.filter((k) => k.id !== target.id);
-        lift(ctx, actor);
-        place(ctx, actor, victim.deadRow, victim.deadCol);
+        place(ctx, actor, victimRow, victimCol);
       }
     }
 
@@ -590,7 +702,7 @@ function advanceTurn(ctx, undo) {
   xorActionsLeft(ctx);
   ctx.actionsLeft--;
   if (ctx.actionsLeft <= 0) {
-    applyPoisonTicksInPlace(ctx, undo.damageRecords, undo.selfLosses, undo.poisonSkipRecords);
+    applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
     flipSide(ctx);
   }
   xorActionsLeft(ctx);
@@ -612,12 +724,12 @@ export function passTurn(ctx) {
   const undo = {
     turn: ctx.turn,
     actionsLeft: ctx.actionsLeft,
-    damageRecords: [],
+    turnEndDamage: [],
     selfLosses: [],
     poisonSkipRecords: [],
   };
   xorActionsLeft(ctx);
-  applyPoisonTicksInPlace(ctx, undo.damageRecords, undo.selfLosses, undo.poisonSkipRecords);
+  applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
   flipSide(ctx);
   xorActionsLeft(ctx);
   return undo;
@@ -632,8 +744,8 @@ export function unpassTurn(ctx, undo) {
     rec.unit.poisonFresh = true;
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
-  for (let i = undo.damageRecords.length - 1; i >= 0; i--) {
-    restoreDamaged(ctx, undo.damageRecords[i]);
+  for (let i = undo.turnEndDamage.length - 1; i >= 0; i--) {
+    restoreDamaged(ctx, undo.turnEndDamage[i]);
   }
   xorActionsLeft(ctx);
 }
@@ -648,6 +760,9 @@ export function unmakeAction(ctx, undo) {
   }
 
   const { action, actor } = undo;
+
+  // Strictly reverse chronological: end-of-turn ticks, then blessings, then the action.
+  restoreEndOfTurnEffects(ctx, undo);
 
   for (let i = undo.blessRecords.length - 1; i >= 0; i--) {
     const { target, prevHp } = undo.blessRecords[i];
@@ -666,14 +781,16 @@ export function unmakeAction(ctx, undo) {
   }
 
   if (action.type === 'deploy') {
-    restoreEndOfTurnEffects(ctx, undo);
+    restoreActionDamage(ctx, undo);
+    restoreTerrain(ctx, undo);
     lift(ctx, actor);
     insertIntoReserve(ctx, actor, undo.reserveIndex);
     return;
   }
 
   if (action.type === 'move') {
-    restoreEndOfTurnEffects(ctx, undo);
+    restoreActionDamage(ctx, undo);
+    restoreTerrain(ctx, undo);
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
     return;
@@ -685,7 +802,7 @@ export function unmakeAction(ctx, undo) {
     place(ctx, actor, undo.possessUndo.fromRow, undo.possessUndo.fromCol);
   }
 
-  restoreEndOfTurnEffects(ctx, undo);
+  restoreActionDamage(ctx, undo);
 }
 
 /** Folds the two hash lanes into one 53-bit-safe integer usable as a Map key. */
@@ -696,14 +813,15 @@ export function hashKey(ctx) {
 export function lineOccupancy(ctx, lineIdx, team) {
   const mine = ctx.lineCount[team][lineIdx];
   const theirs = ctx.lineCount[enemyOf(team)][lineIdx];
-  return { mine, theirs, empty: ctx.winLength - mine - theirs };
+  const flags = ctx.flagLineCount[lineIdx];
+  return { mine: mine + flags, theirs, empty: ctx.winLength - mine - theirs - flags };
 }
 
-/** A completed line for `team` means every cell on it holds one of their units. */
+/** A completed line may combine a team's units with neutral red-blue flags. */
 export function hasCompletedLine(ctx, team) {
   const counts = ctx.lineCount[team];
   for (let i = 0; i < counts.length; i++) {
-    if (counts[i] === ctx.winLength) return true;
+    if (counts[i] + ctx.flagLineCount[i] === ctx.winLength) return true;
   }
   return false;
 }

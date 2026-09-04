@@ -9,7 +9,7 @@ export { WIN_SCORE } from './ai/evaluate.js';
  * Pass a team name for the simple case, or an options object to override the search
  * budget or inject an RNG for tie-breaking.
  *
- * @param {{board: Array, blueReserve?: Array, redReserve?: Array, actedUnitIds?: Set}} state
+ * @param {{board: Array, mapProps?: Array, blueReserve?: Array, redReserve?: Array, actedUnitIds?: Set}} state
  * @param {string|{team: string, actionsPerTurn?: number, roster?: string[],
  *   difficulty?: 'easy'|'normal'|'hard', rng?: () => number, timeBudgetMs?: number}} teamOrOptions
  * @returns {{type: 'deploy'|'move'|'attack', unitId: string, row?: number, col?: number,
@@ -22,6 +22,7 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
   return searchBestAction(
     {
       board: state.board,
+      mapProps: state.mapProps ?? null,
       blueReserve: state.blueReserve ?? [],
       redReserve: state.redReserve ?? [],
       actedUnitIds: state.actedUnitIds ?? new Set(),

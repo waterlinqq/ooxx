@@ -192,12 +192,112 @@ body {
 }
 
 .battle-layout.in-combat .board-area {
-  height: 100%;
+  position: absolute;
+  inset: 0;
 }
 
 .battle-layout.in-combat .board-container {
   max-width: none;
   max-height: none;
+}
+
+/* Reserve bars float over the board so the 3D canvas keeps the full viewport. */
+.battle-layout.in-combat .reserve-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  pointer-events: none;
+  padding: 3px 6px;
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 23, 42, 0.88) 0%,
+    rgba(15, 23, 42, 0.72) 70%,
+    transparent 100%
+  );
+  border: none;
+}
+
+.battle-layout.in-combat .reserve-bar-own {
+  top: auto;
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.88) 0%,
+    rgba(15, 23, 42, 0.72) 70%,
+    transparent 100%
+  );
+}
+
+.battle-layout.in-combat .reserve-bar-enemy {
+  top: 0;
+  bottom: auto;
+}
+
+.battle-layout.in-combat .reserve-bar-scroll,
+.battle-layout.in-combat .reserve-card {
+  pointer-events: auto;
+}
+
+.battle-layout.in-combat .reserve-card {
+  width: 68px;
+  padding: 6px 4px;
+  gap: 3px;
+}
+
+.battle-layout.in-combat .reserve-bar-own .reserve-card {
+  width: 88px;
+  padding: 8px 6px;
+  gap: 4px;
+}
+
+.battle-layout.in-combat .reserve-card-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.battle-layout.in-combat .reserve-bar-own .reserve-card-icon {
+  width: 54px;
+  height: 54px;
+}
+
+.battle-layout.in-combat .reserve-card-enemy {
+  width: 46px;
+  padding: 5px 3px;
+}
+
+.battle-layout.in-combat .reserve-card-enemy .reserve-card-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.battle-layout.in-combat .reserve-card-name {
+  font-size: 0.62rem;
+}
+
+.battle-layout.in-combat .reserve-bar-own .reserve-card-name {
+  font-size: 0.72rem;
+}
+
+.battle-layout.in-combat.has-tutorial .reserve-bar-enemy {
+  display: none;
+}
+
+.battle-layout.in-combat.has-tutorial .reserve-bar-own {
+  z-index: 8;
+}
+
+/* Tutorial panel sits at the top so it does not cover the reserve cards at the bottom. */
+.battle-layout.in-combat.has-tutorial .battle-panels {
+  top: 8px;
+  bottom: auto;
+  align-items: flex-start;
+  justify-content: stretch;
+}
+
+.battle-layout.in-combat.has-tutorial .battle-panels .tutorial-panel {
+  flex: 0 0 auto;
+  width: 100%;
 }
 
 .battle-layout .board-wrap {
@@ -1343,6 +1443,177 @@ body {
   background: rgba(239, 68, 68, 0.25);
 }
 
+.reserve-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.92);
+  position: relative;
+  z-index: 5;
+}
+
+.reserve-bar-enemy {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.reserve-bar-own {
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.reserve-bar-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.reserve-bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.reserve-bar-cards {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.reserve-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 76px;
+  padding: 8px 6px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--panel-2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s, opacity 0.12s;
+}
+
+.reserve-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.reserve-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+}
+
+.reserve-card.selected .reserve-card-name {
+  color: #93c5fd;
+}
+
+.reserve-card.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reserve-card.tutorial-focus {
+  animation: tutorialFocusPulse 1.3s ease-in-out infinite;
+}
+
+.reserve-card.inspected {
+  border-color: #fbbf24;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.45);
+}
+
+.reserve-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.reserve-card-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reserve-card-hp-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  overflow: hidden;
+}
+
+.reserve-card-hp-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.reserve-card-enemy .reserve-card-hp-fill {
+  background: linear-gradient(90deg, #ef4444, #fca5a5);
+}
+
+.reserve-card-hp-text {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reserve-card-enemy {
+  width: 52px;
+  padding: 6px 4px;
+  gap: 3px;
+}
+
+.reserve-card-enemy .reserve-card-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.reserve-card-enemy .reserve-card-name {
+  display: none;
+}
+
+.reserve-bar-own .reserve-card {
+  width: 96px;
+  padding: 10px 8px;
+  gap: 5px;
+}
+
+.reserve-bar-own .reserve-card-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.reserve-bar-own .reserve-card-name {
+  font-size: 0.76rem;
+}
+
+.reserve-bar-own .reserve-card-hp-bar {
+  height: 5px;
+}
+
+.reserve-bar-own .reserve-card-hp-text {
+  font-size: 0.64rem;
+}
+
+.reserve-tutorial-pointer {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  transform: translate(-50%, -100%);
+}
+
 .class-picker {
   display: flex;
   flex-wrap: wrap;
@@ -1906,8 +2177,14 @@ body {
 }
 
 .item-chip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   font-size: 1rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .item-chip-label {
@@ -1947,6 +2224,14 @@ body {
   font-size: 1.25rem;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.item-row-icon-unit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
 }
 
 .item-row-body {
@@ -2006,8 +2291,17 @@ body {
 }
 
 .item-battle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1.1rem;
   line-height: 1;
+  flex-shrink: 0;
+}
+
+.item-battle-icon-thumb {
+  width: 32px;
+  height: 32px;
 }
 
 .item-battle-name {
