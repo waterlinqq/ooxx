@@ -699,14 +699,14 @@ export class Game {
     this.animating = false;
     this.blueRoster = [...this.getModeConfig().roster];
     this.redRoster = createRandomRoster(this.boardMode);
-    this.startRound({ vsAi: true });
+    this.startRound();
   }
 
   getRoundFirstPlayer() {
     return 'blue';
   }
 
-  startRound({ vsAi = false } = {}) {
+  startRound() {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
     this.mapProps = generateMapProps(mode.size);
@@ -727,7 +727,6 @@ export class Game {
       this.message = '';
     } else {
       this.message = `${TEAM[this.currentPlayer].name}先攻`;
-      if (vsAi) this.message += ' · 對戰 AI';
     }
 
     this.notify();

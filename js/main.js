@@ -982,15 +982,35 @@ function syncOnlineTimers(state) {
   }
 }
 
+function createModeGridIcon(size) {
+  const wrap = document.createElement('span');
+  wrap.className = 'mode-btn-icon';
+  wrap.setAttribute('aria-hidden', 'true');
+
+  const grid = document.createElement('span');
+  grid.className = 'mode-grid';
+  grid.style.setProperty('--grid-size', String(size));
+
+  for (let i = 0; i < size * size; i++) {
+    const cell = document.createElement('span');
+    cell.className = 'mode-grid-cell';
+    grid.appendChild(cell);
+  }
+
+  wrap.appendChild(grid);
+  return wrap;
+}
+
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
-  const canPick = state.phase === 'onlineLobby' || state.phase === 'onlineWaiting';
+  const canPick = state.phase === 'onlineLobby';
 
   for (const mode of Object.values(BOARD_MODES)) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn mode-btn' + (selectedOnlineMode === mode.id ? ' active' : '');
-    btn.innerHTML = `<span class="mode-btn-label">${mode.label}</span>`;
+    btn.setAttribute('aria-label', `${mode.size}×${mode.size}`);
+    btn.appendChild(createModeGridIcon(mode.size));
     btn.disabled = !canPick;
     btn.addEventListener('click', () => {
       selectedOnlineMode = mode.id;

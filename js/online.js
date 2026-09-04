@@ -411,11 +411,28 @@ export class OnlineClient {
 
   async findMatch(boardMode, nickname) {
     this.selectedBoardMode = boardMode;
-    await this.connect();
     this.lastError = null;
-    await this.send(MSG.FIND_MATCH, { boardMode, nickname });
-    if (this.gameState) return;
-    if (this.roomState?.matchmaking) this.startMatchmakingWatch(this.roomState);
+    try {
+      await this.connect();
+      await this.send(MSG.FIND_MATCH, { boardMode, nickname });
+      if (this.gameState) return;
+      if (this.roomState?.matchmaking) this.startMatchmakingWatch(this.roomState);
+      this.notify();
+    } catch (e) {
+      if (String(e?.message ?? '').includes('已在其他房間')) throw e;
+      this.beginLocalMatchmaking(boardMode);
+    }
+  }
+
+  beginLocalMatchmaking(boardMode) {
+    this.roomState = {
+      matchmaking: true,
+      boardMode,
+      createdAt: new Date().toISOString(),
+      players: [],
+      status: 'waiting',
+    };
+    this.startMatchmakingWatch(this.roomState);
     this.notify();
   }
 
@@ -457,10 +474,12 @@ export class OnlineClient {
     const boardMode = this.roomState.boardMode ?? this.selectedBoardMode ?? '3x3';
     this.aiFallbackPending = true;
     let leaveBlocked = false;
-    try {
-      await this.send(MSG.LEAVE_ROOM, {});
-    } catch (e) {
-      leaveBlocked = String(e?.message ?? '').includes('進行中');
+    if (this.canSend()) {
+      try {
+        await this.send(MSG.LEAVE_ROOM, {});
+      } catch (e) {
+        leaveBlocked = String(e?.message ?? '').includes('進行中');
+      }
     }
 
     if (gen !== this.matchmakingGen) {
