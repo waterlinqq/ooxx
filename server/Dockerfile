@@ -1,10 +1,14 @@
 FROM node:22-alpine
-WORKDIR /app
-COPY server/package.json ./
-RUN npm install --omit=dev
-COPY server/src ./src
-COPY shared /shared
-COPY apps/web/js /js
-ENV SHARED_PATH=/shared
+WORKDIR /ooxx
+
+COPY server/package.json ./server/package.json
+RUN cd server && npm install --omit=dev
+
+COPY shared ./shared
+COPY server/src ./server/src
+COPY apps/web/js ./apps/web/js
+
+WORKDIR /ooxx/server
+ENV SHARED_PATH=/ooxx/shared
 EXPOSE 3001
 CMD ["node", "src/index.js"]

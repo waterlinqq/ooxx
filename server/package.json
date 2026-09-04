@@ -8,7 +8,6 @@
     "migrate": "node src/migrate.js"
   },
   "dependencies": {
-    "@ooxx/shared": "*",
     "pg": "^8.13.1",
     "ws": "^8.18.0"
   }

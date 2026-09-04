@@ -25,6 +25,9 @@ if [[ ! -f "$EC2_KEY" ]]; then
   exit 1
 fi
 
+# EC2 換機後 IP 不變但 host key 會變，需先清除舊紀錄
+ssh-keygen -R "${EC2_HOST}" -f "${HOME}/.ssh/known_hosts" >/dev/null 2>&1 || true
+
 SSH_OPTS=(-i "$EC2_KEY" -o StrictHostKeyChecking=accept-new)
 RSYNC_SSH="ssh ${SSH_OPTS[*]}"
 
