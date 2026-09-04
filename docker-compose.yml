@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ooxx
+      POSTGRES_USER: ooxx
+      POSTGRES_PASSWORD: ooxx
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ooxx -d ooxx"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://ooxx:ooxx@db:5432/ooxx
+      PORT: "3001"
+      SHARED_PATH: /shared
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./shared:/shared:ro
+      - ./server/src:/app/src:ro
+
+volumes:
+  pgdata:

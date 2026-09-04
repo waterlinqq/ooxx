@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "npm run dev --prefix server",
+    "dev:all": "npx concurrently -k \"npm run dev\" \"npm run dev:server\"",
+    "docker:up": "docker compose up -d db",
+    "migrate": "npm run migrate --prefix server",
     "build": "vite build",
     "preview": "vite preview",
     "sim": "node scripts/simulate.mjs",
@@ -13,6 +17,7 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "vite": "^6.0.0"
   }
 }

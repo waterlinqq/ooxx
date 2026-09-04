@@ -1,0 +1,11 @@
+{
+  "name": "@ooxx/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./units.js": "./units.js",
+    "./rules.js": "./rules.js",
+    "./mapPropUtils.js": "./mapPropUtils.js",
+    "./protocol.js": "./protocol.js"
+  }
+}

@@ -14,9 +14,16 @@ import {
   canAffordClass,
   isClassOwned,
   isTutorialDone,
+  initCloudSave,
+  getSaveSnapshot,
 } from './save.js';
+import { onlineClient } from './online.js';
 
 loadSave();
+initCloudSave()
+  .then(() => onlineClient.tryReconnectOnLoad())
+  .then(() => render(getAppState()))
+  .catch(() => render(getAppState()));
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -49,7 +56,15 @@ const classDetailInfoEl = document.getElementById('classDetailInfo');
 const classPreviewHostEl = document.getElementById('classPreviewHost');
 const endPanelEl = document.getElementById('endPanel');
 const endResultEl = document.getElementById('endResult');
-const modeButtonsEl = document.getElementById('modeButtons');
+const modeButtonsEl = document.getElementById('onlineModeButtons');
+const onlineLobbyActionsEl = document.getElementById('onlineLobbyActions');
+const onlineWaitingEl = document.getElementById('onlineWaiting');
+const waitingRoomCodeEl = document.getElementById('waitingRoomCode');
+const onlineWaitingMsgEl = document.getElementById('onlineWaitingMsg');
+const createRoomBtn = document.getElementById('createRoomBtn');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const roomCodeInput = document.getElementById('roomCodeInput');
+const cancelRoomBtn = document.getElementById('cancelRoomBtn');
 const confirmRosterBtn = document.getElementById('confirmRoster');
 const restartBtn = document.getElementById('restart');
 const surrenderBtn = document.getElementById('surrender');
@@ -270,6 +285,33 @@ function syncTurnTimer(state) {
   turnTimerPaused = false;
 }
 
+let onlineModeActive = true;
+let selectedOnlineMode = '3x3';
+let onlineTimerInterval = null;
+
+function getAppState() {
+  if (onlineModeActive && (onlineClient.gameState || onlineClient.roomState)) {
+    const state = onlineClient.getDisplayState();
+    return { ...state, ...getSaveSnapshot() };
+  }
+  if (onlineModeActive && onlineClient.roomState) {
+    return { ...onlineClient.getDisplayState(), ...getSaveSnapshot() };
+  }
+  if (onlineModeActive) {
+    return {
+      phase: 'onlineLobby',
+      boardMode: selectedOnlineMode,
+      ...getSaveSnapshot(),
+      onlineMode: true,
+    };
+  }
+  return game.getState();
+}
+
+function isOnlinePlaying() {
+  return onlineModeActive && Boolean(onlineClient.gameState);
+}
+
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
 let lastPhase = 'lobby';
@@ -305,7 +347,8 @@ const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
 
 function canControlUnit(state, unit) {
   if (state.phase !== 'battle' || state.animating) return false;
-  if (unit.team !== 'blue') return false;
+  const myTeam = state.yourTeam ?? 'blue';
+  if (unit.team !== myTeam) return false;
   if (state.actedUnitIds.includes(unit.id)) return false;
   if (!state.isHumanTurn) return false;
   if (state.tutorial) {
@@ -316,12 +359,30 @@ function canControlUnit(state, unit) {
 }
 
 const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
-  onCellClick: (row, col) => game.clickCell(row, col),
-  onUnitDragStart: (unitId) => game.beginDragUnit(unitId),
-  onUnitDrop: (row, col) => game.dropOnCell(row, col),
-  onDragCancel: () => game.cancelDrag(),
-  onReserveSelect: (unitId) => game.selectReserve(unitId),
-  onUnitInspect: (unitId) => game.inspectUnit(unitId),
+  onCellClick: (row, col) => {
+    if (isOnlinePlaying()) onlineClient.clickCell(row, col);
+    else game.clickCell(row, col);
+  },
+  onUnitDragStart: (unitId) => {
+    if (isOnlinePlaying()) onlineClient.beginDragUnit(unitId);
+    else game.beginDragUnit(unitId);
+  },
+  onUnitDrop: (row, col) => {
+    if (isOnlinePlaying()) onlineClient.dropOnCell(row, col);
+    else game.dropOnCell(row, col);
+  },
+  onDragCancel: () => {
+    if (isOnlinePlaying()) onlineClient.cancelDrag();
+    else game.cancelDrag();
+  },
+  onReserveSelect: (unitId) => {
+    if (isOnlinePlaying()) onlineClient.selectReserve(unitId);
+    else game.selectReserve(unitId);
+  },
+  onUnitInspect: (unitId) => {
+    if (isOnlinePlaying()) onlineClient.inspectUnit(unitId);
+    else game.inspectUnit(unitId);
+  },
   onItemTarget: (row, col) => game.tryItemTarget(row, col),
   canControlUnit,
 });
@@ -360,7 +421,7 @@ function switchNav(navId) {
     btn.classList.toggle('active', btn.dataset.nav === navId);
   }
 
-  const state = game.getState();
+  const state = getAppState();
   if (BATTLE_PHASES.has(state.phase)) {
     board3d.setVisible(navId === 'battle');
     if (navId === 'battle') {
@@ -414,7 +475,7 @@ function renderClassDetail(classId) {
 
 function selectClass(classId) {
   selectedClassId = classId;
-  render(game.getState());
+  render(getAppState());
 }
 
 function renderClassPicker() {
@@ -738,11 +799,19 @@ function createReserveCard(unit, { side, state }) {
   hpFill.style.width = `${pct}%`;
   hpBar.appendChild(hpFill);
 
+  const vitals = document.createElement('div');
+  vitals.className = 'reserve-card-vitals';
+
   const hpText = document.createElement('span');
   hpText.className = 'reserve-card-hp-text';
-  hpText.textContent = `${unit.hp}/${unit.maxHp}`;
+  hpText.textContent = String(unit.hp);
 
-  card.append(iconWrap, nameEl, hpBar, hpText);
+  const atkText = document.createElement('span');
+  atkText.className = 'reserve-card-atk-text';
+  atkText.textContent = `ATK ${unit.atk}`;
+
+  vitals.append(hpText, atkText);
+  card.append(iconWrap, nameEl, hpBar, vitals);
 
   if (side === 'enemy') {
     card.addEventListener('click', () => game.inspectUnit(unit.id));
@@ -802,32 +871,90 @@ function renderReserveBars(state) {
   scheduleReserveTutorialPointer(state);
 }
 
+function syncOnlineTimers(state) {
+  if (!state.onlineMode || !state.timers || state.phase !== 'battle') {
+    if (onlineTimerInterval) {
+      clearInterval(onlineTimerInterval);
+      onlineTimerInterval = null;
+    }
+    turnTimerEl.classList.add('hidden');
+    matchTimerEl.classList.add('hidden');
+    return;
+  }
+
+  const update = () => {
+    const t = state.timers;
+    if (!t) return;
+
+    const turnPct = state.turnDurationMs > 0
+      ? Math.min(1, t.turnRemainingMs / state.turnDurationMs)
+      : 0;
+    turnTimerFillEl.style.width = `${turnPct * 100}%`;
+    turnTimerEl.classList.remove('hidden');
+    turnTimerEl.setAttribute('aria-hidden', 'false');
+
+    const matchPct = state.matchDurationMs > 0
+      ? Math.min(1, t.matchRemainingMs / state.matchDurationMs)
+      : 0;
+    matchTimerFillEl.style.width = `${matchPct * 100}%`;
+    matchTimerTextEl.textContent = formatClock(t.matchRemainingMs);
+    matchTimerEl.classList.remove('hidden');
+    matchTimerEl.setAttribute('aria-hidden', 'false');
+  };
+
+  update();
+  if (!onlineTimerInterval) {
+    onlineTimerInterval = setInterval(() => {
+      if (onlineClient.timers) {
+        onlineClient.timers.turnRemainingMs = Math.max(0, onlineClient.timers.turnRemainingMs - 1000);
+        onlineClient.timers.matchRemainingMs = Math.max(0, onlineClient.timers.matchRemainingMs - 1000);
+      }
+      render(getAppState());
+    }, 1000);
+  }
+}
+
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
-  const canPick = state.phase === 'lobby';
+  const canPick = state.phase === 'onlineLobby' || state.phase === 'onlineWaiting';
 
   for (const mode of Object.values(BOARD_MODES)) {
     const minutes = mode.matchDurationMs / 60000;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
+    btn.className = 'btn mode-btn' + (selectedOnlineMode === mode.id ? ' active' : '');
     btn.innerHTML = `
       <span class="mode-btn-label">${mode.label}</span>
       <span class="mode-btn-sub">限時 ${minutes} 分鐘</span>
     `;
     btn.disabled = !canPick;
-    btn.addEventListener('click', () => game.setBoardMode(mode.id));
+    btn.addEventListener('click', () => {
+      selectedOnlineMode = mode.id;
+      render(getAppState());
+    });
     modeButtonsEl.appendChild(btn);
   }
 }
 
-function renderLobbyFooter(state) {
-  const inLobby = state.phase === 'lobby';
-  confirmRosterBtn.classList.toggle('hidden', !inLobby);
-  startTutorialBtn.classList.toggle('hidden', !inLobby);
-  if (inLobby) {
-    confirmRosterBtn.textContent = state.startButtonLabel;
+function renderOnlineLobby(state) {
+  const inLobby = state.phase === 'onlineLobby';
+  const waiting = state.phase === 'onlineWaiting';
+
+  onlineLobbyActionsEl.classList.toggle('hidden', !inLobby);
+  onlineWaitingEl.classList.toggle('hidden', !waiting);
+
+  if (waiting) {
+    waitingRoomCodeEl.textContent = state.roomCode ?? '';
+    const players = state.roomState?.players ?? [];
+    onlineWaitingMsgEl.textContent = players.length >= 2
+      ? '對手已加入，開局中…'
+      : '等待對手加入…（分享房間碼）';
   }
+}
+
+function renderLobbyFooter(state) {
+  startTutorialBtn.classList.toggle('hidden', true);
+  if (confirmRosterBtn) confirmRosterBtn.classList.add('hidden');
 }
 
 function renderTutorialPanel(state) {
@@ -851,7 +978,7 @@ function renderBattlePanels(state) {
   const inTutorial = Boolean(state.tutorial);
 
   surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
-  surrenderBtn.disabled = !inBattle || state.animating;
+  surrenderBtn.disabled = !inBattle || state.animating || !state.isHumanTurn;
 
   endPanelEl.classList.toggle('hidden', !showEnd);
   restartBtn.classList.toggle('hidden', !showEnd || inTutorial);
@@ -859,7 +986,7 @@ function renderBattlePanels(state) {
 
   if (!inTutorial) {
     restartBtn.textContent = '再來一局';
-    backToLobbyBtn.textContent = '換模式';
+    backToLobbyBtn.textContent = state.onlineMode ? '返回大廳' : '換模式';
   } else {
     backToLobbyBtn.textContent = '開始遊戲';
   }
@@ -873,8 +1000,12 @@ function renderBattlePanels(state) {
 }
 
 function render(state) {
-  syncMatchTimer(state);
-  syncTurnTimer(state);
+  if (state.onlineMode && state.timers) {
+    syncOnlineTimers(state);
+  } else {
+    syncMatchTimer(state);
+    syncTurnTimer(state);
+  }
 
   boardWrapEl.classList.toggle('blue-turn', state.phase === 'battle' && state.currentPlayer === 'blue');
   boardWrapEl.classList.toggle('red-turn', state.phase === 'battle' && state.currentPlayer === 'red');
@@ -882,13 +1013,14 @@ function render(state) {
   const inFormation = state.phase === 'formation';
   const inBattle = state.phase === 'battle';
   const inBattleFlow = BATTLE_PHASES.has(state.phase);
+  const inOnlineLobby = state.phase === 'onlineLobby' || state.phase === 'onlineWaiting';
   const inCombat = inBattle && activeNav === 'battle';
 
   appEl.classList.toggle('in-combat', inCombat);
   battleContentEl.classList.toggle('in-combat', inCombat);
   battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
   battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
-  lobbyContentEl.classList.toggle('hidden', state.phase !== 'lobby');
+  lobbyContentEl.classList.toggle('hidden', !inOnlineLobby && state.phase !== 'lobby');
   formationContentEl.classList.toggle('hidden', !inFormation);
   battleContentEl.classList.toggle('hidden', !inBattleFlow);
 
@@ -905,6 +1037,7 @@ function render(state) {
   renderBattlePanels(state);
   renderTutorialPanel(state);
   renderLobbyFooter(state);
+  renderOnlineLobby(state);
   renderCoinBalance(state);
   if (inFormation) {
     renderFormation(state);
@@ -943,28 +1076,76 @@ bottomNavEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.nav-item');
   if (!btn || btn.disabled) return;
   switchNav(btn.dataset.nav);
-  render(game.getState());
+  render(getAppState());
 });
 
-confirmRosterBtn.addEventListener('click', () => game.openFormation());
+createRoomBtn.addEventListener('click', async () => {
+  createRoomBtn.disabled = true;
+  try {
+    await onlineClient.createRoom(selectedOnlineMode);
+    render(getAppState());
+  } catch (e) {
+    alert(e.message ?? '建立房間失敗');
+  } finally {
+    createRoomBtn.disabled = false;
+  }
+});
+
+joinRoomBtn.addEventListener('click', async () => {
+  const code = roomCodeInput.value.trim().toUpperCase();
+  if (code.length !== 6) {
+    alert('請輸入 6 位房間碼');
+    return;
+  }
+  joinRoomBtn.disabled = true;
+  try {
+    await onlineClient.joinRoom(code);
+  } catch (e) {
+    alert(e.message ?? '加入失敗');
+  } finally {
+    joinRoomBtn.disabled = false;
+  }
+});
+
+cancelRoomBtn.addEventListener('click', () => {
+  onlineClient.leaveOnline();
+  render(getAppState());
+});
+
+if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => game.openFormation());
 formationBackBtn.addEventListener('click', () => game.backToLobby());
 startBattleBtn.addEventListener('click', () => game.startBattle());
-restartBtn.addEventListener('click', () => game.restartSeries());
-backToLobbyBtn.addEventListener('click', () => game.backToLobby());
-surrenderBtn.addEventListener('click', () => game.surrender());
+restartBtn.addEventListener('click', () => {
+  if (isOnlinePlaying() || onlineClient.roomState) {
+    onlineClient.leaveOnline();
+    render(getAppState());
+    return;
+  }
+  game.restartSeries();
+});
+backToLobbyBtn.addEventListener('click', () => {
+  if (onlineModeActive) {
+    onlineClient.leaveOnline();
+    render(getAppState());
+    return;
+  }
+  game.backToLobby();
+});
+surrenderBtn.addEventListener('click', () => {
+  if (isOnlinePlaying()) onlineClient.surrender();
+  else game.surrender();
+});
 useItemBtn.addEventListener('click', () => game.beginUseItem());
 cancelItemBtn.addEventListener('click', () => game.cancelItemTargeting());
 startTutorialBtn.addEventListener('click', () => game.startTutorial());
 tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 
-game.subscribe(render);
-render(game.getState());
+game.subscribe((state) => {
+  if (!isOnlinePlaying() && !onlineClient.roomState) render(state);
+});
+onlineClient.subscribe(() => render(getAppState()));
+render(getAppState());
 
 window.addEventListener('resize', () => {
-  scheduleReserveTutorialPointer(game.getState());
+  scheduleReserveTutorialPointer(getAppState());
 });
-
-// First-time players land straight in the scripted tutorial instead of the mode picker.
-if (!isTutorialDone()) {
-  game.startTutorial();
-}

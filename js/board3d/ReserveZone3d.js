@@ -97,8 +97,10 @@ function createReserveLabel() {
     <div class="unit-3d-badge"></div>
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
-    <div class="unit-3d-hp-text"></div>
-    <div class="unit-3d-stats hidden"></div>
+    <div class="unit-3d-vitals">
+      <div class="unit-3d-hp-text"></div>
+      <div class="unit-3d-stats"></div>
+    </div>
   `;
   return { label: new CSS2DObject(wrap), wrap };
 }
@@ -176,16 +178,10 @@ export class ReserveZone3d {
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
 
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
-    entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
+    entry.wrap.querySelector('.unit-3d-hp-text').textContent = String(unit.hp);
 
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
-    if (inspected) {
-      statsEl.classList.remove('hidden');
-      statsEl.textContent = `ATK ${unit.atk}`;
-    } else {
-      statsEl.classList.add('hidden');
-      statsEl.textContent = '';
-    }
+    statsEl.textContent = `ATK ${unit.atk}`;
 
     // While the tutorial locks the bench, fade the models the player can't pick so the
     // one they need is unmistakable — the DOM label alone is too small to read as a cue.

@@ -43,8 +43,10 @@ function createHpLabel() {
     <div class="unit-3d-badge hidden"></div>
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
-    <div class="unit-3d-hp-text"></div>
-    <div class="unit-3d-stats hidden"></div>
+    <div class="unit-3d-vitals">
+      <div class="unit-3d-hp-text"></div>
+      <div class="unit-3d-stats"></div>
+    </div>
   `;
   const label = new CSS2DObject(wrap);
   return { label, wrap };
@@ -312,17 +314,11 @@ export class UnitMeshManager {
 
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
-    entry.wrap.querySelector('.unit-3d-hp-text').textContent = `${unit.hp}/${unit.maxHp}`;
+    entry.wrap.querySelector('.unit-3d-hp-text').textContent = String(unit.hp);
 
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
-    if (inspected && unit.team === 'red') {
-      statsEl.classList.remove('hidden');
-      const poisonTag = unit.poisoned ? ' · 中毒' : '';
-      statsEl.textContent = `ATK ${unit.atk}${poisonTag}`;
-    } else {
-      statsEl.classList.add('hidden');
-      statsEl.textContent = '';
-    }
+    const poisonTag = unit.poisoned ? ' · 中毒' : '';
+    statsEl.textContent = `ATK ${unit.atk}${poisonTag}`;
 
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);

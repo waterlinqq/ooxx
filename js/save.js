@@ -1,6 +1,7 @@
 import { ITEM_IDS, SHOP_PRICES, STARTING_COINS } from './items.js';
 import { CLASS_IDS, CLASSES } from './units.js';
 import { STARTER_CLASSES, getUnlockPrice, isUnlockable } from './unlocks.js';
+import { getAuthToken, ensureGuestToken } from './guestAuth.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
@@ -35,6 +36,7 @@ const DEFAULT_SAVE = {
 
 /** @type {SaveData | null} */
 let cache = null;
+let cloudPushTimer = null;
 
 function normalizeSave(raw) {
   const save = {
@@ -50,6 +52,23 @@ function normalizeSave(raw) {
   }
 
   return save;
+}
+
+function mergeCloudLocal(cloud, local) {
+  const merged = normalizeSave(local);
+  const cloudNorm = normalizeSave(cloud);
+
+  merged.coins = Math.max(merged.coins, cloudNorm.coins);
+  merged.tutorialDone = merged.tutorialDone || cloudNorm.tutorialDone;
+
+  const owned = new Set([...merged.ownedClasses, ...cloudNorm.ownedClasses]);
+  merged.ownedClasses = CLASS_IDS.filter((id) => owned.has(id));
+
+  for (const id of ITEM_IDS) {
+    merged.inventory[id] = Math.max(merged.inventory[id] ?? 0, cloudNorm.inventory[id] ?? 0);
+  }
+
+  return merged;
 }
 
 export function loadSave() {
@@ -68,6 +87,46 @@ export function loadSave() {
   cache = normalizeSave(DEFAULT_SAVE);
   persistSave();
   return cache;
+}
+
+export async function initCloudSave() {
+  try {
+    await ensureGuestToken();
+    const token = getAuthToken();
+    const res = await fetch('/api/save', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return loadSave();
+
+    const cloud = await res.json();
+    const local = loadSave();
+    cache = mergeCloudLocal(cloud, local);
+    persistSave();
+    scheduleCloudPush();
+    return cache;
+  } catch {
+    return loadSave();
+  }
+}
+
+function scheduleCloudPush() {
+  if (cloudPushTimer) clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(async () => {
+    const token = getAuthToken();
+    if (!token || !cache) return;
+    try {
+      await fetch('/api/save', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(getSaveSnapshot()),
+      });
+    } catch {
+      // offline — local save still valid
+    }
+  }, 800);
 }
 
 export function getSaveSnapshot() {
@@ -94,6 +153,7 @@ export function markTutorialDone() {
 export function persistSave() {
   if (!cache) return;
   localStorage.setItem(SAVE_KEY, JSON.stringify(cache));
+  scheduleCloudPush();
 }
 
 export function addCoins(amount) {

@@ -26,9 +26,24 @@
       <!-- 戰鬥 -->
       <section class="game-screen active" id="screenBattle" data-screen="battle">
         <div class="screen-scroll" id="lobbyContent">
-          <div class="mode-buttons" id="modeButtons"></div>
-          <button class="btn primary btn-lg" id="confirmRoster" type="button">下一步：選擇編隊</button>
-          <button class="btn tutorial-cta" id="startTutorial" type="button">
+          <div class="online-section">
+            <div class="section-title">線上對戰</div>
+            <p class="section-hint online-hint">選模式 → 建立或加入房間（房間碼 6 位）</p>
+            <div class="mode-buttons" id="onlineModeButtons"></div>
+            <div class="online-actions" id="onlineLobbyActions">
+              <button class="btn primary btn-lg" id="createRoomBtn" type="button">建立房間</button>
+              <div class="online-join-row">
+                <input class="online-room-input" id="roomCodeInput" type="text" maxlength="6" placeholder="房間碼" autocomplete="off" />
+                <button class="btn primary" id="joinRoomBtn" type="button">加入</button>
+              </div>
+            </div>
+            <div class="online-waiting hidden" id="onlineWaiting">
+              <p class="online-room-code">房間碼：<strong id="waitingRoomCode"></strong></p>
+              <p class="online-waiting-msg" id="onlineWaitingMsg">等待對手加入…</p>
+              <button class="btn" id="cancelRoomBtn" type="button">取消</button>
+            </div>
+          </div>
+          <button class="btn tutorial-cta hidden" id="startTutorial" type="button">
             <span class="tutorial-cta-icon">🎓</span>
             <span class="tutorial-cta-body">
               <span class="tutorial-cta-title">新手教學</span>
