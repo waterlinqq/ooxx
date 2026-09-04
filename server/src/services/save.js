@@ -1,7 +1,7 @@
 import { pool } from '../db.js';
 
 const STARTER_CLASSES = ['archer', 'swordsman', 'shield'];
-const DEFAULT_COINS = 100;
+const DEFAULT_COINS = 1000;
 
 const ITEM_IDS = ['potion', 'bomb'];
 

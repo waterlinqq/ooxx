@@ -38,11 +38,6 @@
             </div>
             <div class="online-waiting hidden" id="onlineWaiting">
               <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
-                <div class="online-match-rings" aria-hidden="true">
-                  <span class="online-match-ring"></span>
-                  <span class="online-match-ring"></span>
-                  <span class="online-match-ring"></span>
-                </div>
                 <p class="online-match-label">匹配中<span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
               </div>
               <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
@@ -55,31 +50,6 @@
               <span class="tutorial-cta-title">新手教學</span>
             </span>
           </button>
-        </div>
-
-        <div class="screen-scroll hidden" id="formationContent">
-          <div>
-            <div class="section-title">
-              我的編隊
-              <span class="section-hint" id="formationCount"></span>
-            </div>
-            <div class="roster-lineup" id="formationLineup"></div>
-          </div>
-
-          <div id="formationItemSection">
-            <div class="section-title section-title-compact">本場道具</div>
-            <div class="item-picker" id="formationItems"></div>
-          </div>
-
-          <div>
-            <div class="section-title">可選職業</div>
-            <div class="class-grid" id="formationPool"></div>
-          </div>
-
-          <div class="formation-footer">
-            <button class="btn" id="formationBack" type="button">返回模式</button>
-            <button class="btn primary" id="startBattle" type="button">開始對戰</button>
-          </div>
         </div>
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">
@@ -154,6 +124,36 @@
         </div>
       </section>
 
+      <!-- 編組 -->
+      <section class="game-screen" id="screenFormation" data-screen="formation">
+        <div class="screen-scroll">
+          <div class="section-title section-title-compact">對戰模式</div>
+          <div class="mode-buttons" id="formationModeButtons"></div>
+
+          <div>
+            <div class="section-title">
+              我的編隊
+              <span class="section-hint" id="formationCount"></span>
+            </div>
+            <div class="roster-lineup" id="formationLineup"></div>
+          </div>
+
+          <div id="formationItemSection">
+            <div class="section-title section-title-compact">本場道具</div>
+            <div class="item-picker" id="formationItems"></div>
+          </div>
+
+          <div>
+            <div class="section-title">可選職業</div>
+            <div class="class-grid" id="formationPool"></div>
+          </div>
+
+          <div class="formation-footer hidden" id="formationFooter">
+            <button class="btn primary" id="startBattle" type="button">開始對戰</button>
+          </div>
+        </div>
+      </section>
+
       <!-- 角色 -->
       <section class="game-screen" id="screenCharacters" data-screen="characters">
         <div class="screen-scroll">
@@ -189,6 +189,10 @@
       <button type="button" class="nav-item active" data-nav="battle">
         <span class="nav-icon">⚔️</span>
         <span class="nav-label">戰鬥</span>
+      </button>
+      <button type="button" class="nav-item" data-nav="formation">
+        <span class="nav-icon">🛡️</span>
+        <span class="nav-label">編組</span>
       </button>
       <button type="button" class="nav-item" data-nav="characters">
         <span class="nav-icon">🧙</span>

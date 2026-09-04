@@ -29,7 +29,7 @@ export const COIN_REWARDS = {
   '5x5': { win: 80, loss: 20 },
 };
 
-export const STARTING_COINS = 100;
+export const STARTING_COINS = 1000;
 
 export function getItem(id) {
   return ITEMS[id] ?? null;

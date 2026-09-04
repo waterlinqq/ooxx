@@ -68,6 +68,8 @@ export class Game {
     this.mapProps = createEmptyMapProps(this.getModeConfig().size);
     this.blueRoster = [];
     this.redRoster = [];
+    /** @type {Record<string, string[]>} */
+    this.rostersByMode = {};
     this.blueReserve = [];
     this.redReserve = [];
     this.message = '';
@@ -125,17 +127,27 @@ export class Game {
     return '下一步：選擇編隊';
   }
 
-  setBoardMode(modeId) {
-    if (this.phase !== 'lobby') return;
-    if (!BOARD_MODES[modeId]) return;
+  canEditRoster() {
+    return this.phase === 'lobby' || this.phase === 'formation' || this.phase === 'gameEnd';
+  }
+
+  syncFormationMode(modeId) {
+    if (!BOARD_MODES[modeId] || !this.canEditRoster()) return;
+    if (this.boardMode === modeId) return;
+
+    this.rostersByMode[this.boardMode] = [...this.blueRoster];
     this.boardMode = modeId;
+    this.blueRoster = [...(this.rostersByMode[modeId] ?? [])];
+    this.redRoster = [];
+  }
+
+  setBoardMode(modeId) {
+    if (!this.canEditRoster()) return;
+    if (!BOARD_MODES[modeId]) return;
+    this.syncFormationMode(modeId);
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
     this.mapProps = createEmptyMapProps(mode.size);
-    // Roster size and per-class caps differ per mode, so a lineup built for the old mode
-    // can't carry over.
-    this.blueRoster = [];
-    this.redRoster = [];
     this.notify();
   }
 
@@ -165,7 +177,7 @@ export class Game {
   }
 
   addToFormation(classId) {
-    if (this.phase !== 'formation') return;
+    if (!this.canEditRoster()) return;
     if (!CLASSES[classId]) return;
 
     const existing = this.blueRoster.indexOf(classId);
@@ -193,7 +205,7 @@ export class Game {
   }
 
   removeFromFormation(index) {
-    if (this.phase !== 'formation') return;
+    if (!this.canEditRoster()) return;
     if (index < 0 || index >= this.blueRoster.length) return;
     this.blueRoster = this.blueRoster.filter((_, i) => i !== index);
     this.message = '';
@@ -201,7 +213,7 @@ export class Game {
   }
 
   selectEquippedItem(itemId) {
-    if (this.phase !== 'formation') return;
+    if (!this.canEditRoster()) return;
 
     if (itemId === null) {
       this.equippedItem = null;

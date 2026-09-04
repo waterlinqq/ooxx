@@ -4,7 +4,7 @@ import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass } from './units.js';
 import { isUnlockable } from './unlocks.js';
 import {
   loadSave,
@@ -34,12 +34,12 @@ const boardCanvasHost = document.getElementById('boardCanvas');
 const fxLayerEl = document.getElementById('fxLayer');
 const boardWrapEl = document.querySelector('.board-wrap');
 const lobbyContentEl = document.getElementById('lobbyContent');
-const formationContentEl = document.getElementById('formationContent');
 const battleContentEl = document.getElementById('battleContent');
+const formationModeButtonsEl = document.getElementById('formationModeButtons');
+const formationFooterEl = document.getElementById('formationFooter');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
 const formationPoolEl = document.getElementById('formationPool');
-const formationBackBtn = document.getElementById('formationBack');
 const startBattleBtn = document.getElementById('startBattle');
 const backToLobbyBtn = document.getElementById('backToLobby');
 const turnTimerEl = document.getElementById('turnTimer');
@@ -94,6 +94,7 @@ const reserveTutorialPointerEl = document.getElementById('reserveTutorialPointer
 
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
+  formation: document.getElementById('screenFormation'),
   characters: document.getElementById('screenCharacters'),
   bag: document.getElementById('screenBag'),
   shop: document.getElementById('screenShop'),
@@ -333,6 +334,11 @@ let onlineModeActive = true;
 let selectedOnlineMode = '3x3';
 let onlineTimerInterval = null;
 
+function getRosterForMode(modeId) {
+  if (game.boardMode === modeId) return game.blueRoster;
+  return game.rostersByMode[modeId] ?? [];
+}
+
 function getAppState() {
   if (onlineClient.gameState || onlineClient.roomState) {
     const state = onlineClient.getDisplayState();
@@ -350,11 +356,19 @@ function getAppState() {
   }
 
   if (onlineModeActive) {
+    const modeId = selectedOnlineMode;
+    const blueRoster = getRosterForMode(modeId);
+    const rosterLimit = getRosterLimit(modeId);
     return {
       phase: 'onlineLobby',
-      boardMode: selectedOnlineMode,
+      boardMode: modeId,
       ...getSaveSnapshot(),
       onlineMode: true,
+      blueRoster,
+      rosterLimit,
+      maxPerClass: getMaxPerClass(modeId),
+      formationReady: blueRoster.length === rosterLimit,
+      equippedItem: game.equippedItem,
     };
   }
   return local;
@@ -488,6 +502,10 @@ function switchNav(navId) {
 
   for (const btn of bottomNavEl.querySelectorAll('.nav-item')) {
     btn.classList.toggle('active', btn.dataset.nav === navId);
+  }
+
+  if (navId === 'formation') {
+    game.syncFormationMode(state.boardMode);
   }
 
   if (BATTLE_PHASES.has(state.phase)) {
@@ -808,6 +826,7 @@ function renderFormation(state) {
   }
 
   startBattleBtn.disabled = !state.formationReady;
+  formationFooterEl.classList.toggle('hidden', state.phase !== 'formation');
 }
 
 function tutorialAllowsReserve(state, unit) {
@@ -1001,6 +1020,26 @@ function createModeGridIcon(size) {
   return wrap;
 }
 
+function renderFormationModePicker(state) {
+  formationModeButtonsEl.innerHTML = '';
+  const canPick = activeNav === 'formation' && game.canEditRoster();
+
+  for (const mode of Object.values(BOARD_MODES)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
+    btn.setAttribute('aria-label', `${mode.size}×${mode.size}`);
+    btn.appendChild(createModeGridIcon(mode.size));
+    btn.disabled = !canPick;
+    btn.addEventListener('click', () => {
+      selectedOnlineMode = mode.id;
+      game.syncFormationMode(mode.id);
+      render(getAppState());
+    });
+    formationModeButtonsEl.appendChild(btn);
+  }
+}
+
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
   const canPick = state.phase === 'onlineLobby';
@@ -1014,6 +1053,7 @@ function renderModePicker(state) {
     btn.disabled = !canPick;
     btn.addEventListener('click', () => {
       selectedOnlineMode = mode.id;
+      game.syncFormationMode(mode.id);
       render(getAppState());
     });
     modeButtonsEl.appendChild(btn);
@@ -1113,11 +1153,13 @@ function render(state) {
   battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
   battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
   lobbyContentEl.classList.toggle('hidden', !inOnlineLobby && state.phase !== 'lobby');
-  formationContentEl.classList.toggle('hidden', !inFormation);
   battleContentEl.classList.toggle('hidden', !inBattleFlow);
 
   if (state.phase !== lastPhase && inBattleFlow) {
     switchNav('battle');
+  }
+  if (state.phase !== lastPhase && inFormation) {
+    switchNav('formation');
   }
   if (state.phase !== lastPhase && state.phase === 'battle' && !state.tutorial) {
     showWinConditionToast(state.winCount);
@@ -1131,9 +1173,12 @@ function render(state) {
   renderLobbyFooter(state);
   renderOnlineLobby(state);
   renderCoinBalance(state);
-  if (inFormation) {
+  if (inFormation || (activeNav === 'formation' && game.canEditRoster())) {
     renderFormation(state);
     renderFormationItems(state);
+  }
+  if (activeNav === 'formation' && game.canEditRoster()) {
+    renderFormationModePicker(state);
   }
   if (inBattleFlow) renderBattleItem(state);
   if (inBattleFlow) renderReserveBars(state);
@@ -1216,8 +1261,10 @@ cancelRoomBtn.addEventListener('click', () => {
   onlineClient.leaveOnline().then(() => render(getAppState()));
 });
 
-if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => game.openFormation());
-formationBackBtn.addEventListener('click', () => game.backToLobby());
+if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => {
+  game.openFormation();
+  switchNav('formation');
+});
 startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => {
   if (isOnlinePlaying() || onlineClient.roomState) return;
