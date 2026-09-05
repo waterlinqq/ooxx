@@ -143,9 +143,6 @@
             <div class="class-grid" id="formationPool"></div>
           </div>
 
-          <div class="formation-footer hidden" id="formationFooter">
-            <button class="btn primary" id="startBattle" type="button">開始對戰</button>
-          </div>
         </div>
       </section>
 
@@ -202,6 +199,9 @@
         <span class="nav-label">商店</span>
       </button>
     </nav>
+    <div class="purchase-toast hidden" id="purchaseToast" aria-live="polite">
+      <span class="purchase-toast-text" id="purchaseToastText"></span>
+    </div>
     <div id="gameEndOverlay" class="game-end-overlay hidden" aria-live="polite">
       <div class="game-end-card">
         <div class="end-result" id="endResult"></div>

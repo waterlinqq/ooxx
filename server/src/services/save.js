@@ -3,7 +3,7 @@ import { pool } from '../db.js';
 const STARTER_CLASSES = ['archer', 'swordsman', 'shield'];
 const DEFAULT_COINS = 1000;
 
-const ITEM_IDS = ['potion', 'bomb'];
+const ITEM_IDS = ['potion', 'bomb', 'landmine'];
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));

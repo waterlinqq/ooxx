@@ -122,6 +122,34 @@ export function getAdjacentCellsDiagonal(row, col, size = 3) {
   return cells;
 }
 
+export function isFriendlyCastleCell(board, row, col, team) {
+  const cell = board[row]?.[col];
+  return cell?.team === team && isCastleUnit(cell);
+}
+
+/** @deprecated use isFriendlyCastleCell */
+export function hasAdjacentFriendlyCastle(board, row, col, team) {
+  return isFriendlyCastleCell(board, row, col, team);
+}
+
+export function shouldRecycleOnLand(board, row, col, unit) {
+  if (!unit || isCastleUnit(unit)) return false;
+  return isFriendlyCastleCell(board, row, col, unit.team);
+}
+
+export function recycleUnitToReserve(board, unit) {
+  const next = cloneBoard(board);
+  if (unit.row >= 0 && unit.col >= 0 && next[unit.row]?.[unit.col]?.id === unit.id) {
+    next[unit.row][unit.col] = null;
+  }
+  const recycled = {
+    ...unit,
+    row: -1,
+    col: -1,
+  };
+  return { board: next, recycledUnit: recycled };
+}
+
 export function getValidMoves(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
   if (unit.immobilized || isCastleUnit(unit)) return [];
@@ -133,9 +161,15 @@ export function getValidMoves(board, unit, mapProps = null, shadowClones = null)
     const moves = [];
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (board[r][c] || hasShadowClone(shadowClones, r, c) || (r === unit.row && c === unit.col)) continue;
+        if ((r === unit.row && c === unit.col) || hasShadowClone(shadowClones, r, c)) continue;
         if (isObstacleCell(mapProps, r, c)) continue;
-        if (chebyshev(unit.row, unit.col, r, c) <= maxJump) moves.push([r, c]);
+        if (chebyshev(unit.row, unit.col, r, c) > maxJump) continue;
+        const cell = board[r][c];
+        if (cell) {
+          if (isFriendlyCastleCell(board, r, c, unit.team)) moves.push([r, c]);
+          continue;
+        }
+        moves.push([r, c]);
       }
     }
     return moves;
@@ -155,7 +189,16 @@ export function getValidMoves(board, unit, mapProps = null, shadowClones = null)
         : getAdjacentCells(r, c, size);
       for (const [nr, nc] of neighbors) {
         const key = `${nr},${nc}`;
-        if (board[nr][nc] || hasShadowClone(shadowClones, nr, nc) || visited.has(key)) continue;
+        if (visited.has(key)) continue;
+        const cell = board[nr][nc];
+        if (cell) {
+          if (isFriendlyCastleCell(board, nr, nc, unit.team)) {
+            visited.add(key);
+            moves.push([nr, nc]);
+          }
+          continue;
+        }
+        if (hasShadowClone(shadowClones, nr, nc)) continue;
         if (isObstacleCell(mapProps, nr, nc)) continue;
         visited.add(key);
         moves.push([nr, nc]);
@@ -412,9 +455,6 @@ export function applyMove(board, unit, row, col, shadowClones = null) {
   const next = cloneBoard(board);
   const fromRow = unit.row;
   const fromCol = unit.col;
-  next[fromRow][fromCol] = null;
-  const moved = { ...unit, row, col };
-  next[row][col] = moved;
 
   let nextShadowClones = shadowClones;
   if (shadowClones !== null && (unit.shadowCloneOnMove ?? CLASSES[unit.classId]?.shadowCloneOnMove)) {
@@ -422,6 +462,16 @@ export function applyMove(board, unit, row, col, shadowClones = null) {
       nextShadowClones = placeShadowClone(shadowClones, fromRow, fromCol, unit.team);
     }
   }
+
+  if (isFriendlyCastleCell(board, row, col, unit.team)) {
+    next[fromRow][fromCol] = null;
+    const moved = { ...unit, row, col };
+    return { board: next, unit: moved, shadowClones: nextShadowClones, recycleMove: true };
+  }
+
+  next[fromRow][fromCol] = null;
+  const moved = { ...unit, row, col };
+  next[row][col] = moved;
 
   return { board: next, unit: moved, shadowClones: nextShadowClones };
 }

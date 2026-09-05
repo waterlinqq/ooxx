@@ -1,13 +1,13 @@
 import { CLASS_IDS, CLASSES } from './units.js';
 
-export const STARTER_CLASSES = ['archer', 'swordsman', 'shield'];
+export const STARTER_CLASSES = ['archer', 'swordsman', 'shield', 'castle'];
 
 const DEFAULT_UNLOCK_PRICE = 100;
 
 /** @type {Record<string, number>} */
 export const UNLOCK_PRICES = Object.fromEntries(
   CLASS_IDS
-    .filter((id) => !STARTER_CLASSES.includes(id) && !CLASSES[id]?.boardOnly)
+    .filter((id) => !STARTER_CLASSES.includes(id) && id !== 'castle')
     .map((id) => [id, DEFAULT_UNLOCK_PRICE]),
 );
 

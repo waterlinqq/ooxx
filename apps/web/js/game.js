@@ -12,6 +12,8 @@ import {
   createTeamReserve,
   placeModeCastles,
   isCastleUnit,
+  getDeployableRoster,
+  modeHasAutoCastle,
 } from './units.js';
 import {
   getValidMoves,
@@ -32,6 +34,7 @@ import {
   healUnitAt,
   applyTrapDamage,
   resolveDeathExplosions,
+  isFriendlyCastleCell,
 } from './rules.js';
 import { chooseAiAction } from './ai.js';
 import { createSearchContext } from './ai/board.js';
@@ -91,11 +94,13 @@ export class Game {
     this.playAttackFx = null;
     this.playBlessFx = null;
     this.playMapPropFx = null;
+    this.playLandmineFx = null;
     this.listeners = [];
     this.equippedItem = null;
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
+    this.pendingLandmines = [];
     this.shadowClones = [];
     this.lastCoinReward = 0;
     this._endRevealTimer = null;
@@ -146,14 +151,14 @@ export class Game {
   syncFormationMode(modeId) {
     if (!BOARD_MODES[modeId] || !this.canEditRoster()) return;
 
-    this.rostersByMode[this.boardMode] = [...this.blueRoster];
+    this.rostersByMode[this.boardMode] = this.sanitizeRosterForMode(this.blueRoster);
     if (this.boardMode === modeId) {
       persistRostersByMode(this.rostersByMode);
       return;
     }
 
     this.boardMode = modeId;
-    this.blueRoster = [...(this.rostersByMode[modeId] ?? [])];
+    this.blueRoster = this.sanitizeRosterForMode(this.rostersByMode[modeId] ?? [], modeId);
     this.redRoster = [];
     persistRostersByMode(this.rostersByMode);
   }
@@ -169,7 +174,11 @@ export class Game {
   }
 
   isFormationReady() {
-    return this.blueRoster.length === this.getRosterLimit();
+    return getDeployableRoster(this.blueRoster, this.boardMode).length === this.getRosterLimit();
+  }
+
+  sanitizeRosterForMode(roster, modeId = this.boardMode) {
+    return sortRosterByClass(getDeployableRoster(roster, modeId));
   }
 
   openFormation() {
@@ -200,10 +209,12 @@ export class Game {
   addToFormation(classId) {
     if (!this.canEditRoster()) return;
     if (!CLASSES[classId]) return;
+    if (modeHasAutoCastle(this.boardMode) && classId === 'castle') return;
 
     const existing = this.blueRoster.indexOf(classId);
     if (existing >= 0) {
       this.blueRoster = this.blueRoster.filter((id) => id !== classId);
+      this.blueRoster = this.sanitizeRosterForMode(this.blueRoster);
       this.rostersByMode[this.boardMode] = [...this.blueRoster];
       persistRostersByMode(this.rostersByMode);
       this.message = '';
@@ -223,6 +234,7 @@ export class Game {
       return;
     }
     this.blueRoster = sortRosterByClass([...this.blueRoster, classId]);
+    this.blueRoster = this.sanitizeRosterForMode(this.blueRoster);
     this.rostersByMode[this.boardMode] = [...this.blueRoster];
     persistRostersByMode(this.rostersByMode);
     this.message = '';
@@ -232,7 +244,9 @@ export class Game {
   removeFromFormation(index) {
     if (!this.canEditRoster()) return;
     if (index < 0 || index >= this.blueRoster.length) return;
+    if (modeHasAutoCastle(this.boardMode) && this.blueRoster[index] === 'castle') return;
     this.blueRoster = this.blueRoster.filter((_, i) => i !== index);
+    this.blueRoster = this.sanitizeRosterForMode(this.blueRoster);
     this.rostersByMode[this.boardMode] = [...this.blueRoster];
     persistRostersByMode(this.rostersByMode);
     this.message = '';
@@ -272,6 +286,13 @@ export class Game {
       && !this.itemTargeting;
   }
 
+  getOccupiedTrapCells() {
+    const occupied = new Set();
+    for (const { row, col } of this.pendingBombs) occupied.add(`${row},${col}`);
+    for (const { row, col } of this.pendingLandmines) occupied.add(`${row},${col}`);
+    return occupied;
+  }
+
   getHighlightItemTargets() {
     if (!this.itemTargeting) return [];
 
@@ -279,8 +300,8 @@ export class Game {
       return getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
     }
 
-    if (this.itemTargeting === 'bomb') {
-      const occupied = new Set(this.pendingBombs.map(({ row, col }) => `${row},${col}`));
+    if (this.itemTargeting === 'bomb' || this.itemTargeting === 'landmine') {
+      const occupied = this.getOccupiedTrapCells();
       return getValidBombCells(this.board, this.mapProps).filter(([r, c]) => !occupied.has(`${r},${c}`));
     }
 
@@ -300,11 +321,27 @@ export class Game {
     this.notify();
   }
 
-  beginUseItem() {
-    if (!this.canUseItem()) return;
+  getItemTargetingHint(item) {
+    if (!item) return '';
+    return item.targeting === 'friendly_unit'
+      ? '點選受傷的己方單位（棋盤或牌列）'
+      : '點選棋盤空格';
+  }
 
+  beginUseItem() {
     const item = getItem(this.equippedItem);
     if (!item) return;
+
+    if (this.itemTargeting) {
+      this.draggingUnitId = null;
+      this.selectedReserveId = null;
+      this.inspectedUnitId = null;
+      this.message = `${item.icon} ${this.getItemTargetingHint(item)}`;
+      this.notify();
+      return;
+    }
+
+    if (!this.canUseItem()) return;
 
     if (item.targeting === 'friendly_unit') {
       const boardTargets = getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
@@ -315,10 +352,10 @@ export class Game {
         return;
       }
     } else if (item.targeting === 'empty_cell') {
-      const occupied = new Set(this.pendingBombs.map(({ row, col }) => `${row},${col}`));
-      const bombTargets = getValidBombCells(this.board, this.mapProps)
+      const occupied = this.getOccupiedTrapCells();
+      const trapTargets = getValidBombCells(this.board, this.mapProps)
         .filter(([r, c]) => !occupied.has(`${r},${c}`));
-      if (bombTargets.length === 0) {
+      if (trapTargets.length === 0) {
         this.message = `${item.icon} 目前沒有可放置的空格`;
         this.notify();
         return;
@@ -330,10 +367,7 @@ export class Game {
     this.inspectedUnitId = null;
 
     this.itemTargeting = this.equippedItem;
-    const hint = item.targeting === 'friendly_unit'
-      ? '點選受傷的己方單位（棋盤或牌列）'
-      : '點選棋盤空格';
-    this.message = `${item.icon} ${hint}`;
+    this.message = `${item.icon} ${this.getItemTargetingHint(item)}`;
     this.notify();
   }
 
@@ -360,7 +394,7 @@ export class Game {
         return;
       }
 
-      const amount = getItem('potion')?.effect?.amount ?? 2;
+      const amount = getItem('potion')?.effect?.amount ?? 3;
       const result = healUnitAt(this.board, row, col, amount);
       this.board = result.board;
       const cls = CLASSES[unit.classId];
@@ -382,6 +416,23 @@ export class Game {
 
       this.pendingBombs.push({ row, col });
       this.finishItemUse('放置炸彈');
+      return;
+    }
+
+    if (this.itemTargeting === 'landmine') {
+      if (this.board[row]?.[col]) {
+        this.showItemTargetHint('請點選空格');
+        return;
+      }
+
+      const valid = this.getHighlightItemTargets();
+      if (!valid.some(([r, c]) => r === row && c === col)) {
+        this.showItemTargetHint('此格無法放置地雷');
+        return;
+      }
+
+      this.pendingLandmines.push({ row, col });
+      this.finishItemUse('放置地雷');
     }
   }
 
@@ -404,7 +455,7 @@ export class Game {
       return;
     }
 
-    const amount = getItem('potion')?.effect?.amount ?? 2;
+    const amount = getItem('potion')?.effect?.amount ?? 3;
     unit.hp = Math.min(unit.maxHp, unit.hp + amount);
     const cls = CLASSES[unit.classId];
     this.finishItemUse(`使用紅藥水治療 ${cls.name}`);
@@ -463,12 +514,13 @@ export class Game {
     const labels = [];
     const allKilled = [];
 
+    const damage = getItem('bomb')?.effect?.damage ?? 3;
     for (const { row, col } of bombs) {
-      const result = applyTrapDamage(board, row, col, 2);
+      const result = applyTrapDamage(board, row, col, damage);
       board = result.board;
       if (result.hit) {
         const cls = CLASSES[result.hit.classId];
-        labels.push(`${cls?.name ?? '單位'} -2`);
+        labels.push(`${cls?.name ?? '單位'} -${damage}`);
       }
       if (result.killed) allKilled.push(result.killed);
     }
@@ -495,6 +547,7 @@ export class Game {
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
+    this.pendingLandmines = [];
     this.lastCoinReward = 0;
     this.clearEndSequence();
   }
@@ -571,6 +624,7 @@ export class Game {
       endReason: this.endReason,
       finalScores: this.finalScores,
       validMoves: this.getHighlightMoves(),
+      validRecycleMoves: this.getHighlightRecycleMoves(),
       validTargets: this.getHighlightTargets(),
       validDeploy: this.getHighlightDeploy(),
       animating: this.animating,
@@ -584,6 +638,8 @@ export class Game {
       validItemTargets: this.getHighlightItemTargets(),
       validItemReserveTargets: this.getValidPotionReserveTargetIds(),
       pendingBombs: this.pendingBombs.map((b) => ({ ...b })),
+      pendingLandmines: this.pendingLandmines.map((m) => ({ ...m })),
+      showLandmines: true,
       coins: save.coins,
       inventory: save.inventory,
       ownedClasses: save.ownedClasses,
@@ -613,7 +669,7 @@ export class Game {
 
   getPlayerTurnMessage() {
     if (this.tutorial) return '';
-    return this.currentPlayer === 'blue' ? '你的回合' : '對手回合';
+    return this.currentPlayer === 'blue' ? '我方回合' : '對手回合';
   }
 
   hasValidActionsForTeam(team = this.currentPlayer) {
@@ -638,12 +694,65 @@ export class Game {
     // The trap animation waits for the unit's mesh to finish walking in, so this
     // runs alongside the rest of the turn instead of blocking it.
     if (result.trigger) this.playMapPropFx?.(result.trigger);
-    return result.events;
+
+    const landmineEvents = this.resolveLandmineOnEnter(unitId, row, col);
+    return [...result.events, ...landmineEvents];
+  }
+
+  resolveLandmineOnEnter(unitId, row, col) {
+    const idx = this.pendingLandmines.findIndex((m) => m.row === row && m.col === col);
+    if (idx === -1) return [];
+
+    const damage = getItem('landmine')?.effect?.damage ?? 2;
+    this.pendingLandmines.splice(idx, 1);
+
+    const damaged = applyTrapDamage(this.board, row, col, damage);
+    this.board = damaged.board;
+
+    if (!damaged.hit) return [];
+
+    let events = [`🪤 地雷 -${damage}`];
+    if (damaged.killed) {
+      const explosion = resolveDeathExplosions(this.board, [damaged.killed]);
+      this.board = explosion.board;
+    }
+
+    this.playLandmineFx?.({
+      row,
+      col,
+      unitId,
+      damage,
+      killed: Boolean(damaged.killed),
+    });
+
+    return events;
   }
 
   appendTerrainToLabel(actionLabel, terrainEvents) {
     if (terrainEvents.length === 0) return actionLabel;
     return `${actionLabel} · ${terrainEvents.join('、')}`;
+  }
+
+  completeRecycleMove(movedUnit) {
+    const recycled = { ...movedUnit, row: -1, col: -1 };
+    if (movedUnit.team === 'blue') {
+      this.blueReserve = [...this.blueReserve, recycled];
+    } else {
+      this.redReserve = [...this.redReserve, recycled];
+    }
+  }
+
+  finishRecycleMove(unitId, label = '移動 · 回收') {
+    this.endAction(label, unitId);
+    return true;
+  }
+
+  finishMoveAction(unitId, row, col, baseLabel) {
+    const terrainEvents = this.applyTerrainAfterLanding(unitId, row, col);
+    let label = this.appendTerrainToLabel(baseLabel, terrainEvents);
+    if (this.checkTerrainOutcome(baseLabel, terrainEvents)) return true;
+    this.endAction(label, unitId);
+    return true;
   }
 
   checkTerrainOutcome(actionLabel, terrainEvents) {
@@ -792,30 +901,27 @@ export class Game {
     }
 
     const attacker = this.board[enemy.from.row]?.[enemy.from.col];
-    const target = this.board[enemy.to.row]?.[enemy.to.col];
-    if (!attacker || !target) return;
+    if (!attacker) return;
 
     if (enemy.type === 'move') {
       const result = applyMove(this.board, attacker, enemy.to.row, enemy.to.col, this.shadowClones);
       this.board = result.board;
       this.shadowClones = result.shadowClones ?? this.shadowClones;
+      if (result.recycleMove) {
+        this.completeRecycleMove(result.unit);
+        this.endAction(`${enemy.label} · 回收`, attacker.id);
+        return;
+      }
       const terrainEvents = this.applyTerrainAfterLanding(attacker.id, enemy.to.row, enemy.to.col);
       if (this.checkTerrainOutcome(enemy.label, terrainEvents)) return;
       this.endAction(this.appendTerrainToLabel(enemy.label, terrainEvents), attacker.id);
       return;
     }
 
-    this.resolveAttack(attacker, target, enemy.label);
-  }
+    const target = this.board[enemy.to.row]?.[enemy.to.col];
+    if (!target) return;
 
-  startBattle() {
-    if (!this.canEditRoster()) return;
-    if (!this.isFormationReady()) return;
-    this.tutorial = null;
-    this.syncFormationMode(this.boardMode);
-    this.validateEquippedItemForBattle();
-    this.redRoster = createRandomRoster(this.boardMode);
-    this.startRound();
+    this.resolveAttack(attacker, target, enemy.label);
   }
 
   /** 匹配逾時：用玩家編組（若未完成則退回預設）立刻開打 AI */
@@ -830,6 +936,7 @@ export class Game {
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
+    this.pendingLandmines = [];
     this.animating = false;
     this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
@@ -845,8 +952,8 @@ export class Game {
     this.mapProps = generateMapPropsForMode(this.boardMode);
     this.board = placeModeCastles(this.board, this.boardMode);
     this.shadowClones = [];
-    this.blueReserve = createTeamReserve(this.blueRoster, 'blue');
-    this.redReserve = createTeamReserve(this.redRoster, 'red');
+    this.blueReserve = createTeamReserve(this.blueRoster, 'blue', this.boardMode);
+    this.redReserve = createTeamReserve(this.redRoster, 'red', this.boardMode);
     this.currentPlayer = this.getRoundFirstPlayer();
     this.draggingUnitId = null;
     this.selectedReserveId = null;
@@ -880,6 +987,7 @@ export class Game {
   selectReserve(unitId) {
     if (!this.canHumanAct()) return;
     if (this.itemTargeting) {
+      this.selectedReserveId = null;
       this.tryItemTargetReserve(unitId);
       return;
     }
@@ -970,6 +1078,15 @@ export class Game {
       return;
     }
 
+    if (target.team === unit.team) {
+      if (isCastleUnit(target) && this.tryMoveTo(unitId, row, col)) {
+        this.draggingUnitId = null;
+        return;
+      }
+      this.resetPlayerTurn();
+      return;
+    }
+
     if (target.team !== unit.team) {
       if (this.tryAttackTarget(unitId, row, col)) {
         this.draggingUnitId = null;
@@ -1004,12 +1121,26 @@ export class Game {
     return this.currentPlayer === 'blue' ? this.blueReserve : this.redReserve;
   }
 
+  getRecycleMovesForUnit(unit) {
+    return getValidMoves(this.board, unit, this.mapProps, this.shadowClones)
+      .filter(([row, col]) => isFriendlyCastleCell(this.board, row, col, unit.team));
+  }
+
   getHighlightMoves() {
     if (!this.draggingUnitId) return [];
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
     return this.narrowToTutorialGoal(getValidMoves(this.board, unit, this.mapProps, this.shadowClones), 'move');
+  }
+
+  getHighlightRecycleMoves() {
+    if (!this.draggingUnitId) return [];
+    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
+    const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
+    if (!unit) return [];
+    const recycleMoves = this.getRecycleMovesForUnit(unit);
+    return this.narrowToTutorialGoal(recycleMoves, 'move');
   }
 
   getHighlightTargets() {
@@ -1090,10 +1221,11 @@ export class Game {
     const result = applyMove(this.board, unit, row, col, this.shadowClones);
     this.board = result.board;
     this.shadowClones = result.shadowClones ?? this.shadowClones;
-    const terrainEvents = this.applyTerrainAfterLanding(unitId, row, col);
-    if (this.checkTerrainOutcome('移動', terrainEvents)) return true;
-    this.endAction(this.appendTerrainToLabel('移動', terrainEvents), unitId);
-    return true;
+    if (result.recycleMove) {
+      this.completeRecycleMove(result.unit);
+      return this.finishRecycleMove(unitId);
+    }
+    return this.finishMoveAction(unitId, row, col, '移動');
   }
 
   async resolveAttack(unit, target, label) {
@@ -1305,6 +1437,11 @@ export class Game {
       const result = applyMove(this.board, unit, action.row, action.col, this.shadowClones);
       this.board = result.board;
       this.shadowClones = result.shadowClones ?? this.shadowClones;
+      if (result.recycleMove) {
+        this.completeRecycleMove(result.unit);
+        this.endAction(`${teamLabel} 移動 · 回收`, action.unitId);
+        return;
+      }
       const moveLabel = `${teamLabel} 移動`;
       const terrainEvents = this.applyTerrainAfterLanding(action.unitId, action.row, action.col);
       if (this.checkTerrainOutcome(moveLabel, terrainEvents)) return;

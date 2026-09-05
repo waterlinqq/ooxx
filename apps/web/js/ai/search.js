@@ -23,6 +23,7 @@ import {
   getValidDeployCells,
   getEnemiesOnLine,
   getTowerTargets,
+  isFriendlyCastleCell,
 } from '../rules.js';
 import { getMapPropAt } from '../mapPropUtils.js';
 
@@ -170,6 +171,11 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
       if (ctx.lineCount[enemy][lineIdx] === 0 && progress >= 2) {
         score -= progress * 25;
       }
+    }
+    if (isFriendlyCastleCell(ctx.board, action.row, action.col, team)) {
+      const retreatValue = materialValue(unit);
+      if (unit.hp <= Math.ceil(unit.maxHp / 2)) score += 120 + retreatValue;
+      else score += 15;
     }
   }
 

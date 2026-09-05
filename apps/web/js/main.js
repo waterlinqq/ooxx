@@ -5,8 +5,8 @@ import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.j
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit } from './units.js';
-import { isUnlockable } from './unlocks.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster } from './units.js';
+import { isUnlockable, getUnlockPrice } from './unlocks.js';
 import {
   loadSave,
   buyItem,
@@ -38,11 +38,9 @@ const boardWrapEl = document.querySelector('.board-wrap');
 const lobbyContentEl = document.getElementById('lobbyContent');
 const battleContentEl = document.getElementById('battleContent');
 const formationModeButtonsEl = document.getElementById('formationModeButtons');
-const formationFooterEl = document.getElementById('formationFooter');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
 const formationPoolEl = document.getElementById('formationPool');
-const startBattleBtn = document.getElementById('startBattle');
 const backToLobbyBtn = document.getElementById('backToLobby');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
@@ -76,6 +74,8 @@ const turnToastTextEl = document.getElementById('turnToastText');
 const winConditionTextEl = document.getElementById('winConditionText');
 const statusMessageEl = document.getElementById('statusMessage');
 const coinBalanceEl = document.getElementById('coinBalance');
+const purchaseToastEl = document.getElementById('purchaseToast');
+const purchaseToastTextEl = document.getElementById('purchaseToastText');
 const formationItemsEl = document.getElementById('formationItems');
 const formationItemHintEl = document.getElementById('formationItemHint');
 const bagGridEl = document.getElementById('bagGrid');
@@ -381,7 +381,7 @@ function getAppState() {
       blueRoster,
       rosterLimit,
       maxPerClass: getMaxPerClass(modeId),
-      formationReady: blueRoster.length === rosterLimit,
+      formationReady: getDeployableRoster(blueRoster, modeId).length === rosterLimit,
       equippedItem: game.equippedItem,
     };
   }
@@ -458,6 +458,14 @@ const WIN_CONDITION_FADE_MS = 450;
 
 const TURN_TOAST_SHOW_MS = 1400;
 const TURN_TOAST_FADE_MS = 900;
+const PURCHASE_FEEDBACK_MS = 450;
+const PURCHASE_TOAST_SHOW_MS = 1600;
+const PURCHASE_TOAST_FADE_MS = 400;
+
+/** @type {ReturnType<typeof setTimeout> | null} */
+let purchaseToastTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let purchaseNotifyTimer = null;
 
 /** @type {ReturnType<typeof setTimeout> | null} */
 let turnToastHideTimer = null;
@@ -505,7 +513,7 @@ function syncTurnToast(state) {
   if (!battleJustStarted && player === lastTurnToastPlayer) return;
   lastTurnToastPlayer = player;
 
-  const text = player === 'blue' ? '你的回合' : '對手回合';
+  const text = player === 'blue' ? '我方回合' : '對手回合';
   const delay = battleJustStarted ? WIN_CONDITION_SHOW_MS + 250 : 0;
   if (delay > 0) {
     setTimeout(() => showTurnToast(text, player), delay);
@@ -615,7 +623,9 @@ onlineClient.playAttackFx = (fx) => board3d.playAttackFx(fx);
 game.playBlessFx = (fx) => board3d.playBlessFx(fx);
 onlineClient.playBlessFx = (fx) => board3d.playBlessFx(fx);
 game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
+game.playLandmineFx = (fx) => board3d.playLandmineFx(fx);
 onlineClient.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
+onlineClient.playLandmineFx = (fx) => board3d.playLandmineFx(fx);
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
@@ -650,6 +660,7 @@ function switchNav(navId) {
 }
 
 function formatClassTrait(cls) {
+  if (cls.type === 'castle') return '堡壘 · 友方踏入回收 · 攻破獲勝';
   if (cls.diagonalOnly) return '僅斜角移動與攻擊 · 無法上下左右';
   if (cls.poisonOnHit) return '上下左右近戰 · 命中使敵中毒';
   if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
@@ -673,10 +684,14 @@ function renderClassDetail(classId) {
   const cls = CLASSES[classId];
   if (!cls) return;
 
+  const hpLabel = cls.id === 'castle'
+    ? `${cls.hp}（攻城戰 ${getCastleHpForMode('5x5')}）`
+    : cls.hp;
+
   classDetailInfoEl.innerHTML = `
     <h2 class="detail-name">${cls.name}</h2>
     <dl class="detail-stats">
-      <div><dt>HP</dt><dd>${cls.hp}</dd></div>
+      <div><dt>HP</dt><dd>${hpLabel}</dd></div>
       <div><dt>ATK</dt><dd>${cls.atk}</dd></div>
       <div><dt>特性</dt><dd>${formatClassTrait(cls)}</dd></div>
     </dl>
@@ -756,7 +771,7 @@ function createClassUnlockRow(cls, { onBuy }) {
     btn.textContent = '購買';
     btn.disabled = !canBuy;
     if (!canBuy) btn.title = '金幣不足';
-    btn.addEventListener('click', () => onBuy(cls.id));
+    btn.addEventListener('click', () => onBuy(cls.id, btn));
     row.appendChild(btn);
   }
 
@@ -798,7 +813,7 @@ function createItemRow(item, { count, price, onBuy }) {
     btn.textContent = '購買';
     btn.disabled = !canBuy;
     if (!canBuy) btn.title = '金幣不足';
-    btn.addEventListener('click', () => onBuy(item.id));
+    btn.addEventListener('click', () => onBuy(item.id, btn));
     row.appendChild(btn);
   }
 
@@ -808,6 +823,72 @@ function createItemRow(item, { count, price, onBuy }) {
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
   statusMessageEl.classList.add('hidden');
+}
+
+function clearPurchaseNotifyTimer() {
+  if (purchaseNotifyTimer) {
+    clearTimeout(purchaseNotifyTimer);
+    purchaseNotifyTimer = null;
+  }
+}
+
+function playCoinSpendAnimation(price) {
+  coinBalanceEl.classList.remove('coin-spent');
+  void coinBalanceEl.offsetWidth;
+  coinBalanceEl.classList.add('coin-spent');
+  window.setTimeout(() => coinBalanceEl.classList.remove('coin-spent'), 600);
+
+  if (!price) return;
+  const statusBar = coinBalanceEl.closest('.status-bar');
+  if (!statusBar) return;
+  const floater = document.createElement('span');
+  floater.className = 'coin-spend-float';
+  floater.textContent = `-${price}`;
+  statusBar.appendChild(floater);
+  window.setTimeout(() => floater.remove(), 750);
+}
+
+function showPurchaseToast(message, { success = true } = {}) {
+  if (purchaseToastTimer) {
+    clearTimeout(purchaseToastTimer);
+    purchaseToastTimer = null;
+  }
+
+  purchaseToastEl.classList.remove('hidden', 'dismissing', 'visible', 'purchase-toast-error');
+  if (!success) purchaseToastEl.classList.add('purchase-toast-error');
+  purchaseToastTextEl.textContent = message;
+  void purchaseToastEl.offsetWidth;
+  purchaseToastEl.classList.add('visible');
+
+  purchaseToastTimer = window.setTimeout(() => {
+    purchaseToastEl.classList.add('dismissing');
+    purchaseToastTimer = window.setTimeout(() => {
+      purchaseToastEl.classList.add('hidden');
+      purchaseToastEl.classList.remove('visible', 'dismissing', 'purchase-toast-error');
+      purchaseToastTimer = null;
+    }, PURCHASE_TOAST_FADE_MS);
+  }, PURCHASE_TOAST_SHOW_MS);
+}
+
+function handlePurchaseSuccess({ name, price, rowEl, kind = 'item' }) {
+  rowEl?.classList.add('purchase-success');
+  playCoinSpendAnimation(price);
+  const prefix = kind === 'class' ? '已解鎖' : '已購買';
+  showPurchaseToast(`${prefix} ${name}`);
+  renderCoinBalance(getAppState());
+  clearPurchaseNotifyTimer();
+  purchaseNotifyTimer = window.setTimeout(() => {
+    purchaseNotifyTimer = null;
+    game.notify();
+  }, PURCHASE_FEEDBACK_MS);
+}
+
+function handlePurchaseFailure(reason, btn) {
+  btn?.classList.remove('purchase-fail');
+  void btn?.offsetWidth;
+  btn?.classList.add('purchase-fail');
+  window.setTimeout(() => btn?.classList.remove('purchase-fail'), 450);
+  showPurchaseToast(reason, { success: false });
 }
 
 function renderFormationItems(state) {
@@ -868,9 +949,18 @@ function renderShop(state) {
     for (const classId of unlockable) {
       const cls = CLASSES[classId];
       shopGridEl.appendChild(createClassUnlockRow(cls, {
-        onBuy: (id) => {
+        onBuy: (id, btn) => {
           const result = buyClass(id);
-          if (result.ok) game.notify();
+          if (result.ok) {
+            handlePurchaseSuccess({
+              name: cls.name,
+              price: getUnlockPrice(id),
+              rowEl: btn.closest('.item-row'),
+              kind: 'class',
+            });
+            return;
+          }
+          handlePurchaseFailure(result.reason, btn);
         },
       }));
     }
@@ -884,9 +974,17 @@ function renderShop(state) {
   for (const item of Object.values(ITEMS)) {
     shopGridEl.appendChild(createItemRow(item, {
       price: SHOP_PRICES[item.id],
-      onBuy: (id) => {
+      onBuy: (id, btn) => {
         const result = buyItem(id);
-        if (result.ok) game.notify();
+        if (result.ok) {
+          handlePurchaseSuccess({
+            name: item.name,
+            price: SHOP_PRICES[id],
+            rowEl: btn.closest('.item-row'),
+          });
+          return;
+        }
+        handlePurchaseFailure(result.reason, btn);
       },
     }));
   }
@@ -913,7 +1011,7 @@ function renderBattleItem(state) {
 
   if (targeting) {
     itemBattleBtnEl.disabled = state.animating;
-    itemBattleBtnEl.title = `${state.itemDef.name}（點擊取消）`;
+    itemBattleBtnEl.title = `${state.itemDef.name}（使用中 · Esc 取消）`;
     return;
   }
 
@@ -926,27 +1024,44 @@ function renderBattleItem(state) {
 function renderFormation(state) {
   const limit = state.rosterLimit;
   const picked = state.blueRoster;
+  const autoCastle = modeHasAutoCastle(state.boardMode);
 
-  formationCountEl.textContent = `${picked.length} / ${limit} 人`;
+  const deployablePicked = autoCastle ? picked.filter((id) => id !== 'castle') : picked;
 
-  formationLineupEl.classList.toggle('full', picked.length === limit);
+  formationCountEl.textContent = autoCastle
+    ? `${deployablePicked.length} / ${limit} 人 · 固定城堡`
+    : `${picked.length} / ${limit} 人`;
+
+  formationLineupEl.classList.toggle('full', deployablePicked.length === limit);
   formationLineupEl.innerHTML = '';
 
+  if (autoCastle) {
+    const castleChip = document.createElement('div');
+    castleChip.className = 'roster-chip roster-chip-locked';
+    castleChip.title = `城堡（固定 · HP ${getCastleHpForMode('5x5')}）`;
+    setUnitIcon(castleChip, 'castle');
+    formationLineupEl.appendChild(castleChip);
+  }
+
   if (picked.length > 0) {
-    picked.forEach((classId, index) => {
+    const lineup = deployablePicked;
+    lineup.forEach((classId) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'roster-chip';
       chip.title = `移除 ${CLASSES[classId].name}`;
       setUnitIcon(chip, classId);
-      chip.addEventListener('click', () => game.removeFromFormation(index));
+      chip.addEventListener('click', () => {
+        const rosterIndex = picked.indexOf(classId);
+        if (rosterIndex >= 0) game.removeFromFormation(rosterIndex);
+      });
       formationLineupEl.appendChild(chip);
     });
   }
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
-    if (cls.boardOnly) continue;
+    if (autoCastle && cls.id === 'castle') continue;
     if (!isClassOwnedInState(state, cls.id)) continue;
 
     const selected = picked.includes(cls.id);
@@ -969,12 +1084,6 @@ function renderFormation(state) {
     card.addEventListener('click', () => game.addToFormation(cls.id));
     formationPoolEl.appendChild(card);
   }
-
-  startBattleBtn.disabled = !state.formationReady;
-  formationFooterEl.classList.toggle(
-    'hidden',
-    state.phase !== 'formation' && state.phase !== 'onlineLobby',
-  );
 }
 
 function tutorialAllowsReserve(state, unit) {
@@ -1055,10 +1164,15 @@ function createReserveCard(unit, { side, state }) {
         () => onlineClient.selectReserve(unit.id),
         () => {
           if (game.itemTargeting) {
-            game.tryItemTargetReserve(unit.id);
+            game.selectReserve(unit.id);
             return;
           }
-          if (!deploySelectable) return;
+          if (!game.canHumanAct()) return;
+          const allowed = game.getTutorialSelectableClassIds();
+          if (allowed && !allowed.includes(unit.classId)) {
+            game.rejectTutorialAction();
+            return;
+          }
           game.selectReserve(unit.id);
         },
       );
@@ -1430,7 +1544,6 @@ if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => {
   game.openFormation();
   switchNav('formation');
 });
-startBattleBtn.addEventListener('click', () => game.startBattle());
 restartBtn.addEventListener('click', () => {
   if (isOnlinePlaying() || onlineClient.roomState) return;
   game.restartSeries();
@@ -1441,8 +1554,12 @@ surrenderBtn.addEventListener('click', () => {
   else game.surrender();
 });
 itemBattleBtnEl.addEventListener('click', () => {
-  if (game.itemTargeting) game.cancelItemTargeting();
-  else game.beginUseItem();
+  game.beginUseItem();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || event.repeat) return;
+  if (isOnlinePlaying() || !game.itemTargeting) return;
+  game.cancelItemTargeting();
 });
 startTutorialBtn.addEventListener('click', () => game.startTutorial());
 tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
@@ -1462,7 +1579,7 @@ game.subscribe(() => {
 initCloudSave()
   .then(() => {
     game.rostersByMode = getSavedRostersByMode();
-    game.blueRoster = [...(game.rostersByMode[game.boardMode] ?? [])];
+    game.blueRoster = game.sanitizeRosterForMode([...(game.rostersByMode[game.boardMode] ?? [])]);
     return onlineClient.tryReconnectOnLoad();
   })
   .then(() => {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildMapPropModel } from './MapPropModels.js';
-import { buildItemBombModel } from './UnitModels.js';
+import { buildItemBombModel, buildItemLandmineModel } from './UnitModels.js';
 
 const THUMB_SIZE = 256;
 const PREVIEW_ROTATION_Y = 0.35;
@@ -84,6 +84,9 @@ function buildItemModel(itemId) {
   if (itemId === 'bomb') {
     return buildItemBombModel();
   }
+  if (itemId === 'landmine') {
+    return buildItemLandmineModel();
+  }
   return null;
 }
 
@@ -126,7 +129,7 @@ export function fillItemIcon(container, itemId, thumbnails, fallbackIcon = '?', 
   const src = thumbnails.get(itemId);
   if (src) {
     const img = document.createElement('img');
-    img.className = 'unit-thumb';
+    img.className = 'unit-thumb item-thumb';
     img.src = src;
     img.alt = alt;
     img.draggable = false;

@@ -3,6 +3,7 @@ import { TILE_SIZE } from './TileGrid.js';
 
 const HIGHLIGHT = {
   move: { color: 0x22c55e, opacity: 0.42, emissive: 0x166534 },
+  recycle: { color: 0xfacc15, opacity: 0.5, emissive: 0xca8a04 },
   attack: { color: 0xef4444, opacity: 0.48, emissive: 0x991b1b },
   deploy: { color: 0x3b82f6, opacity: 0.42, emissive: 0x1d4ed8 },
   win: { color: 0xfbbf24, opacity: 0.55, emissive: 0xb45309 },
@@ -27,6 +28,7 @@ export class HighlightSystem {
     const desired = new Map();
 
     const moves = new Set(state.validMoves.map(([r, c]) => cellKey(r, c)));
+    const recycle = new Set((state.validRecycleMoves || []).map(([r, c]) => cellKey(r, c)));
     const targets = new Set(state.validTargets.map(([r, c]) => cellKey(r, c)));
     const deploy = new Set(state.validDeploy.map(([r, c]) => cellKey(r, c)));
     const items = new Set((state.validItemTargets || []).map(([r, c]) => cellKey(r, c)));
@@ -40,6 +42,7 @@ export class HighlightSystem {
         else if (items.has(key)) type = 'item';
         else if (deploy.has(key)) type = 'deploy';
         else if (targets.has(key)) type = 'attack';
+        else if (recycle.has(key)) type = 'recycle';
         else if (moves.has(key)) type = 'move';
         if (type) desired.set(key, type);
       }

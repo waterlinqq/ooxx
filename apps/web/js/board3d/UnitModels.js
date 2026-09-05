@@ -565,6 +565,133 @@ export function buildItemBombModel() {
   return root;
 }
 
+function buildLandmineCore(mats) {
+  const mine = new THREE.Group();
+
+  part(mine, cached('mine-base', () => new THREE.CylinderGeometry(0.14, 0.15, 0.035, 20)), mats.steel, {
+    pos: [0, 0.018, 0],
+    shadow: true,
+  });
+  part(mine, cached('mine-rim', () => new THREE.TorusGeometry(0.145, 0.012, 6, 24)), mats.charcoal, {
+    pos: [0, 0.035, 0],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(mine, cached('mine-dome', () => new THREE.SphereGeometry(0.058, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55)), mats.armor, {
+    pos: [0, 0.048, 0],
+    shadow: true,
+  });
+
+  const stripeGeo = cached('mine-stripe', () => new THREE.BoxGeometry(0.11, 0.008, 0.018));
+  for (const rot of [0, Math.PI / 2]) {
+    part(mine, stripeGeo, mats.gold, {
+      pos: [0, 0.036, 0],
+      rot: [0, rot, 0],
+    });
+  }
+
+  const led = part(mine, cached('mine-led', () => new THREE.SphereGeometry(0.018, 10, 8)), mats.ember, {
+    pos: [0, 0.072, 0],
+    shadow: false,
+  });
+  led.material.emissive = mats.ember.color;
+  led.material.emissiveIntensity = 1.2;
+
+  const prongGeo = cached('mine-prong', () => new THREE.CylinderGeometry(0.006, 0.008, 0.028, 6));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    part(mine, prongGeo, mats.steel, {
+      pos: [Math.cos(a) * 0.1, 0.052, Math.sin(a) * 0.1],
+      rot: [0.35 * Math.cos(a), 0, -0.35 * Math.sin(a)],
+    });
+  }
+
+  return { group: mine, led };
+}
+
+export function buildItemLandmineModel() {
+  const mats = createMaterialSet('red');
+  const { group } = buildLandmineCore(mats);
+  const root = new THREE.Group();
+  root.add(group);
+  group.position.set(0, 0.04, 0);
+  group.rotation.set(0, 0.35, 0);
+  return root;
+}
+
+/**
+ * Board marker for a placed landmine. Mostly buried so only the player spots it;
+ * `activate` plays the spring-and-burst when a unit steps on it.
+ */
+export function buildLandmineBoardMarker() {
+  const mine = new THREE.Group();
+
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2a3344, roughness: 0.82, metalness: 0.35 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x6b7a8f, roughness: 0.38, metalness: 0.78 });
+  const warning = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0.35,
+    roughness: 0.5,
+    metalness: 0.2,
+  });
+  const ledMat = new THREE.MeshStandardMaterial({
+    color: 0xff4444,
+    emissive: 0xff2222,
+    emissiveIntensity: 0.9,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+
+  const pit = new THREE.Group();
+  pit.position.y = -0.02;
+  mine.add(pit);
+
+  part(pit, cached('lm-plate', () => new THREE.CylinderGeometry(0.2, 0.21, 0.028, 18)), iron, {
+    pos: [0, 0.014, 0],
+    shadow: true,
+  });
+  part(pit, cached('lm-cap', () => new THREE.SphereGeometry(0.042, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.52)), steel, {
+    pos: [0, 0.028, 0],
+  });
+  const led = part(pit, cached('lm-led', () => new THREE.SphereGeometry(0.012, 8, 6)), ledMat, {
+    pos: [0, 0.046, 0],
+    shadow: false,
+  });
+  part(pit, cached('lm-ring', () => new THREE.TorusGeometry(0.055, 0.006, 6, 16)), warning, {
+    pos: [0, 0.03, 0],
+    rot: [Math.PI / 2, 0, 0],
+  });
+
+  const burst = new THREE.Group();
+  burst.visible = false;
+  mine.add(burst);
+  const burstCore = part(burst, cached('lm-burst', () => new THREE.SphereGeometry(0.08, 10, 8)), ledMat, {
+    shadow: false,
+  });
+  burstCore.material.transparent = true;
+  burstCore.material.opacity = 0;
+
+  const activate = (p) => {
+    const thrust = p < 0.18 ? p / 0.18 : p < 0.42 ? 1 - (p - 0.18) / 0.24 : 0;
+    const burstP = p < 0.2 ? 0 : Math.min(1, (p - 0.2) / 0.35);
+    const fade = p > 0.55 ? Math.min(1, (p - 0.55) / 0.35) : 0;
+
+    pit.position.y = -0.02 + thrust * 0.06;
+    pit.scale.setScalar(1 + thrust * 0.08);
+    ledMat.emissiveIntensity = 0.6 + thrust * 2.2;
+
+    burst.visible = burstP > 0;
+    burst.scale.setScalar(0.4 + burstP * 2.4);
+    burstCore.material.opacity = (1 - fade) * (1 - burstP * 0.35);
+    burst.position.y = 0.04 + burstP * 0.12;
+
+    pit.visible = fade < 0.85;
+    if (fade >= 0.85) pit.scale.setScalar(Math.max(0.01, 1 - fade));
+  };
+
+  return { root: mine, led, activate, activateMs: 720 };
+}
+
 function buildSwordsman(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);

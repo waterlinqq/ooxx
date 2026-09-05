@@ -145,13 +145,13 @@ export const CLASSES = {
     id: 'castle',
     name: '城堡',
     icon: '🏯',
-    hp: 15,
+    hp: 10,
     atk: 0,
     range: 0,
     moveRange: 0,
     type: 'castle',
-    boardOnly: true,
-    desc: '不可移動、不攻擊；血量歸零時對手獲勝，可計入連線',
+    recycleAdjacent: true,
+    desc: '堡壘；友方踏入時該單位回到牌列（保留 HP）；攻城戰主堡 15 HP；被摧毀時對手獲勝',
   },
 };
 
@@ -216,7 +216,8 @@ export const BOARD_MODES = {
     // All deployable classes, one each; castles are placed on the board at start.
     rosterSize: 13,
     maxPerClass: 1,
-    roster: Object.keys(CLASSES).filter((id) => !CLASSES[id]?.boardOnly),
+    roster: Object.keys(CLASSES).filter((id) => id !== 'castle'),
+    castleHp: 15,
     mapProps: false,
     castles: {
       red: { row: 0, col: 0 },   // (1,1) 敵方左上
@@ -231,8 +232,28 @@ export const BOARD_MODES = {
 
 export const CLASS_IDS = Object.keys(CLASSES);
 
-export function getRosterClassIds() {
-  return CLASS_IDS.filter((id) => !CLASSES[id]?.boardOnly);
+export function getRosterClassIds(modeId = null) {
+  if (modeId && modeHasAutoCastle(modeId)) {
+    return CLASS_IDS.filter((id) => id !== 'castle');
+  }
+  return CLASS_IDS;
+}
+
+export function modeHasAutoCastle(modeId) {
+  return Boolean(getBoardMode(modeId).castles);
+}
+
+export function getCastleHpForMode(modeId) {
+  const mode = getBoardMode(modeId);
+  return mode.castleHp ?? CLASSES.castle.hp;
+}
+
+export function getDeployableRoster(roster, modeId) {
+  if (!Array.isArray(roster)) return [];
+  if (modeHasAutoCastle(modeId)) {
+    return roster.filter((id) => id !== 'castle');
+  }
+  return [...roster];
 }
 
 export function isCastleUnit(unit) {
@@ -253,9 +274,12 @@ export function placeModeCastles(board, modeId) {
   const mode = getBoardMode(modeId);
   if (!mode.castles) return board;
   const next = cloneBoard(board);
+  const castleHp = getCastleHpForMode(modeId);
   for (const [team, pos] of Object.entries(mode.castles)) {
     const unit = createUnit('castle', team);
     unit.id = `${team}-castle`;
+    unit.hp = castleHp;
+    unit.maxHp = castleHp;
     unit.row = pos.row;
     unit.col = pos.col;
     next[pos.row][pos.col] = unit;
@@ -290,7 +314,8 @@ export function countRosterClasses(roster) {
 }
 
 export function canAddToRoster(roster, classId, modeId) {
-  if (!CLASSES[classId] || CLASSES[classId].boardOnly) return false;
+  if (!CLASSES[classId]) return false;
+  if (modeHasAutoCastle(modeId) && classId === 'castle') return false;
   if (roster.length >= getRosterLimit(modeId)) return false;
   const used = roster.filter((id) => id === classId).length;
   return used < getMaxPerClass(modeId);
@@ -298,10 +323,11 @@ export function canAddToRoster(roster, classId, modeId) {
 
 export function isValidRoster(roster, modeId) {
   if (!Array.isArray(roster)) return false;
-  if (roster.length !== getRosterLimit(modeId)) return false;
-  const counts = countRosterClasses(roster);
-  for (const classId of roster) {
-    if (!CLASSES[classId] || CLASSES[classId].boardOnly) return false;
+  const deployable = getDeployableRoster(roster, modeId);
+  if (deployable.length !== getRosterLimit(modeId)) return false;
+  const counts = countRosterClasses(deployable);
+  for (const classId of deployable) {
+    if (!CLASSES[classId]) return false;
   }
   for (const count of Object.values(counts)) {
     if (count > getMaxPerClass(modeId)) return false;
@@ -311,7 +337,9 @@ export function isValidRoster(roster, modeId) {
 
 /** Use the player's lineup when valid; otherwise fall back to the mode preset. */
 export function resolveRoster(roster, modeId) {
-  if (isValidRoster(roster, modeId)) return sortRosterByClass([...roster]);
+  if (isValidRoster(roster, modeId)) {
+    return sortRosterByClass(getDeployableRoster(roster, modeId));
+  }
   return sortRosterByClass([...getBoardMode(modeId).roster]);
 }
 
@@ -322,7 +350,7 @@ export function createRandomRoster(modeId, rng = Math.random) {
   const roster = [];
 
   while (roster.length < limit) {
-    const pool = getRosterClassIds().filter((id) => (counts[id] ?? 0) < maxPerClass);
+    const pool = getRosterClassIds(modeId).filter((id) => (counts[id] ?? 0) < maxPerClass);
     if (pool.length === 0) break;
     const classId = pool[Math.floor(rng() * pool.length)];
     counts[classId] = (counts[classId] ?? 0) + 1;
@@ -362,8 +390,9 @@ export function createUnit(classId, teamId) {
   };
 }
 
-export function createTeamReserve(roster, teamId) {
-  return roster.map((classId) => createUnit(classId, teamId));
+export function createTeamReserve(roster, teamId, modeId = null) {
+  const deployable = modeId ? getDeployableRoster(roster, modeId) : roster;
+  return deployable.map((classId) => createUnit(classId, teamId));
 }
 
 export function createEmptyBoard(size = 3) {

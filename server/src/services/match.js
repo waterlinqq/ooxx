@@ -91,8 +91,8 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
     shadowClones: [],
     blueRoster: [...blueRoster],
     redRoster: [...redRoster],
-    blueReserve: createTeamReserve(blueRoster, 'blue'),
-    redReserve: createTeamReserve(redRoster, 'red'),
+    blueReserve: createTeamReserve(blueRoster, 'blue', boardMode),
+    redReserve: createTeamReserve(redRoster, 'red', boardMode),
     actedUnitIds: [],
     actionsRemaining: mode.actionsPerTurn,
     message: `${TEAM.blue.name}先攻：每回合 ${mode.actionsPerTurn} 次行動`,
@@ -144,6 +144,12 @@ function applyTerrainAfterLanding(state, unitId, row, col) {
   state.board = result.board;
   state.mapProps = result.mapProps;
   return { events: result.events ?? [], trigger: result.trigger ?? null };
+}
+
+function completeRecycleMove(state, movedUnit) {
+  const recycled = { ...movedUnit, row: -1, col: -1 };
+  const reserveKey = movedUnit.team === 'blue' ? 'blueReserve' : 'redReserve';
+  state[reserveKey] = [...state[reserveKey], recycled];
 }
 
 function packActionFx(terrainTrigger, blessingFx) {
@@ -340,8 +346,13 @@ export function applyGameAction(state, action, team) {
     const result = applyMove(state.board, unit, action.row, action.col, state.shadowClones ?? []);
     state.board = result.board;
     state.shadowClones = result.shadowClones ?? state.shadowClones;
+    if (result.recycleMove) {
+      completeRecycleMove(state, result.unit);
+      const endResult = endAction(state, '移動 · 回收', unit.id);
+      return { ...endResult, actionFx: packActionFx(null, endResult.actionFx?.blessing) };
+    }
     const terrain = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
-    const detail = terrain.events.length > 0 ? `移動 · ${terrain.events.join('、')}` : '移動';
+    let detail = terrain.events.length > 0 ? `移動 · ${terrain.events.join('、')}` : '移動';
     if (checkWinAfterEffect(state, detail)) {
       return { ok: true, ended: true, actionFx: packActionFx(terrain.trigger, null) };
     }

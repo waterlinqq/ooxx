@@ -21,6 +21,7 @@ import {
   cloneShadowClones,
   placeShadowClone,
   expireShadowClonesForTurnStart,
+  isFriendlyCastleCell,
 } from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
@@ -599,8 +600,15 @@ export function makeAction(ctx, action) {
       ctx.shadowClones = placeShadowClone(ctx.shadowClones ?? [], undo.fromRow, undo.fromCol, actor.team);
       undo.shadowCloneUndo = { row: undo.fromRow, col: undo.fromCol, prev };
     }
-    place(ctx, actor, action.row, action.col);
-    applyTerrainOnEnter(ctx, actor, undo);
+    const dest = ctx.board[action.row]?.[action.col];
+    if (dest && isCastleUnit(dest) && dest.team === actor.team) {
+      const list = ctx.reserves[actor.team];
+      insertIntoReserve(ctx, actor, list.length);
+      undo.recycled = true;
+    } else {
+      place(ctx, actor, action.row, action.col);
+      applyTerrainOnEnter(ctx, actor, undo);
+    }
   } else if (action.type === 'attack') {
     const target = ctx.unitsById.get(action.targetId);
     let hits;
@@ -811,8 +819,20 @@ export function unmakeAction(ctx, undo) {
   if (action.type === 'move') {
     restoreActionDamage(ctx, undo);
     restoreTerrain(ctx, undo);
-    lift(ctx, actor);
-    place(ctx, actor, undo.fromRow, undo.fromCol);
+    if (undo.recycled) {
+      const list = ctx.reserves[actor.team];
+      const idx = list.indexOf(actor);
+      if (idx >= 0) {
+        const before = countReserveClass(ctx, actor.team, actor.classId);
+        list.splice(idx, 1);
+        xorHash(ctx, reserveCountKey(ctx, actor.team, actor.classId, before));
+        xorHash(ctx, reserveCountKey(ctx, actor.team, actor.classId, before - 1));
+      }
+      place(ctx, actor, undo.fromRow, undo.fromCol);
+    } else {
+      lift(ctx, actor);
+      place(ctx, actor, undo.fromRow, undo.fromCol);
+    }
     if (undo.shadowCloneUndo) {
       const { row, col, prev } = undo.shadowCloneUndo;
       ctx.shadowClones = (ctx.shadowClones ?? []).filter((clone) => !(clone.row === row && clone.col === col));

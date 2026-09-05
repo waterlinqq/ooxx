@@ -5,6 +5,7 @@ import { TileGrid, TILE_PITCH, tileWorldPosition } from './TileGrid.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
+import { LandmineMarkerManager } from './LandmineMarkerManager.js';
 import { MapPropManager } from './MapPropManager.js';
 import { ShadowCloneManager } from './ShadowCloneManager.js';
 import { InputController } from './InputController.js';
@@ -109,6 +110,7 @@ export class BoardScene {
     this.unitManager = new UnitMeshManager(this.scene);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
+    this.landmineMarkers = new LandmineMarkerManager(this.tileGrid);
     this.mapPropManager = new MapPropManager(this.tileGrid);
     this.shadowCloneManager = new ShadowCloneManager(this.tileGrid);
     this.tutorialPointer = new TutorialPointer(this.scene);
@@ -251,6 +253,7 @@ export class BoardScene {
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
     this.bombMarkers.sync(state.pendingBombs ?? []);
+    this.landmineMarkers.sync(state.pendingLandmines ?? [], state.showLandmines ?? true);
     this.mapPropManager.sync(state.mapProps ?? null);
     this.shadowCloneManager.sync(state.shadowClones ?? []);
     this.unitManager.syncBoard(state.board, state);
@@ -274,6 +277,17 @@ export class BoardScene {
   // Fired when a unit enters a cell holding a prop. The state has already been
   // resolved, so this is purely presentation and is deliberately not awaited by
   // the game loop.
+  playLandmineFx(fx) {
+    const arrived = this.unitManager.waitForArrival(fx.unitId, fx.row, fx.col);
+    this.landmineMarkers.trigger({ row: fx.row, col: fx.col }, arrived);
+
+    arrived.then(() => {
+      if (fx.damage > 0) {
+        this.attackFx.showTerrainDamage(fx.row, fx.col, fx.damage, fx.killed);
+      }
+    });
+  }
+
   playMapPropFx(fx) {
     const arrived = this.unitManager.waitForArrival(fx.unitId, fx.row, fx.col);
     this.mapPropManager.trigger(fx, arrived);
@@ -304,6 +318,7 @@ export class BoardScene {
     this.unitManager.syncBoard([], { actedUnitIds: [], draggingUnitId: null });
     this.highlightSystem.clear();
     this.bombMarkers.clear();
+    this.landmineMarkers.clear();
     this.mapPropManager.clear();
     this.shadowCloneManager.clear();
     this.tutorialPointer.hide();
@@ -316,6 +331,7 @@ export class BoardScene {
     if (this.visible) {
       this.unitManager.tick(delta, elapsed);
       this.mapPropManager.tick();
+      this.landmineMarkers.tick(elapsed);
       this.devStats?.begin();
       this.renderer.render(this.scene, this.camera);
       this.devStats?.end();

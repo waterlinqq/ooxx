@@ -5,6 +5,7 @@ import {
   getValidMoves,
   getValidAttackTargets,
   getValidDeployCells,
+  isFriendlyCastleCell,
 } from './rules.js';
 import { buildAttackFx } from './actionFx.js';
 import {
@@ -369,6 +370,15 @@ export class OnlineClient {
     return getValidMoves(this.gameState.board, unit, this.gameState.mapProps, this.gameState.shadowClones);
   }
 
+  getHighlightRecycleMoves() {
+    if (!this.draggingUnitId || !this.gameState) return [];
+    if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
+    const unit = this.gameState.board.flat().find((u) => u?.id === this.draggingUnitId);
+    if (!unit) return [];
+    return this.getHighlightMoves()
+      .filter(([row, col]) => isFriendlyCastleCell(this.gameState.board, row, col, unit.team));
+  }
+
   getHighlightTargets() {
     if (!this.draggingUnitId || !this.gameState) return [];
     if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
@@ -417,6 +427,7 @@ export class OnlineClient {
       blueRoster: gs.blueRoster,
       redRoster: gs.redRoster,
       validMoves: this.getHighlightMoves(),
+      validRecycleMoves: this.getHighlightRecycleMoves(),
       validTargets: this.getHighlightTargets(),
       validDeploy: this.getHighlightDeploy(),
       draggingUnitId: this.draggingUnitId,
@@ -622,6 +633,7 @@ export class OnlineClient {
 
     const targets = this.getHighlightTargets();
     const moves = this.getHighlightMoves();
+    const recycleMoves = this.getHighlightRecycleMoves();
 
     if (targets.some(([r, c]) => r === row && c === col)) {
       this.submitAction({
@@ -631,7 +643,7 @@ export class OnlineClient {
         col,
       });
       this.draggingUnitId = null;
-    } else if (moves.some(([r, c]) => r === row && c === col)) {
+    } else if (recycleMoves.some(([r, c]) => r === row && c === col) || moves.some(([r, c]) => r === row && c === col)) {
       this.submitAction({
         type: 'move',
         unitId: this.draggingUnitId,
