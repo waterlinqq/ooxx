@@ -2079,26 +2079,6 @@ function buildCrabGeneral(mats) {
     });
   }
 
-  const banner = new THREE.Group();
-  banner.position.set(0.02, 0.055, -0.13);
-  banner.rotation.set(-0.34, 0, 0.12);
-  body.add(banner);
-  part(banner, cached('crab-banner-pole', () => new THREE.CylinderGeometry(0.008, 0.01, 0.17, 8)), mats.gold, {
-    pos: [0, 0.085, 0],
-  });
-  part(banner, cached('crab-banner-cloth', () => new THREE.BoxGeometry(0.115, 0.095, 0.011)), mats.cloth, {
-    pos: [0.056, 0.115, 0],
-    rot: [0, 0, -0.08],
-  });
-  part(banner, cached('crab-banner-crest', () => new THREE.OctahedronGeometry(0.021, 0)), mats.trim, {
-    pos: [0.056, 0.115, 0.011],
-    shadow: false,
-  });
-  part(banner, cached('crab-banner-tip', () => new THREE.ConeGeometry(0.015, 0.042, 6)), mats.trim, {
-    pos: [0, 0.19, 0],
-    shadow: false,
-  });
-
   // Face sits in the notch under the front lip, where the shell overhangs it.
   const head = new THREE.Group();
   head.position.set(0, -0.012, 0.132);
@@ -2150,7 +2130,6 @@ function buildCrabGeneral(mats) {
     armR: clawR,
     eyes,
     crest,
-    banner,
     eyeStalkL: eyeStalks.left.stalk,
     eyeStalkR: eyeStalks.right.stalk,
     extraMaterials,
