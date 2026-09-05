@@ -10,7 +10,6 @@ import {
   createTeamReserve,
   resolveRoster,
   placeModeCastles,
-  getCastleCells,
 } from '../../../shared/units.js';
 import {
   getValidMoves,
@@ -80,8 +79,7 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
   const mode = getBoardMode(boardMode);
   const blueRoster = resolveRoster(rosters.blueRoster, boardMode);
   const redRoster = resolveRoster(rosters.redRoster, boardMode);
-  const { generateMapProps } = mapPropsModule;
-  const castleCells = getCastleCells(boardMode).map(({ row, col }) => [row, col]);
+  const { generateMapPropsForMode } = mapPropsModule;
   const board = placeModeCastles(createEmptyBoard(mode.size), boardMode);
 
   return {
@@ -89,7 +87,7 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
     phase: 'battle',
     currentPlayer: 'blue',
     board,
-    mapProps: generateMapProps(mode.size, rng, castleCells),
+    mapProps: generateMapPropsForMode(boardMode, rng),
     shadowClones: [],
     blueRoster: [...blueRoster],
     redRoster: [...redRoster],

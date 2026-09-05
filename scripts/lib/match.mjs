@@ -4,7 +4,6 @@ import {
   createUnit,
   createEmptyBoard,
   placeModeCastles,
-  getCastleCells,
   getBoardMode,
 } from '../../apps/web/js/units.js';
 import {
@@ -20,7 +19,7 @@ import {
   getValidAttackTargets,
   expireShadowClonesForTurnStart,
 } from '../../apps/web/js/rules.js';
-import { generateMapProps, resolveMapPropOnEnter } from '../../apps/web/js/mapProps.js';
+import { generateMapPropsForMode, resolveMapPropOnEnter } from '../../apps/web/js/mapProps.js';
 import { isObstacleCell } from '../../apps/web/js/mapPropUtils.js';
 
 export const MAX_TURNS = 800;
@@ -221,11 +220,10 @@ export function runMatch({
   const propRng = mapPropRng ?? createRng(unitCounterStart + size * 7919);
   const modeConfig = getBoardMode(mode.id ?? mode);
   const boardModeId = modeConfig.id ?? mode.id ?? mode;
-  const castleCells = getCastleCells(boardModeId).map(({ row, col }) => [row, col]);
 
   const state = {
     board: placeModeCastles(createEmptyBoard(size), boardModeId),
-    mapProps: generateMapProps(size, propRng, castleCells),
+    mapProps: generateMapPropsForMode(boardModeId, propRng),
     shadowClones: [],
     blueReserve: createSimReserve(blueRoster, 'blue', unitCounter),
     redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length),

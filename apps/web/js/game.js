@@ -11,7 +11,6 @@ import {
   createEmptyBoard,
   createTeamReserve,
   placeModeCastles,
-  getCastleCells,
   isCastleUnit,
 } from './units.js';
 import {
@@ -57,7 +56,7 @@ import {
 } from './tutorial.js';
 import {
   createEmptyMapProps,
-  generateMapProps,
+  generateMapPropsForMode,
   resolveMapPropOnEnter,
   isObstacleCell,
 } from './mapProps.js';
@@ -775,8 +774,7 @@ export class Game {
   startRound() {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
-    const castleCells = getCastleCells(this.boardMode).map(({ row, col }) => [row, col]);
-    this.mapProps = generateMapProps(mode.size, Math.random, castleCells);
+    this.mapProps = generateMapPropsForMode(this.boardMode);
     this.board = placeModeCastles(this.board, this.boardMode);
     this.shadowClones = [];
     this.blueReserve = createTeamReserve(this.blueRoster, 'blue');

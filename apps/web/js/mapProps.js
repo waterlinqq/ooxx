@@ -1,4 +1,5 @@
 import { healUnitAt, applyTrapDamage, resolveDeathExplosions } from './rules.js';
+import { getBoardMode, getCastleCells } from './units.js';
 import {
   createEmptyMapProps,
   cloneMapProps,
@@ -72,6 +73,25 @@ export function generateMapProps(size, rng = Math.random, excludedCells = []) {
   }
 
   return props;
+}
+
+/** Respects per-mode mapProps flag (e.g. siege mode disables random terrain). */
+export function generateMapPropsForMode(modeId, rng = Math.random) {
+  const mode = getBoardMode(modeId);
+  const props = createEmptyMapProps(mode.size);
+
+  if (mode.fixedMapProps?.length) {
+    for (const { row, col, kind } of mode.fixedMapProps) {
+      props[row][col] = { kind };
+    }
+    return props;
+  }
+
+  if (mode.mapProps === false) {
+    return props;
+  }
+  const excluded = getCastleCells(modeId).map(({ row, col }) => [row, col]);
+  return generateMapProps(mode.size, rng, excluded);
 }
 
 /**

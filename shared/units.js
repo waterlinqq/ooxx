@@ -217,10 +217,15 @@ export const BOARD_MODES = {
     rosterSize: 13,
     maxPerClass: 1,
     roster: Object.keys(CLASSES).filter((id) => !CLASSES[id]?.boardOnly),
+    mapProps: false,
     castles: {
-      red: { row: 0, col: 2 },
-      blue: { row: 4, col: 2 },
+      red: { row: 0, col: 0 },   // (1,1) 敵方左上
+      blue: { row: 4, col: 4 },  // (5,5) 己方右下
     },
+    fixedMapProps: [
+      { row: 1, col: 3, kind: 'flag' }, // (2,4)
+      { row: 3, col: 1, kind: 'flag' }, // (4,2)
+    ],
   },
 };
 
