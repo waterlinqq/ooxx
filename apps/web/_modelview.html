@@ -4,13 +4,16 @@
   <meta charset="utf-8" />
   <style>
     body { margin: 0; background: #0b1220; color: #e2e8f0; font: 12px system-ui; }
-    .grid { display: grid; grid-template-columns: repeat(4, 190px); gap: 4px; padding: 4px; }
-    .cell { position: relative; width: 190px; height: 190px; }
-    .cell span { position: absolute; left: 6px; top: 4px; z-index: 2; }
+    #wrap { position: relative; }
+    #labels { position: absolute; inset: 0; pointer-events: none; }
+    #labels div { position: absolute; }
   </style>
 </head>
 <body>
-  <div class="grid" id="grid"></div>
+  <div id="wrap">
+    <canvas id="c"></canvas>
+    <div id="labels"></div>
+  </div>
   <script type="module">
     import * as THREE from 'three';
     import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -18,51 +21,64 @@
 
     const params = new URLSearchParams(location.search);
     const classes = (params.get('c') ?? 'crabGeneral').split(',');
-    const grid = document.getElementById('grid');
+    const teams = (params.get('t') ?? 'blue,red').split(',');
+    const CELL = Number(params.get('s') ?? 240);
+    const COLS = Number(params.get('cols') ?? 4);
 
-    const views = [
-      { label: 'front', pos: [0, 1.1, 2.6] },
-      { label: 'iso', pos: [2.0, 1.8, 2.0] },
-      { label: 'top', pos: [0, 3.0, 0.4] },
-      { label: 'side', pos: [2.6, 0.9, 0] },
+    const allViews = [
+      { label: 'front', pos: [0, 0.75, 2.5] },
+      { label: 'iso', pos: [1.9, 1.5, 1.9] },
+      { label: 'top-down', pos: [0.1, 2.6, 1.1] },
+      { label: 'side', pos: [2.5, 0.75, 0.05] },
     ];
+    const wanted = params.get('v');
+    const views = wanted
+      ? wanted.split(',').map((name) => allViews.find((v) => v.label === name)).filter(Boolean)
+      : allViews;
 
+    const tiles = [];
     for (const classId of classes) {
-      for (const team of ['blue', 'red']) {
+      for (const team of teams) {
         for (const view of views) {
-          const cell = document.createElement('div');
-          cell.className = 'cell';
-          const tag = document.createElement('span');
-          tag.textContent = `${classId} ${team} ${view.label}`;
-          cell.appendChild(tag);
-          grid.appendChild(cell);
-          render(cell, classId, team, view);
+          tiles.push({ classId, team, view });
         }
       }
     }
 
-    function render(container, classId, team, view) {
+    const rows = Math.ceil(tiles.length / COLS);
+    const canvas = document.getElementById('c');
+    const width = COLS * CELL;
+    const height = rows * CELL;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(2);
+    renderer.setSize(width, height, false);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    renderer.setScissorTest(true);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    function makeScene(classId, team) {
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x0b1220);
-      const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
-      camera.position.set(...view.pos);
-      camera.lookAt(0, 0.4, 0);
-
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setPixelRatio(2);
-      renderer.setSize(190, 190);
-      renderer.shadowMap.enabled = true;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.3;
-      container.appendChild(renderer.domElement);
-
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = envMap;
       scene.environmentIntensity = 0.55;
       scene.add(new THREE.AmbientLight(0xffffff, 0.42));
       scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
       const key = new THREE.DirectionalLight(0xfff6e6, 1.9);
       key.position.set(4, 8, 4);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.camera.left = -2;
+      key.shadow.camera.right = 2;
+      key.shadow.camera.top = 2;
+      key.shadow.camera.bottom = -2;
       scene.add(key);
       const fill = new THREE.DirectionalLight(0x93c5fd, 0.45);
       fill.position.set(-3, 5, -4);
@@ -76,13 +92,43 @@
         new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
       );
       floor.position.y = -0.03;
+      floor.receiveShadow = true;
       scene.add(floor);
 
       const model = buildUnitModel(classId, team);
       model.root.position.set(0, 0.072, 0);
       scene.add(model.root);
-      renderer.render(scene, camera);
+      return { scene, height: model.height };
     }
+
+    const sceneCache = new Map();
+    const labels = document.getElementById('labels');
+
+    tiles.forEach((tile, i) => {
+      const key = `${tile.classId}:${tile.team}`;
+      if (!sceneCache.has(key)) sceneCache.set(key, makeScene(tile.classId, tile.team));
+      const { scene, height: h } = sceneCache.get(key);
+
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+
+      const label = document.createElement('div');
+      label.textContent = `${tile.classId} ${tile.team} ${tile.view.label}  h=${h.toFixed(2)}`;
+      label.style.left = `${col * CELL + 6}px`;
+      label.style.top = `${row * CELL + 4}px`;
+      labels.appendChild(label);
+
+      const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+      camera.position.set(...tile.view.pos);
+      camera.lookAt(0, 0.32, 0);
+
+      // three.js scales viewport/scissor by the pixel ratio itself, so these stay in CSS px.
+      const x = col * CELL;
+      const y = (rows - 1 - row) * CELL;
+      renderer.setViewport(x, y, CELL, CELL);
+      renderer.setScissor(x, y, CELL, CELL);
+      renderer.render(scene, camera);
+    });
   </script>
 </body>
 </html>

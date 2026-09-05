@@ -77,6 +77,7 @@ const battleStatusPillEl = document.getElementById('battleStatusPill');
 const battleStatusTextEl = document.getElementById('battleStatusText');
 const coinBalanceEl = document.getElementById('coinBalance');
 const formationItemsEl = document.getElementById('formationItems');
+const formationItemHintEl = document.getElementById('formationItemHint');
 const bagGridEl = document.getElementById('bagGrid');
 const shopGridEl = document.getElementById('shopGrid');
 const itemBattleBarEl = document.getElementById('itemBattleBar');
@@ -759,6 +760,19 @@ function renderCoinBalance(state) {
 
 function renderFormationItems(state) {
   formationItemsEl.innerHTML = '';
+
+  const totalItems = ITEM_IDS.reduce((sum, id) => sum + (state.inventory[id] ?? 0), 0);
+  if (formationItemHintEl) {
+    if (totalItems <= 0) {
+      formationItemHintEl.textContent = '背包沒有道具，請先到商店購買';
+      formationItemHintEl.classList.remove('hidden');
+    } else if (!state.equippedItem) {
+      formationItemHintEl.textContent = '選一個道具帶入對戰，開戰後可按「使用道具」';
+      formationItemHintEl.classList.remove('hidden');
+    } else {
+      formationItemHintEl.classList.add('hidden');
+    }
+  }
 
   const noneItem = { id: null, name: '無', icon: '➖' };
   formationItemsEl.appendChild(createItemChip(noneItem, {

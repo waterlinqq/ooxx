@@ -3,11 +3,10 @@ import * as THREE from 'three';
 const DRAG_THRESHOLD = 8;
 
 export class InputController {
-  constructor({ domElement, camera, tileGrid, unitManager, callbacks }) {
+  constructor({ domElement, camera, tileGrid, callbacks }) {
     this.domElement = domElement;
     this.camera = camera;
     this.tileGrid = tileGrid;
-    this.unitManager = unitManager;
     this.callbacks = callbacks;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -37,97 +36,23 @@ export class InputController {
     return true;
   }
 
-  findInteractiveRoot(object) {
-    let obj = object;
-    while (obj) {
-      const kind = obj.userData?.kind;
-      if (kind === 'tile' || kind === 'unit') {
-        return obj;
-      }
-      obj = obj.parent;
-    }
-    return null;
-  }
-
-  raycastTargets() {
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const targets = [];
-
-    this.unitManager.group.traverse((obj) => {
-      if (!obj.isMesh) return;
-      let node = obj;
-      while (node) {
-        if (node.userData?.kind === 'unit') {
-          targets.push(obj);
-          break;
-        }
-        node = node.parent;
-      }
-    });
-
-    this.tileGrid.group.traverse((obj) => {
-      if (obj.isMesh && obj.userData?.kind === 'tile') {
-        targets.push(obj);
-      }
-    });
-
-    return this.raycaster.intersectObjects(targets, false);
-  }
-
-  isClickOverUnitLabel(event) {
-    for (const entry of this.unitManager.units.values()) {
-      const el = entry.wrap;
-      if (!el || el.style.display === 'none') continue;
-      if ((entry.labelFade ?? 1) < 0.2) continue;
-      const rect = el.getBoundingClientRect();
-      if (
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  pickTarget(event) {
+  /** Resolve the board cell under the pointer; unit comes from game state, not mesh hits. */
+  pickCell(event) {
     if (!this.updatePointer(event)) return null;
 
-    const overLabel = this.isClickOverUnitLabel(event);
-    const hits = this.raycastTargets();
-    let unitPick = null;
-    let tilePick = null;
-    for (const hit of hits) {
-      const root = this.findInteractiveRoot(hit.object);
-      if (!root) continue;
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    if (!this.raycaster.ray.intersectPlane(this.plane, this.intersectPoint)) return null;
 
-      if (root.userData.kind === 'unit') {
-        if (!unitPick) {
-          unitPick = {
-            kind: 'unit',
-            row: root.userData.row,
-            col: root.userData.col,
-            unitId: root.userData.unitId,
-          };
-        }
-        continue;
-      }
+    const tile = this.tileGrid.getTileAtWorld(this.intersectPoint.x, this.intersectPoint.z);
+    if (!tile) return null;
 
-      if (root.userData.kind === 'tile' && !tilePick) {
-        tilePick = { kind: 'tile', row: root.userData.row, col: root.userData.col, unitId: null };
-      }
+    const { row, col } = tile.userData;
+    const unit = this.state?.board?.[row]?.[col] ?? null;
+
+    if (unit) {
+      return { kind: 'unit', row, col, unitId: unit.id };
     }
-
-    if (unitPick && !overLabel) return unitPick;
-    if (tilePick) return tilePick;
-
-    return null;
-  }
-
-  pickCell(event) {
-    return this.pickTarget(event);
+    return { kind: 'tile', row, col, unitId: null };
   }
 
   canControlUnit(unitId) {
@@ -200,19 +125,16 @@ export class InputController {
     }
     if (!this.state || this.state.animating) return;
 
-    if (this.state.itemTargeting) {
-      const pick = this.pickTarget(event);
-      if (pick && (pick.kind === 'tile' || pick.kind === 'unit')) {
-        this.callbacks.onItemTarget(pick.row, pick.col);
-      }
-      return;
-    }
-
-    const pick = this.pickTarget(event);
+    const pick = this.pickCell(event);
     if (!pick) {
       if (this.state.draggingUnitId) {
         this.callbacks.onDragCancel();
       }
+      return;
+    }
+
+    if (this.state.itemTargeting) {
+      this.callbacks.onItemTarget(pick.row, pick.col);
       return;
     }
 
@@ -239,8 +161,7 @@ export class InputController {
       return;
     }
 
-    const cellUnit = this.state.board[pick.row]?.[pick.col];
-    if (!cellUnit) {
+    if (pick.kind === 'tile') {
       this.callbacks.onCellClick(pick.row, pick.col);
     }
   };

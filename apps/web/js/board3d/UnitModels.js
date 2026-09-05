@@ -1701,13 +1701,13 @@ function buildGhost(mats) {
 // work: wide across, tapered at the front, with a spike at each shoulder.
 function crabCarapaceShape() {
   const shape = new THREE.Shape();
-  shape.moveTo(0, 0.185);
-  shape.bezierCurveTo(0.075, 0.181, 0.152, 0.147, 0.198, 0.078);
-  shape.lineTo(0.256, 0.014);
-  shape.bezierCurveTo(0.232, -0.077, 0.156, -0.158, 0, -0.174);
-  shape.bezierCurveTo(-0.156, -0.158, -0.232, -0.077, -0.256, 0.014);
-  shape.lineTo(-0.198, 0.078);
-  shape.bezierCurveTo(-0.152, 0.147, -0.075, 0.181, 0, 0.185);
+  shape.moveTo(0, 0.16);
+  shape.bezierCurveTo(0.06, 0.157, 0.13, 0.135, 0.192, 0.082);
+  shape.lineTo(0.272, 0.022);
+  shape.bezierCurveTo(0.246, -0.07, 0.15, -0.148, 0, -0.162);
+  shape.bezierCurveTo(-0.15, -0.148, -0.246, -0.07, -0.272, 0.022);
+  shape.lineTo(-0.192, 0.082);
+  shape.bezierCurveTo(-0.13, 0.135, -0.06, 0.157, 0, 0.16);
   return shape;
 }
 
@@ -1717,6 +1717,17 @@ function crabCarapaceGeometry() {
     geometry.rotateX(Math.PI / 2);
     geometry.computeVertexNormals();
     return geometry;
+  });
+}
+
+function crabCrestFinGeometry() {
+  return cached('crab-crest-fin', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.062, 0);
+    shape.lineTo(0.062, 0);
+    shape.bezierCurveTo(0.07, 0.06, 0.038, 0.115, 0, 0.135);
+    shape.bezierCurveTo(-0.038, 0.115, -0.07, 0.06, -0.062, 0);
+    return extrude(shape, 0.016, 0.005);
   });
 }
 
@@ -1739,56 +1750,59 @@ function crabArcGeometry(key, radius, tube, arc) {
   });
 }
 
-function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat) {
+function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat) {
   const claw = new THREE.Group();
   // Held out front and slightly raised: the reach is what sells the diagonal
   // threat, and it keeps the pincers clear of the shell from every angle.
-  claw.position.set(side * 0.17, -0.012, 0.115);
-  claw.rotation.set(-0.26, side * 0.66, 0);
+  claw.position.set(side * 0.185, 0.03, 0.1);
+  claw.rotation.set(-0.34, side * 0.54, 0);
 
   part(claw, cached('crab-shoulder', () => new THREE.SphereGeometry(0.05, 14, 12)), jointMat, {
     scale: [1, 0.88, 1],
   });
-  part(claw, cached('crab-arm-upper', () => new THREE.CylinderGeometry(0.033, 0.042, 0.09, 12)), shellMat, {
-    pos: [0, 0.004, 0.05],
+  part(claw, cached('crab-arm-upper', () => new THREE.CylinderGeometry(0.036, 0.046, 0.085, 12)), shellMat, {
+    pos: [0, 0.004, 0.048],
     rot: [Math.PI / 2, 0, 0],
   });
-  part(claw, cached('crab-elbow', () => new THREE.SphereGeometry(0.037, 12, 10)), jointMat, {
-    pos: [0, 0.006, 0.098],
+  part(claw, cached('crab-elbow', () => new THREE.SphereGeometry(0.04, 12, 10)), jointMat, {
+    pos: [0, 0.006, 0.094],
   });
 
   // The palm is a fat oval rather than a box; a slab here read as a pair of pliers.
   const palm = new THREE.Group();
-  palm.position.set(0, 0.014, 0.155);
-  palm.rotation.set(0.08, side * -0.18, side * 0.12);
+  palm.position.set(0, 0.016, 0.16);
+  // Rolled part-way over so the open pincer reads both head-on and from above.
+  palm.rotation.set(0.1, side * -0.24, side * 0.42);
   claw.add(palm);
-  part(palm, cached('crab-palm', () => new THREE.SphereGeometry(0.062, 16, 12)), clawMat, {
-    scale: [0.8, 0.92, 1.3],
+  part(palm, cached('crab-palm', () => new THREE.SphereGeometry(0.07, 16, 12)), clawMat, {
+    scale: [0.78, 1, 1.24],
   });
-  part(palm, cached('crab-palm-ridge', () => new THREE.BoxGeometry(0.018, 0.026, 0.1)), clawDeepMat, {
-    pos: [0, 0.05, 0],
+  part(palm, cached('crab-palm-ridge', () => new THREE.BoxGeometry(0.02, 0.028, 0.11)), clawDeepMat, {
+    pos: [0, 0.056, 0],
     shadow: false,
   });
-  part(palm, crabArcGeometry('crab-claw-band', 0.056, 0.009, Math.PI * 2), mats.gold, {
-    pos: [0, 0, -0.048],
+  part(palm, crabArcGeometry('crab-claw-band', 0.06, 0.01, Math.PI * 2), mats.gold, {
+    pos: [0, 0, -0.05],
     rot: [Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.86],
+    scale: [1, 1, 0.88],
     shadow: false,
   });
 
-  const pincerGeo = cached('crab-pincer', () => new THREE.CylinderGeometry(0.008, 0.036, 0.125, 10));
-  const toothGeo = cached('crab-pincer-tooth', () => new THREE.ConeGeometry(0.009, 0.024, 6));
+  const pincerGeo = cached('crab-pincer', () => new THREE.CylinderGeometry(0.009, 0.04, 0.105, 10));
+  const toothGeo = cached('crab-pincer-tooth', () => new THREE.ConeGeometry(0.009, 0.022, 6));
 
+  // A visible gap between the two fingers is what makes this read as a pincer, so
+  // they stay parted rather than closed flush.
   const upperPinch = new THREE.Group();
-  upperPinch.position.set(0, 0.03, 0.055);
-  upperPinch.rotation.set(-0.14, 0, 0);
+  upperPinch.position.set(0, 0.036, 0.058);
+  upperPinch.rotation.set(-0.34, 0, 0);
   palm.add(upperPinch);
   part(upperPinch, pincerGeo, clawMat, {
-    pos: [0, 0, 0.062],
+    pos: [0, 0, 0.052],
     rot: [Math.PI / 2, 0, 0],
   });
-  for (const [z, y] of [[0.03, -0.026], [0.06, -0.019], [0.09, -0.012]]) {
-    part(upperPinch, toothGeo, mats.trim, {
+  for (const [z, y] of [[0.03, -0.026], [0.062, -0.016]]) {
+    part(upperPinch, toothGeo, bellyMat, {
       pos: [0, y, z],
       rot: [Math.PI, 0, 0],
       shadow: false,
@@ -1796,38 +1810,36 @@ function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat) {
   }
 
   const lowerPinch = new THREE.Group();
-  lowerPinch.position.set(0, -0.028, 0.055);
-  lowerPinch.rotation.set(0.2, 0, 0);
+  lowerPinch.position.set(0, -0.032, 0.058);
+  lowerPinch.rotation.set(0.26, 0, 0);
   palm.add(lowerPinch);
   part(lowerPinch, pincerGeo, clawDeepMat, {
-    pos: [0, 0, 0.055],
+    pos: [0, 0, 0.045],
     rot: [Math.PI / 2, 0, 0],
-    scale: [0.9, 0.9, 0.86],
+    scale: [0.88, 0.88, 0.84],
   });
-  for (const [z, y] of [[0.028, 0.022], [0.058, 0.014]]) {
-    part(lowerPinch, toothGeo, mats.trim, { pos: [0, y, z], shadow: false });
-  }
+  part(lowerPinch, toothGeo, bellyMat, { pos: [0, 0.02, 0.03], shadow: false });
 
   return claw;
 }
 
 function addCrabEyeStalk(parent, side, mats, shellMat) {
   const stalk = new THREE.Group();
-  stalk.position.set(side * 0.058, 0.024, 0.048);
-  stalk.rotation.set(-0.16, 0, side * -0.26);
-  part(stalk, cached('crab-stalk', () => new THREE.CylinderGeometry(0.011, 0.016, 0.072, 10)), shellMat, {
-    pos: [0, 0.036, 0],
+  stalk.position.set(side * 0.066, 0.028, 0.05);
+  stalk.rotation.set(-0.14, 0, side * -0.3);
+  part(stalk, cached('crab-stalk', () => new THREE.CylinderGeometry(0.012, 0.017, 0.086, 10)), shellMat, {
+    pos: [0, 0.043, 0],
   });
-  part(stalk, crabArcGeometry('crab-stalk-ring', 0.015, 0.004, Math.PI * 2), mats.gold, {
-    pos: [0, 0.06, 0],
+  part(stalk, crabArcGeometry('crab-stalk-ring', 0.016, 0.005, Math.PI * 2), mats.gold, {
+    pos: [0, 0.072, 0],
     shadow: false,
   });
-  part(stalk, cached('crab-eye-socket', () => new THREE.SphereGeometry(0.027, 12, 10)), mats.charcoal, {
-    pos: [0, 0.084, 0],
+  part(stalk, cached('crab-eye-socket', () => new THREE.SphereGeometry(0.031, 12, 10)), mats.charcoal, {
+    pos: [0, 0.1, 0],
     scale: [1, 0.94, 0.92],
   });
-  const eye = part(stalk, cached('crab-eyeball', () => new THREE.SphereGeometry(0.02, 12, 10)), mats.eye, {
-    pos: [0, 0.086, 0.013],
+  const eye = part(stalk, cached('crab-eyeball', () => new THREE.SphereGeometry(0.023, 12, 10)), mats.eye, {
+    pos: [0, 0.102, 0.014],
     shadow: false,
   });
   parent.add(stalk);
@@ -1874,25 +1886,25 @@ function buildCrabGeneral(mats) {
   const warm = new THREE.Color(0xffd9b3);
   const shadowTone = new THREE.Color(0x0b1220);
 
-  const shellMat = standard(teamBase.clone().lerp(warm, 0.12), {
-    roughness: 0.4,
-    metalness: 0.26,
-    emissive: teamBase.clone().lerp(shadowTone, 0.5),
-    emissiveIntensity: 0.3,
-  });
-  const shellDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.48), {
-    roughness: 0.5,
-    metalness: 0.3,
-  });
-  const clawMat = standard(teamBase.clone().lerp(warm, 0.26), {
-    roughness: 0.36,
-    metalness: 0.28,
-    emissive: teamBase.clone().lerp(shadowTone, 0.55),
-    emissiveIntensity: 0.16,
-  });
-  const clawDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.34), {
+  const shellMat = standard(teamBase.clone().lerp(warm, 0.06), {
     roughness: 0.44,
-    metalness: 0.3,
+    metalness: 0.2,
+    emissive: teamBase.clone().lerp(shadowTone, 0.45),
+    emissiveIntensity: 0.34,
+  });
+  const shellDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.5), {
+    roughness: 0.52,
+    metalness: 0.26,
+  });
+  const clawMat = standard(teamBase.clone().lerp(warm, 0.14), {
+    roughness: 0.4,
+    metalness: 0.16,
+    emissive: teamBase.clone().lerp(shadowTone, 0.5),
+    emissiveIntensity: 0.2,
+  });
+  const clawDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.36), {
+    roughness: 0.46,
+    metalness: 0.24,
   });
   const legMat = standard(teamBase.clone().lerp(shadowTone, 0.62), {
     roughness: 0.66,
@@ -1909,41 +1921,51 @@ function buildCrabGeneral(mats) {
   // Outline plate for the top-down read, dome on top for volume from the side.
   part(body, crabCarapaceGeometry(), shellDeepMat, { pos: [0, -0.004, 0] });
   part(body, crabDomeGeometry(), shellMat, {
-    pos: [0, 0.008, -0.006],
-    scale: [0.226, 0.152, 0.158],
+    pos: [0, 0.006, -0.008],
+    scale: [0.244, 0.105, 0.152],
   });
+
+  // Two shallow grooves break the dome into shell segments; without them the
+  // ellipsoid reads as a helmet.
+  for (const [z, radius, y] of [[-0.03, 0.15, 0.086], [-0.09, 0.1, 0.056]]) {
+    part(body, crabArcGeometry(`crab-shell-groove-${z}`, radius, 0.007, Math.PI * 1.1), shellDeepMat, {
+      pos: [0, y, z],
+      scale: [1.25, 1, 1],
+      shadow: false,
+    });
+  }
 
   const knobGeo = cached('crab-shell-knob', () => new THREE.SphereGeometry(0.026, 10, 8));
   for (const [x, y, z, s] of [
-    [0, 0.152, -0.03, 1.05],
-    [-0.105, 0.118, 0.03, 0.9],
-    [0.105, 0.118, 0.03, 0.9],
-    [-0.145, 0.075, -0.075, 0.78],
-    [0.145, 0.075, -0.075, 0.78],
+    [-0.11, 0.09, 0.02, 0.95],
+    [0.11, 0.09, 0.02, 0.95],
+    [-0.175, 0.056, -0.055, 0.8],
+    [0.175, 0.056, -0.055, 0.8],
   ]) {
-    part(body, knobGeo, shellMat, { pos: [x, y, z], scale: [s, s * 0.6, s], shadow: false });
+    part(body, knobGeo, shellMat, { pos: [x, y, z], scale: [s, s * 0.5, s], shadow: false });
   }
 
-  part(body, crabArcGeometry('crab-shell-brow', 0.185, 0.011, Math.PI * 0.66), mats.gold, {
-    pos: [0, 0.038, 0.012],
+  part(body, crabArcGeometry('crab-shell-brow', 0.175, 0.012, Math.PI * 0.72), mats.gold, {
+    pos: [0, 0.045, 0.01],
+    scale: [1.18, 1, 1],
     shadow: false,
   });
-  part(body, crabArcGeometry('crab-shell-rim', 0.235, 0.012, Math.PI * 2), shellDeepMat, {
-    pos: [0, -0.014, -0.01],
-    scale: [1.06, 1, 0.76],
+  part(body, crabArcGeometry('crab-shell-rim', 0.23, 0.013, Math.PI * 2), shellDeepMat, {
+    pos: [0, -0.012, -0.01],
+    scale: [1.1, 1, 0.72],
     shadow: false,
   });
 
-  const spikeGeo = cached('crab-shell-spike', () => new THREE.ConeGeometry(0.024, 0.08, 7));
+  const spikeGeo = cached('crab-shell-spike', () => new THREE.ConeGeometry(0.026, 0.085, 7));
   for (const side of [-1, 1]) {
     part(body, spikeGeo, shellDeepMat, {
-      pos: [side * 0.278, 0.002, 0.012],
-      rot: [0, 0, side * -1.42],
+      pos: [side * 0.295, 0.004, 0.018],
+      rot: [0, 0.35, side * -1.46],
       shadow: false,
     });
-    part(body, cached('crab-shell-tooth', () => new THREE.ConeGeometry(0.017, 0.05, 6)), shellDeepMat, {
-      pos: [side * 0.212, 0.0, -0.105],
-      rot: [0, 0, side * -1.15],
+    part(body, cached('crab-shell-tooth', () => new THREE.ConeGeometry(0.018, 0.055, 6)), shellDeepMat, {
+      pos: [side * 0.222, 0.002, -0.095],
+      rot: [0, 0, side * -1.05],
       shadow: false,
     });
   }
@@ -1952,48 +1974,46 @@ function buildCrabGeneral(mats) {
     pos: [0, -0.045, -0.005],
   });
 
+  // A forward-facing fan crest, so the "general" reads from the board's camera
+  // instead of only in profile.
   const crest = new THREE.Group();
-  crest.position.set(0, 0.145, -0.015);
+  crest.position.set(0, 0.1, -0.01);
   body.add(crest);
-  part(crest, cached('crab-crest-base', () => new THREE.CylinderGeometry(0.042, 0.064, 0.036, 14)), mats.armorDeep);
-  part(crest, cached('crab-crest-fin', () => new THREE.BoxGeometry(0.024, 0.115, 0.115)), mats.armor, {
-    pos: [0, 0.09, 0.005],
-    rot: [0.06, 0, 0],
-  });
-  part(crest, cached('crab-crest-edge', () => new THREE.BoxGeometry(0.03, 0.014, 0.115)), mats.gold, {
-    pos: [0, 0.148, 0.005],
-    rot: [0.06, 0, 0],
-    shadow: false,
+  part(crest, cached('crab-crest-base', () => new THREE.CylinderGeometry(0.038, 0.058, 0.03, 14)), mats.armorDeep);
+  part(crest, crabCrestFinGeometry(), mats.armor, {
+    pos: [0, 0.02, 0.004],
+    rot: [-0.22, 0, 0],
   });
   part(crest, cached('crab-crest-gem', () => new THREE.OctahedronGeometry(0.026, 0)), mats.trim, {
-    pos: [0, 0.062, 0.062],
+    pos: [0, 0.036, 0.03],
+    rot: [0, 0, Math.PI / 4],
     shadow: false,
   });
   for (const side of [-1, 1]) {
-    part(crest, cached('crab-crest-horn', () => new THREE.ConeGeometry(0.013, 0.075, 6)), mats.gold, {
-      pos: [side * 0.05, 0.05, 0.01],
-      rot: [-0.12, 0, side * 0.5],
+    part(crest, cached('crab-crest-horn', () => new THREE.ConeGeometry(0.012, 0.09, 6)), mats.gold, {
+      pos: [side * 0.075, 0.075, 0.01],
+      rot: [-0.2, 0, side * 0.62],
       shadow: false,
     });
   }
 
   const banner = new THREE.Group();
-  banner.position.set(0, 0.09, -0.135);
-  banner.rotation.x = -0.3;
+  banner.position.set(0.02, 0.055, -0.13);
+  banner.rotation.set(-0.34, 0, 0.12);
   body.add(banner);
-  part(banner, cached('crab-banner-pole', () => new THREE.CylinderGeometry(0.007, 0.009, 0.22, 8)), mats.gold, {
-    pos: [0, 0.11, 0],
+  part(banner, cached('crab-banner-pole', () => new THREE.CylinderGeometry(0.008, 0.01, 0.17, 8)), mats.gold, {
+    pos: [0, 0.085, 0],
   });
-  part(banner, cached('crab-banner-cloth', () => new THREE.BoxGeometry(0.11, 0.085, 0.012)), mats.cloth, {
-    pos: [0.052, 0.15, 0],
-    rot: [0, 0, -0.1],
+  part(banner, cached('crab-banner-cloth', () => new THREE.BoxGeometry(0.115, 0.095, 0.011)), mats.cloth, {
+    pos: [0.056, 0.115, 0],
+    rot: [0, 0, -0.08],
   });
-  part(banner, cached('crab-banner-crest', () => new THREE.OctahedronGeometry(0.019, 0)), mats.trim, {
-    pos: [0.052, 0.15, 0.012],
+  part(banner, cached('crab-banner-crest', () => new THREE.OctahedronGeometry(0.021, 0)), mats.trim, {
+    pos: [0.056, 0.115, 0.011],
     shadow: false,
   });
-  part(banner, cached('crab-banner-tip', () => new THREE.ConeGeometry(0.014, 0.04, 6)), mats.trim, {
-    pos: [0, 0.24, 0],
+  part(banner, cached('crab-banner-tip', () => new THREE.ConeGeometry(0.015, 0.042, 6)), mats.trim, {
+    pos: [0, 0.19, 0],
     shadow: false,
   });
 
@@ -2025,15 +2045,15 @@ function buildCrabGeneral(mats) {
   }
   const eyes = [eyeStalks.left.eye, eyeStalks.right.eye];
 
-  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat);
-  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat);
+  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat);
+  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat);
   body.add(clawL);
   body.add(clawR);
 
   for (const [z, fan, splay] of [
-    [0.055, 0.34, 0.92],
-    [-0.03, 0.02, 1.06],
-    [-0.11, -0.32, 0.96],
+    [0.062, 0.42, 0.9],
+    [-0.02, 0.04, 1.08],
+    [-0.105, -0.4, 0.94],
   ]) {
     for (const side of [-1, 1]) {
       addCrabLeg(body, side, z, fan, splay, mats, legMat, jointMat);

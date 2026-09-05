@@ -282,6 +282,10 @@ body {
 }
 
 /* Tutorial panel sits at the top so it does not cover the reserve cards at the bottom. */
+.battle-layout.in-combat .battle-panels {
+  bottom: calc(76px + max(8px, env(safe-area-inset-bottom)));
+}
+
 .battle-layout.in-combat.has-tutorial .battle-panels {
   top: 8px;
   bottom: auto;
@@ -2089,6 +2093,11 @@ body {
 
 #formationItemSection {
   margin-bottom: 12px;
+}
+
+.formation-item-hint {
+  margin: 0 0 8px;
+  line-height: 1.4;
 }
 
 .online-section {

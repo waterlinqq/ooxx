@@ -125,7 +125,6 @@ export class BoardScene {
       domElement: containerEl,
       camera: this.camera,
       tileGrid: this.tileGrid,
-      unitManager: this.unitManager,
       callbacks,
     });
 

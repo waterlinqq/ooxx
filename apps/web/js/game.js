@@ -747,7 +747,7 @@ export class Game {
     if (!this.isFormationReady()) {
       this.blueRoster = [...this.getModeConfig().roster];
     }
-    this.equippedItem = null;
+    this.validateEquippedItemForBattle();
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
