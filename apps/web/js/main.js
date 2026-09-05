@@ -4,8 +4,10 @@ import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
-import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
+import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster } from './units.js';
+import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
+import { CODEX_TABS } from './codex.js';
 import { isUnlockable, getUnlockPrice } from './unlocks.js';
 import {
   loadSave,
@@ -60,9 +62,11 @@ const turnTimerFillEl = document.getElementById('turnTimerFill');
 const matchTimerEl = document.getElementById('matchTimer');
 const matchTimerFillEl = document.getElementById('matchTimerFill');
 const matchTimerTextEl = document.getElementById('matchTimerText');
-const classPickerEl = document.getElementById('classPicker');
-const classDetailInfoEl = document.getElementById('classDetailInfo');
-const classPreviewHostEl = document.getElementById('classPreviewHost');
+const codexTabsEl = document.getElementById('codexTabs');
+const codexPickerEl = document.getElementById('codexPicker');
+const codexDetailInfoEl = document.getElementById('codexDetailInfo');
+const codexPreviewHostEl = document.getElementById('codexPreviewHost');
+const codexRangeLegendEl = document.getElementById('codexRangeLegend');
 const endResultEl = document.getElementById('endResult');
 const gameEndOverlayEl = document.getElementById('gameEndOverlay');
 const modeButtonsEl = document.getElementById('onlineModeButtons');
@@ -71,6 +75,7 @@ const onlineWaitingEl = document.getElementById('onlineWaiting');
 const waitingRoomCodeEl = document.getElementById('waitingRoomCode');
 const waitingRoomCodeLineEl = document.getElementById('waitingRoomCodeLine');
 const onlineMatchIndicatorEl = document.getElementById('onlineMatchIndicator');
+const onlineMatchLabelTextEl = document.getElementById('onlineMatchLabelText');
 const findMatchBtn = document.getElementById('findMatchBtn');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
@@ -110,7 +115,7 @@ const reserveTutorialPointerEl = document.getElementById('reserveTutorialPointer
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
   formation: document.getElementById('screenFormation'),
-  characters: document.getElementById('screenCharacters'),
+  codex: document.getElementById('screenCodex'),
   bag: document.getElementById('screenBag'),
   shop: document.getElementById('screenShop'),
 };
@@ -467,6 +472,9 @@ function withOnlineOrLocal(onlineFn, localFn) {
 
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
+let activeCodexTab = 'units';
+let selectedItemId = ITEM_IDS[0];
+let selectedMechanismId = MAP_PROP_KINDS[0];
 let lastPhase = 'lobby';
 let lastInCombat = false;
 
@@ -610,10 +618,11 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
   canControlUnit,
 });
 
-const characterPreview = new CharacterPreviewScene(classPreviewHostEl);
+const unitPreview = new CharacterPreviewScene(codexPreviewHostEl);
 
 const unitThumbnails = generateUnitThumbnails(Object.keys(CLASSES));
 const itemThumbnails = generateItemThumbnails(ITEM_IDS);
+const mapPropThumbnails = generateMapPropThumbnails(MAP_PROP_KINDS);
 const navThumbnails = generateNavThumbnails();
 applyNavIcons(bottomNavEl, navThumbnails);
 
@@ -628,6 +637,129 @@ function setItemIcon(container, item) {
     return;
   }
   fillItemIcon(container, item.id, itemThumbnails, item.icon ?? '?', item.name ?? item.id);
+}
+
+function setMapPropIcon(container, kind) {
+  const prop = MAP_PROPS[kind];
+  fillMapPropIcon(container, kind, mapPropThumbnails, prop?.icon ?? '?', prop?.name ?? kind);
+}
+
+function updateCodexPreviewVisibility() {
+  const showUnit3d = activeNav === 'codex' && activeCodexTab === 'units';
+  unitPreview.setVisible(showUnit3d);
+  codexPreviewHostEl?.classList.toggle('hidden', !showUnit3d);
+  if (showUnit3d) {
+    unitPreview.setClass(selectedClassId);
+  }
+}
+
+function switchCodexTab(tab) {
+  if (!CODEX_TABS.includes(tab)) return;
+  activeCodexTab = tab;
+}
+
+function renderCodexTabs() {
+  if (!codexTabsEl) return;
+  for (const btn of codexTabsEl.querySelectorAll('[data-codex-tab]')) {
+    const tab = btn.dataset.codexTab;
+    const active = tab === activeCodexTab;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+}
+
+function createCodexPickBtn({ active, title, onClick, fillIcon }) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'class-pick-btn' + (active ? ' active' : '');
+  btn.title = title;
+  fillIcon(btn);
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function renderCodexItemDetail(itemId) {
+  const item = ITEMS[itemId];
+  if (!item) return;
+
+  codexDetailInfoEl.innerHTML = `
+    <h2 class="detail-name">${item.name}</h2>
+    <p class="codex-desc">${item.desc}</p>
+  `;
+}
+
+function renderCodexMechanismDetail(kind) {
+  const prop = MAP_PROPS[kind];
+  if (!prop) return;
+
+  codexDetailInfoEl.innerHTML = `
+    <h2 class="detail-name">${prop.name}</h2>
+    <p class="codex-desc">${prop.desc}</p>
+  `;
+}
+
+function renderCodexUnits() {
+  for (const cls of Object.values(CLASSES)) {
+    codexPickerEl.appendChild(createCodexPickBtn({
+      active: cls.id === selectedClassId,
+      title: cls.name,
+      onClick: () => selectClass(cls.id),
+      fillIcon: (btn) => setUnitIcon(btn, cls.id),
+    }));
+  }
+  renderClassDetail(selectedClassId);
+}
+
+function renderCodexItems() {
+  for (const item of Object.values(ITEMS)) {
+    codexPickerEl.appendChild(createCodexPickBtn({
+      active: item.id === selectedItemId,
+      title: item.name,
+      onClick: () => selectCodexItem(item.id),
+      fillIcon: (btn) => setItemIcon(btn, item),
+    }));
+  }
+  renderCodexItemDetail(selectedItemId);
+}
+
+function renderCodexMechanisms() {
+  for (const kind of MAP_PROP_KINDS) {
+    const prop = MAP_PROPS[kind];
+    codexPickerEl.appendChild(createCodexPickBtn({
+      active: kind === selectedMechanismId,
+      title: prop.name,
+      onClick: () => selectCodexMechanism(kind),
+      fillIcon: (btn) => setMapPropIcon(btn, kind),
+    }));
+  }
+  renderCodexMechanismDetail(selectedMechanismId);
+}
+
+function renderCodex() {
+  if (!codexPickerEl || !codexDetailInfoEl) return;
+
+  renderCodexTabs();
+  codexPickerEl.innerHTML = '';
+
+  if (activeCodexTab === 'units') {
+    renderCodexUnits();
+  } else if (activeCodexTab === 'items') {
+    renderCodexItems();
+  } else {
+    renderCodexMechanisms();
+  }
+
+  updateCodexPreviewVisibility();
+}
+
+function selectCodexItem(itemId) {
+  selectedItemId = itemId;
+  render(getAppState());
+}
+
+function selectCodexMechanism(kind) {
+  selectedMechanismId = kind;
+  render(getAppState());
 }
 
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
@@ -664,10 +796,10 @@ function switchNav(navId) {
     }
   }
 
-  const showCharacterPreview = navId === 'characters';
-  characterPreview.setVisible(showCharacterPreview);
-  if (showCharacterPreview) {
-    characterPreview.setClass(selectedClassId);
+  if (navId === 'codex') {
+    updateCodexPreviewVisibility();
+  } else {
+    unitPreview.setVisible(false);
   }
 }
 
@@ -700,7 +832,7 @@ function renderClassDetail(classId) {
     ? `${cls.hp}（攻城戰 ${getCastleHpForMode('5x5')}）`
     : cls.hp;
 
-  classDetailInfoEl.innerHTML = `
+  codexDetailInfoEl.innerHTML = `
     <h2 class="detail-name">${cls.name}</h2>
     <dl class="detail-stats">
       <div><dt>HP</dt><dd>${hpLabel}</dd></div>
@@ -709,30 +841,14 @@ function renderClassDetail(classId) {
     </dl>
   `;
 
-  if (activeNav === 'characters') {
-    characterPreview.setClass(classId);
+  if (activeNav === 'codex' && activeCodexTab === 'units') {
+    unitPreview.setClass(classId);
   }
 }
 
 function selectClass(classId) {
   selectedClassId = classId;
   render(getAppState());
-}
-
-function renderClassPicker() {
-  classPickerEl.innerHTML = '';
-
-  for (const cls of Object.values(CLASSES)) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'class-pick-btn' + (cls.id === selectedClassId ? ' active' : '');
-    btn.title = cls.name;
-    setUnitIcon(btn, cls.id);
-    btn.addEventListener('click', () => selectClass(cls.id));
-    classPickerEl.appendChild(btn);
-  }
-
-  renderClassDetail(selectedClassId);
 }
 
 function createItemChip(item, { count, equipped, onSelect }) {
@@ -1317,7 +1433,10 @@ function renderOnlineLobby(state) {
   if (waiting) {
     const matching = Boolean(state.matchmaking);
     waitingRoomCodeLineEl.classList.toggle('hidden', matching);
-    onlineMatchIndicatorEl.classList.toggle('hidden', !matching);
+    onlineMatchIndicatorEl.classList.remove('hidden');
+    if (onlineMatchLabelTextEl) {
+      onlineMatchLabelTextEl.textContent = matching ? '匹配中' : '等待中';
+    }
 
     if (!matching) {
       waitingRoomCodeEl.textContent = state.roomCode ?? '';
@@ -1558,20 +1677,21 @@ function render(state) {
   lastInCombat = inCombat;
 
   renderModePicker(state);
-  renderClassPicker();
+  if (activeNav === 'codex') renderCodex();
   updateBottomNav(state);
-
-  const showCharacterPreview = activeNav === 'characters';
-  characterPreview.setVisible(showCharacterPreview);
-  if (showCharacterPreview) {
-    characterPreview.setClass(selectedClassId);
-  }
 }
 
 bottomNavEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.nav-item');
   if (!btn || btn.disabled) return;
   switchNav(btn.dataset.nav);
+  render(getAppState());
+});
+
+codexTabsEl?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-codex-tab]');
+  if (!btn) return;
+  switchCodexTab(btn.dataset.codexTab);
   render(getAppState());
 });
 

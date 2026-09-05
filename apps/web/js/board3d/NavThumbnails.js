@@ -112,7 +112,7 @@ export function generateNavThumbnails(navIds = NAV_ICON_IDS) {
 const NAV_LABELS = {
   battle: '戰鬥',
   formation: '編組',
-  characters: '角色',
+  codex: '圖鑑',
   bag: '背包',
   shop: '商店',
 };

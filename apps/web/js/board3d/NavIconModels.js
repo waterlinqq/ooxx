@@ -317,12 +317,12 @@ function buildShopIcon(mats) {
 const BUILDERS = {
   battle: buildBattleIcon,
   formation: buildFormationIcon,
-  characters: buildCharactersIcon,
+  codex: buildCharactersIcon,
   bag: buildBagIcon,
   shop: buildShopIcon,
 };
 
-export const NAV_ICON_IDS = ['battle', 'formation', 'characters', 'bag', 'shop'];
+export const NAV_ICON_IDS = ['formation', 'codex', 'battle', 'bag', 'shop'];
 
 export function buildNavIconModel(navId) {
   const builder = BUILDERS[navId];

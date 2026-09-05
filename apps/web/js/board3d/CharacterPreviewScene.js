@@ -417,6 +417,7 @@ export class CharacterPreviewScene {
 
   setVisible(show) {
     this.visible = show;
+    this.renderer.domElement.style.display = show ? 'block' : 'none';
     if (show) {
       this.onResize();
     }

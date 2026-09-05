@@ -15,6 +15,14 @@ const ITEM_THUMB_TUNING = {
   landmine: { widthFactor: 0.82, heightFactor: 1.35, scale: 0.92 },
 };
 
+const MAP_PROP_THUMB_TUNING = {
+  potion: { widthFactor: 0.72, heightFactor: 1, scale: 1.05 },
+  spikes: { widthFactor: 0.82, heightFactor: 1, scale: 1 },
+  web: { widthFactor: 0.9, heightFactor: 1, scale: 1 },
+  stone: { widthFactor: 0.82, heightFactor: 1, scale: 1 },
+  flag: { widthFactor: 0.72, heightFactor: 1.2, scale: 1 },
+};
+
 function disposeObject(root) {
   root.traverse((obj) => {
     if (obj.geometry && !obj.geometry.userData?.shared) {
@@ -68,13 +76,21 @@ function setupCamera() {
   return camera;
 }
 
-function getItemViewHeight(size, itemId) {
-  const tuning = ITEM_THUMB_TUNING[itemId] ?? { widthFactor: 0.72, heightFactor: 1 };
+function getViewHeight(size, tuningKey, tuningTable) {
+  const tuning = tuningTable[tuningKey] ?? { widthFactor: 0.72, heightFactor: 1 };
   return Math.max(
     size.y * tuning.heightFactor,
     size.x * tuning.widthFactor,
     size.z * tuning.widthFactor,
   );
+}
+
+function getItemViewHeight(size, itemId) {
+  return getViewHeight(size, itemId, ITEM_THUMB_TUNING);
+}
+
+function getMapPropViewHeight(size, kind) {
+  return getViewHeight(size, kind, MAP_PROP_THUMB_TUNING);
 }
 
 function getThumbnailFitTarget(root, itemId) {
@@ -96,6 +112,18 @@ function prepareItemForThumbnail(root, itemId) {
   }
 }
 
+function normalizeForThumbnail(root, tuningKey, tuningTable, getViewHeightFn) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const viewHeight = getViewHeightFn(size, tuningKey);
+  if (viewHeight <= 0) return;
+
+  const tuning = tuningTable[tuningKey] ?? { scale: 1 };
+  const scale = (TARGET_VIEW_HEIGHT / viewHeight) * (tuning.scale ?? 1);
+  root.scale.setScalar(scale);
+  root.updateMatrixWorld(true);
+}
+
 function normalizeItemForThumbnail(root, itemId) {
   const fitTarget = getThumbnailFitTarget(root, itemId);
   const box = new THREE.Box3().setFromObject(fitTarget);
@@ -109,18 +137,34 @@ function normalizeItemForThumbnail(root, itemId) {
   root.updateMatrixWorld(true);
 }
 
-function fitCameraToModel(camera, object, itemId) {
+function normalizeMapPropForThumbnail(root, kind) {
+  normalizeForThumbnail(root, kind, MAP_PROP_THUMB_TUNING, getMapPropViewHeight);
+}
+
+function fitCameraToObject(camera, object, viewHeight) {
   const box = new THREE.Box3().setFromObject(object);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const viewHeight = getItemViewHeight(size, itemId) * FRAME_PADDING;
+  const paddedHeight = viewHeight * FRAME_PADDING;
 
-  camera.left = -viewHeight / 2;
-  camera.right = viewHeight / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
+  camera.left = -paddedHeight / 2;
+  camera.right = paddedHeight / 2;
+  camera.top = paddedHeight / 2;
+  camera.bottom = -paddedHeight / 2;
   camera.updateProjectionMatrix();
   camera.lookAt(center.x, center.y - size.y * 0.04, center.z);
+}
+
+function fitCameraToModel(camera, object, itemId) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  fitCameraToObject(camera, object, getItemViewHeight(size, itemId));
+}
+
+function fitCameraToMapProp(camera, object, kind) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  fitCameraToObject(camera, object, getMapPropViewHeight(size, kind));
 }
 
 function buildItemModel(itemId) {
@@ -137,6 +181,64 @@ function buildItemModel(itemId) {
     return buildItemLandmineModel();
   }
   return null;
+}
+
+function buildMapPropThumbnailModel(kind) {
+  const model = buildMapPropModel(kind);
+  if (!model?.root) return null;
+  model.root.rotation.y = PREVIEW_ROTATION_Y;
+  return model.root;
+}
+
+export function generateMapPropThumbnails(kinds) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(THUMB_SIZE, THUMB_SIZE);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
+
+  const { scene, envMap, pmrem } = setupScene(renderer);
+  const camera = setupCamera();
+  const thumbnails = new Map();
+
+  for (const kind of kinds) {
+    const root = buildMapPropThumbnailModel(kind);
+    if (!root) continue;
+
+    if (kind === 'potion') prepareItemForThumbnail(root, 'potion');
+    normalizeMapPropForThumbnail(root, kind);
+    scene.add(root);
+    fitCameraToMapProp(camera, root, kind);
+
+    renderer.render(scene, camera);
+    thumbnails.set(kind, renderer.domElement.toDataURL('image/png'));
+
+    scene.remove(root);
+    disposeObject(root);
+  }
+
+  envMap.dispose();
+  pmrem.dispose();
+  renderer.dispose();
+
+  return thumbnails;
+}
+
+export function fillMapPropIcon(container, kind, thumbnails, fallbackIcon = '?', alt = '') {
+  container.replaceChildren();
+  const src = thumbnails.get(kind);
+  if (src) {
+    const img = document.createElement('img');
+    img.className = 'unit-thumb item-thumb';
+    img.src = src;
+    img.alt = alt;
+    img.draggable = false;
+    container.appendChild(img);
+    return;
+  }
+  container.textContent = fallbackIcon;
 }
 
 export function generateItemThumbnails(itemIds) {

@@ -37,7 +37,7 @@
             </div>
             <div class="online-waiting hidden" id="onlineWaiting">
               <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
-                <p class="online-match-label">匹配中<span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+                <p class="online-match-label"><span id="onlineMatchLabelText">匹配中</span><span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
               </div>
               <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
               <button class="btn" id="cancelRoomBtn" type="button">取消</button>
@@ -162,18 +162,23 @@
         </div>
       </section>
 
-      <!-- 角色 -->
-      <section class="game-screen" id="screenCharacters" data-screen="characters">
+      <!-- 圖鑑 -->
+      <section class="game-screen" id="screenCodex" data-screen="codex">
+        <div class="codex-tabs" id="codexTabs" role="tablist" aria-label="圖鑑分類">
+          <button type="button" class="codex-tab active" role="tab" data-codex-tab="units" aria-selected="true">角色</button>
+          <button type="button" class="codex-tab" role="tab" data-codex-tab="items" aria-selected="false">道具</button>
+          <button type="button" class="codex-tab" role="tab" data-codex-tab="mechanisms" aria-selected="false">機關</button>
+        </div>
         <div class="screen-scroll">
-          <div class="class-picker" id="classPicker"></div>
-          <div class="class-detail" id="classDetail">
-            <div class="detail-preview-host" id="classPreviewHost">
-              <div class="range-legend" aria-label="範圍圖例">
+          <div class="class-picker" id="codexPicker"></div>
+          <div class="class-detail" id="codexDetail">
+            <div class="detail-preview-host" id="codexPreviewHost">
+              <div class="range-legend" id="codexRangeLegend" aria-label="範圍圖例">
                 <span><i class="range-swatch move"></i>移動範圍</span>
                 <span><i class="range-swatch attack"></i>攻擊範圍</span>
               </div>
             </div>
-            <div class="detail-info" id="classDetailInfo"></div>
+            <div class="detail-info" id="codexDetailInfo"></div>
           </div>
         </div>
       </section>
@@ -194,17 +199,17 @@
     </main>
 
     <nav class="bottom-nav" id="bottomNav" aria-label="主選單">
-      <button type="button" class="nav-item active" data-nav="battle" aria-label="戰鬥">
-        <span class="nav-icon" aria-hidden="true"></span>
-        <span class="nav-label">戰鬥</span>
-      </button>
       <button type="button" class="nav-item" data-nav="formation" aria-label="編組">
         <span class="nav-icon" aria-hidden="true"></span>
         <span class="nav-label">編組</span>
       </button>
-      <button type="button" class="nav-item" data-nav="characters" aria-label="角色">
+      <button type="button" class="nav-item" data-nav="codex" aria-label="圖鑑">
         <span class="nav-icon" aria-hidden="true"></span>
-        <span class="nav-label">角色</span>
+        <span class="nav-label">圖鑑</span>
+      </button>
+      <button type="button" class="nav-item active" data-nav="battle" aria-label="戰鬥">
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span class="nav-label">戰鬥</span>
       </button>
       <button type="button" class="nav-item" data-nav="bag" aria-label="背包">
         <span class="nav-icon" aria-hidden="true"></span>
