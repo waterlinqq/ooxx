@@ -835,7 +835,7 @@ body {
 }
 
 .unit-3d-hp-text {
-  font-size: 1.2rem;
+  font-size: 0.95rem;
   font-weight: 800;
   line-height: 1;
   color: #f8fafc;
@@ -879,7 +879,7 @@ body {
 }
 
 .unit-3d-stats {
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   font-weight: 800;
   line-height: 1;
   color: #fbbf24;

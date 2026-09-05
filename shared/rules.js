@@ -67,6 +67,10 @@ const ORTHOGONAL_DIRS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
 ];
 
+const DIAGONAL_DIRS = [
+  [-1, -1], [-1, 1], [1, -1], [1, 1],
+];
+
 export function chebyshev(r1, c1, r2, c2) {
   return Math.max(Math.abs(r1 - r2), Math.abs(c1 - c2));
 }
@@ -108,6 +112,16 @@ export function getAdjacentCells8(row, col, size = 3) {
   return cells;
 }
 
+export function getAdjacentCellsDiagonal(row, col, size = 3) {
+  const cells = [];
+  for (const [dr, dc] of DIAGONAL_DIRS) {
+    const r = row + dr;
+    const c = col + dc;
+    if (isInBounds(r, c, size)) cells.push([r, c]);
+  }
+  return cells;
+}
+
 export function getValidMoves(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
   if (unit.immobilized) return [];
@@ -136,7 +150,10 @@ export function getValidMoves(board, unit, mapProps = null, shadowClones = null)
     const nextFrontier = [];
     for (const [r, c, steps] of frontier) {
       if (steps >= maxSteps) continue;
-      for (const [nr, nc] of getAdjacentCells(r, c, size)) {
+      const neighbors = unitDiagonalOnly(unit)
+        ? getAdjacentCellsDiagonal(r, c, size)
+        : getAdjacentCells(r, c, size);
+      for (const [nr, nc] of neighbors) {
         const key = `${nr},${nc}`;
         if (board[nr][nc] || hasShadowClone(shadowClones, nr, nc) || visited.has(key)) continue;
         if (isObstacleCell(mapProps, nr, nc)) continue;
@@ -254,6 +271,10 @@ function unitAttackType(unit) {
   return unit.type ?? CLASSES[unit.classId]?.type;
 }
 
+function unitDiagonalOnly(unit) {
+  return unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly ?? false;
+}
+
 export function getValidAttackTargets(board, unit) {
   if (unit.row < 0) return [];
 
@@ -262,7 +283,10 @@ export function getValidAttackTargets(board, unit) {
   const type = unitAttackType(unit);
 
   if (type === 'melee' || type === 'support') {
-    for (const [r, c] of getAdjacentCells(unit.row, unit.col, size)) {
+    const adjacent = unitDiagonalOnly(unit)
+      ? getAdjacentCellsDiagonal(unit.row, unit.col, size)
+      : getAdjacentCells(unit.row, unit.col, size);
+    for (const [r, c] of adjacent) {
       const target = board[r][c];
       if (target && canAttackTarget(unit, target)) targets.push(target);
     }
@@ -499,6 +523,7 @@ export function applyPossession(attacker, victim) {
     passiveBlessing: attacker.passiveBlessing,
     possessionOnKill: attacker.possessionOnKill,
     poisonOnHit: attacker.poisonOnHit,
+    diagonalOnly: attacker.diagonalOnly,
     poisoned: attacker.poisoned,
     poisonFresh: attacker.poisonFresh,
   };
@@ -519,6 +544,7 @@ export function applyPossession(attacker, victim) {
   attacker.passiveBlessing = cls.passiveBlessing ?? false;
   attacker.possessionOnKill = false;
   attacker.poisonOnHit = cls.poisonOnHit ?? false;
+  attacker.diagonalOnly = cls.diagonalOnly ?? false;
   clearPoison(attacker);
 
   return prev;

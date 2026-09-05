@@ -74,44 +74,28 @@ export class InputController {
     return this.raycaster.intersectObjects(targets, false);
   }
 
-  pickUnitFromLabel(event) {
-    let best = null;
-    let bestZ = -Infinity;
-    for (const [unitId, entry] of this.unitManager.units) {
+  isClickOverUnitLabel(event) {
+    for (const entry of this.unitManager.units.values()) {
       const el = entry.wrap;
       if (!el || el.style.display === 'none') continue;
       if ((entry.labelFade ?? 1) < 0.2) continue;
       const rect = el.getBoundingClientRect();
       if (
-        event.clientX < rect.left ||
-        event.clientX > rect.right ||
-        event.clientY < rect.top ||
-        event.clientY > rect.bottom
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
       ) {
-        continue;
-      }
-      const z = Number.parseInt(el.style.zIndex, 10) || 0;
-      if (z >= bestZ) {
-        bestZ = z;
-        best = {
-          kind: 'unit',
-          row: entry.root.userData.row,
-          col: entry.root.userData.col,
-          unitId,
-        };
+        return true;
       }
     }
-    return best;
+    return false;
   }
 
-  pickTarget(event, { fromLabel = false } = {}) {
+  pickTarget(event) {
     if (!this.updatePointer(event)) return null;
 
-    if (fromLabel) {
-      const labelPick = this.pickUnitFromLabel(event);
-      if (labelPick) return labelPick;
-    }
-
+    const overLabel = this.isClickOverUnitLabel(event);
     const hits = this.raycastTargets();
     let unitPick = null;
     let tilePick = null;
@@ -136,26 +120,14 @@ export class InputController {
       }
     }
 
-    if (unitPick) return unitPick;
-
-    if (tilePick) {
-      const occupant = this.state?.board?.[tilePick.row]?.[tilePick.col];
-      if (occupant) {
-        return {
-          kind: 'unit',
-          row: tilePick.row,
-          col: tilePick.col,
-          unitId: occupant.id,
-        };
-      }
-      return tilePick;
-    }
+    if (unitPick && !overLabel) return unitPick;
+    if (tilePick) return tilePick;
 
     return null;
   }
 
-  pickCell(event, options) {
-    return this.pickTarget(event, options);
+  pickCell(event) {
+    return this.pickTarget(event);
   }
 
   canControlUnit(unitId) {
@@ -178,7 +150,7 @@ export class InputController {
 
   onPointerDown = (event) => {
     if (event.button !== 0 || !this.state || this.state.animating) return;
-    const pick = this.pickCell(event, { fromLabel: true });
+    const pick = this.pickCell(event);
     if (!pick?.unitId || !this.canControlUnit(pick.unitId)) return;
 
     this.domElement.setPointerCapture(event.pointerId);
@@ -229,14 +201,14 @@ export class InputController {
     if (!this.state || this.state.animating) return;
 
     if (this.state.itemTargeting) {
-      const pick = this.pickTarget(event, { fromLabel: true });
+      const pick = this.pickTarget(event);
       if (pick && (pick.kind === 'tile' || pick.kind === 'unit')) {
         this.callbacks.onItemTarget(pick.row, pick.col);
       }
       return;
     }
 
-    const pick = this.pickTarget(event, { fromLabel: true });
+    const pick = this.pickTarget(event);
     if (!pick) {
       if (this.state.draggingUnitId) {
         this.callbacks.onDragCancel();

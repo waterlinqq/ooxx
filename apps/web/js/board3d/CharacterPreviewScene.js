@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildUnitModel } from './UnitModels.js';
-import { createEmptyBoard, createUnit } from '../units.js';
+import { CLASSES, createEmptyBoard, createUnit } from '../units.js';
 import { getValidMoves, isInBounds } from '../rules.js';
 
 const UNIT_BASE_Y = 0.072;
@@ -14,6 +14,10 @@ const ORTHOGONAL_DIRECTIONS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
 ];
 
+const DIAGONAL_DIRECTIONS = [
+  [-1, -1], [-1, 1], [1, -1], [1, 1],
+];
+
 function previewTilePosition(row, col) {
   const offset = ((PREVIEW_BOARD_SIZE - 1) * PREVIEW_TILE_PITCH) / 2;
   return {
@@ -24,6 +28,13 @@ function previewTilePosition(row, col) {
 
 function getAttackRangeCells(unit) {
   const cells = [];
+
+  if (unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly) {
+    for (const [dr, dc] of DIAGONAL_DIRECTIONS) {
+      cells.push([unit.row + dr, unit.col + dc]);
+    }
+    return cells.filter(([row, col]) => isInBounds(row, col, PREVIEW_BOARD_SIZE));
+  }
 
   if (unit.type === 'artillery') {
     for (const [dr, dc] of ORTHOGONAL_DIRECTIONS) {
@@ -285,6 +296,10 @@ export class CharacterPreviewScene {
         bomb: captureRest(rig.bomb),
         wingL: captureRest(rig.wingL),
         wingR: captureRest(rig.wingR),
+        crest: captureRest(rig.crest),
+        banner: captureRest(rig.banner),
+        eyeStalkL: captureRest(rig.eyeStalkL),
+        eyeStalkR: captureRest(rig.eyeStalkR),
       },
       seed: Math.random() * Math.PI * 2,
       materials: model.materials,
@@ -369,6 +384,26 @@ export class CharacterPreviewScene {
         const flap = Math.sin(t * 4.5) * 0.38;
         if (rest.wingL) rest.wingL.node.rotation.z = rest.wingL.rot.z + flap;
         if (rest.wingR) rest.wingR.node.rotation.z = rest.wingR.rot.z - flap;
+        break;
+      }
+      case 'crabGeneral': {
+        const pinch = Math.sin(t * 2.4) * 0.08;
+        if (rest.armL) rest.armL.node.rotation.x = rest.armL.rot.x + pinch;
+        if (rest.armR) rest.armR.node.rotation.x = rest.armR.rot.x - pinch;
+        if (rest.eyeStalkL) {
+          rest.eyeStalkL.node.rotation.z = rest.eyeStalkL.rot.z + Math.sin(t * 1.8) * 0.12;
+          rest.eyeStalkL.node.rotation.x = rest.eyeStalkL.rot.x + Math.sin(t * 2.3 + 0.4) * 0.08;
+        }
+        if (rest.eyeStalkR) {
+          rest.eyeStalkR.node.rotation.z = rest.eyeStalkR.rot.z - Math.sin(t * 1.8 + 0.6) * 0.12;
+          rest.eyeStalkR.node.rotation.x = rest.eyeStalkR.rot.x + Math.sin(t * 2.3) * 0.08;
+        }
+        if (rest.banner) {
+          rest.banner.node.rotation.z = rest.banner.rot.z + Math.sin(t * 1.2) * 0.06;
+        }
+        if (rest.crest) {
+          rest.crest.node.position.y = rest.crest.pos.y + Math.sin(t * 1.5) * 0.004;
+        }
         break;
       }
       default:

@@ -1697,6 +1697,364 @@ function buildGhost(mats) {
   };
 }
 
+// Top-down is the board's default camera, so the carapace outline does most of the
+// work: wide across, tapered at the front, with a spike at each shoulder.
+function crabCarapaceShape() {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0.185);
+  shape.bezierCurveTo(0.075, 0.181, 0.152, 0.147, 0.198, 0.078);
+  shape.lineTo(0.256, 0.014);
+  shape.bezierCurveTo(0.232, -0.077, 0.156, -0.158, 0, -0.174);
+  shape.bezierCurveTo(-0.156, -0.158, -0.232, -0.077, -0.256, 0.014);
+  shape.lineTo(-0.198, 0.078);
+  shape.bezierCurveTo(-0.152, 0.147, -0.075, 0.181, 0, 0.185);
+  return shape;
+}
+
+function crabCarapaceGeometry() {
+  return cached('crab-carapace-plate', () => {
+    const geometry = extrude(crabCarapaceShape(), 0.052, 0.014);
+    geometry.rotateX(Math.PI / 2);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function crabDomeGeometry() {
+  return cached('crab-carapace-dome', () => {
+    const geometry = new THREE.SphereGeometry(1, 26, 14, 0, Math.PI * 2, 0, Math.PI * 0.56);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+// Arcs are baked flat at build time; composing them from mesh Euler angles fights
+// the XYZ order and lands the sweep in the wrong plane.
+function crabArcGeometry(key, radius, tube, arc) {
+  return cached(key, () => {
+    const geometry = new THREE.TorusGeometry(radius, tube, 8, 26, arc);
+    geometry.rotateZ(Math.PI / 2 - arc / 2);
+    geometry.rotateX(Math.PI / 2);
+    return geometry;
+  });
+}
+
+function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat) {
+  const claw = new THREE.Group();
+  // Held out front and slightly raised: the reach is what sells the diagonal
+  // threat, and it keeps the pincers clear of the shell from every angle.
+  claw.position.set(side * 0.17, -0.012, 0.115);
+  claw.rotation.set(-0.26, side * 0.66, 0);
+
+  part(claw, cached('crab-shoulder', () => new THREE.SphereGeometry(0.05, 14, 12)), jointMat, {
+    scale: [1, 0.88, 1],
+  });
+  part(claw, cached('crab-arm-upper', () => new THREE.CylinderGeometry(0.033, 0.042, 0.09, 12)), shellMat, {
+    pos: [0, 0.004, 0.05],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(claw, cached('crab-elbow', () => new THREE.SphereGeometry(0.037, 12, 10)), jointMat, {
+    pos: [0, 0.006, 0.098],
+  });
+
+  // The palm is a fat oval rather than a box; a slab here read as a pair of pliers.
+  const palm = new THREE.Group();
+  palm.position.set(0, 0.014, 0.155);
+  palm.rotation.set(0.08, side * -0.18, side * 0.12);
+  claw.add(palm);
+  part(palm, cached('crab-palm', () => new THREE.SphereGeometry(0.062, 16, 12)), clawMat, {
+    scale: [0.8, 0.92, 1.3],
+  });
+  part(palm, cached('crab-palm-ridge', () => new THREE.BoxGeometry(0.018, 0.026, 0.1)), clawDeepMat, {
+    pos: [0, 0.05, 0],
+    shadow: false,
+  });
+  part(palm, crabArcGeometry('crab-claw-band', 0.056, 0.009, Math.PI * 2), mats.gold, {
+    pos: [0, 0, -0.048],
+    rot: [Math.PI / 2, 0, 0],
+    scale: [1, 1, 0.86],
+    shadow: false,
+  });
+
+  const pincerGeo = cached('crab-pincer', () => new THREE.CylinderGeometry(0.008, 0.036, 0.125, 10));
+  const toothGeo = cached('crab-pincer-tooth', () => new THREE.ConeGeometry(0.009, 0.024, 6));
+
+  const upperPinch = new THREE.Group();
+  upperPinch.position.set(0, 0.03, 0.055);
+  upperPinch.rotation.set(-0.14, 0, 0);
+  palm.add(upperPinch);
+  part(upperPinch, pincerGeo, clawMat, {
+    pos: [0, 0, 0.062],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  for (const [z, y] of [[0.03, -0.026], [0.06, -0.019], [0.09, -0.012]]) {
+    part(upperPinch, toothGeo, mats.trim, {
+      pos: [0, y, z],
+      rot: [Math.PI, 0, 0],
+      shadow: false,
+    });
+  }
+
+  const lowerPinch = new THREE.Group();
+  lowerPinch.position.set(0, -0.028, 0.055);
+  lowerPinch.rotation.set(0.2, 0, 0);
+  palm.add(lowerPinch);
+  part(lowerPinch, pincerGeo, clawDeepMat, {
+    pos: [0, 0, 0.055],
+    rot: [Math.PI / 2, 0, 0],
+    scale: [0.9, 0.9, 0.86],
+  });
+  for (const [z, y] of [[0.028, 0.022], [0.058, 0.014]]) {
+    part(lowerPinch, toothGeo, mats.trim, { pos: [0, y, z], shadow: false });
+  }
+
+  return claw;
+}
+
+function addCrabEyeStalk(parent, side, mats, shellMat) {
+  const stalk = new THREE.Group();
+  stalk.position.set(side * 0.058, 0.024, 0.048);
+  stalk.rotation.set(-0.16, 0, side * -0.26);
+  part(stalk, cached('crab-stalk', () => new THREE.CylinderGeometry(0.011, 0.016, 0.072, 10)), shellMat, {
+    pos: [0, 0.036, 0],
+  });
+  part(stalk, crabArcGeometry('crab-stalk-ring', 0.015, 0.004, Math.PI * 2), mats.gold, {
+    pos: [0, 0.06, 0],
+    shadow: false,
+  });
+  part(stalk, cached('crab-eye-socket', () => new THREE.SphereGeometry(0.027, 12, 10)), mats.charcoal, {
+    pos: [0, 0.084, 0],
+    scale: [1, 0.94, 0.92],
+  });
+  const eye = part(stalk, cached('crab-eyeball', () => new THREE.SphereGeometry(0.02, 12, 10)), mats.eye, {
+    pos: [0, 0.086, 0.013],
+    shadow: false,
+  });
+  parent.add(stalk);
+  return { stalk, eye };
+}
+
+// Legs hinge twice: the femur splays wide so the tips clear the shell outline
+// from above, then the tibia drops back to vertical so the crab still stands.
+function addCrabLeg(parent, side, z, fan, splay, mats, legMat, jointMat) {
+  const leg = new THREE.Group();
+  leg.position.set(side * 0.2, -0.012, z);
+  leg.rotation.set(0, side * fan, side * splay);
+  parent.add(leg);
+
+  part(leg, cached('crab-leg-coxa', () => new THREE.SphereGeometry(0.027, 10, 10)), jointMat);
+  part(leg, cached('crab-leg-femur', () => new THREE.CylinderGeometry(0.018, 0.024, 0.11, 9)), legMat, {
+    pos: [0, -0.055, 0],
+  });
+
+  const knee = new THREE.Group();
+  knee.position.set(0, -0.11, 0);
+  knee.rotation.z = side * -(splay + 0.16);
+  leg.add(knee);
+  part(knee, cached('crab-leg-knee', () => new THREE.SphereGeometry(0.02, 9, 9)), jointMat, { shadow: false });
+  part(knee, cached('crab-leg-tibia', () => new THREE.CylinderGeometry(0.012, 0.017, 0.078, 8)), legMat, {
+    pos: [0, -0.042, 0],
+  });
+  part(knee, cached('crab-leg-tip', () => new THREE.ConeGeometry(0.013, 0.048, 7)), mats.charcoal, {
+    pos: [0, -0.104, 0],
+    rot: [Math.PI, 0, 0],
+    shadow: false,
+  });
+  return leg;
+}
+
+function buildCrabGeneral(mats) {
+  const group = new THREE.Group();
+
+  // The carapace is most of this unit's footprint, so it has to carry the team
+  // colour — a fixed crab-orange left blue and red indistinguishable on the
+  // board. Warm ivory and gold survive on the underside, mandibles, and pincer
+  // teeth, which is enough to keep it reading as a crab.
+  const teamBase = mats.armor.color.clone();
+  const warm = new THREE.Color(0xffd9b3);
+  const shadowTone = new THREE.Color(0x0b1220);
+
+  const shellMat = standard(teamBase.clone().lerp(warm, 0.12), {
+    roughness: 0.4,
+    metalness: 0.26,
+    emissive: teamBase.clone().lerp(shadowTone, 0.5),
+    emissiveIntensity: 0.3,
+  });
+  const shellDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.48), {
+    roughness: 0.5,
+    metalness: 0.3,
+  });
+  const clawMat = standard(teamBase.clone().lerp(warm, 0.26), {
+    roughness: 0.36,
+    metalness: 0.28,
+    emissive: teamBase.clone().lerp(shadowTone, 0.55),
+    emissiveIntensity: 0.16,
+  });
+  const clawDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.34), {
+    roughness: 0.44,
+    metalness: 0.3,
+  });
+  const legMat = standard(teamBase.clone().lerp(shadowTone, 0.62), {
+    roughness: 0.66,
+    metalness: 0.18,
+  });
+  const jointMat = standard(0x2b2233, { roughness: 0.6, metalness: 0.24 });
+  const bellyMat = standard(0xf6dcb8, { roughness: 0.8, metalness: 0.04 });
+  const extraMaterials = [shellMat, shellDeepMat, clawMat, clawDeepMat, legMat, jointMat, bellyMat];
+
+  const body = new THREE.Group();
+  body.position.set(0, 0.2, 0);
+  group.add(body);
+
+  // Outline plate for the top-down read, dome on top for volume from the side.
+  part(body, crabCarapaceGeometry(), shellDeepMat, { pos: [0, -0.004, 0] });
+  part(body, crabDomeGeometry(), shellMat, {
+    pos: [0, 0.008, -0.006],
+    scale: [0.226, 0.152, 0.158],
+  });
+
+  const knobGeo = cached('crab-shell-knob', () => new THREE.SphereGeometry(0.026, 10, 8));
+  for (const [x, y, z, s] of [
+    [0, 0.152, -0.03, 1.05],
+    [-0.105, 0.118, 0.03, 0.9],
+    [0.105, 0.118, 0.03, 0.9],
+    [-0.145, 0.075, -0.075, 0.78],
+    [0.145, 0.075, -0.075, 0.78],
+  ]) {
+    part(body, knobGeo, shellMat, { pos: [x, y, z], scale: [s, s * 0.6, s], shadow: false });
+  }
+
+  part(body, crabArcGeometry('crab-shell-brow', 0.185, 0.011, Math.PI * 0.66), mats.gold, {
+    pos: [0, 0.038, 0.012],
+    shadow: false,
+  });
+  part(body, crabArcGeometry('crab-shell-rim', 0.235, 0.012, Math.PI * 2), shellDeepMat, {
+    pos: [0, -0.014, -0.01],
+    scale: [1.06, 1, 0.76],
+    shadow: false,
+  });
+
+  const spikeGeo = cached('crab-shell-spike', () => new THREE.ConeGeometry(0.024, 0.08, 7));
+  for (const side of [-1, 1]) {
+    part(body, spikeGeo, shellDeepMat, {
+      pos: [side * 0.278, 0.002, 0.012],
+      rot: [0, 0, side * -1.42],
+      shadow: false,
+    });
+    part(body, cached('crab-shell-tooth', () => new THREE.ConeGeometry(0.017, 0.05, 6)), shellDeepMat, {
+      pos: [side * 0.212, 0.0, -0.105],
+      rot: [0, 0, side * -1.15],
+      shadow: false,
+    });
+  }
+
+  part(body, cached('crab-belly-plate', () => new THREE.BoxGeometry(0.3, 0.045, 0.24)), bellyMat, {
+    pos: [0, -0.045, -0.005],
+  });
+
+  const crest = new THREE.Group();
+  crest.position.set(0, 0.145, -0.015);
+  body.add(crest);
+  part(crest, cached('crab-crest-base', () => new THREE.CylinderGeometry(0.042, 0.064, 0.036, 14)), mats.armorDeep);
+  part(crest, cached('crab-crest-fin', () => new THREE.BoxGeometry(0.024, 0.115, 0.115)), mats.armor, {
+    pos: [0, 0.09, 0.005],
+    rot: [0.06, 0, 0],
+  });
+  part(crest, cached('crab-crest-edge', () => new THREE.BoxGeometry(0.03, 0.014, 0.115)), mats.gold, {
+    pos: [0, 0.148, 0.005],
+    rot: [0.06, 0, 0],
+    shadow: false,
+  });
+  part(crest, cached('crab-crest-gem', () => new THREE.OctahedronGeometry(0.026, 0)), mats.trim, {
+    pos: [0, 0.062, 0.062],
+    shadow: false,
+  });
+  for (const side of [-1, 1]) {
+    part(crest, cached('crab-crest-horn', () => new THREE.ConeGeometry(0.013, 0.075, 6)), mats.gold, {
+      pos: [side * 0.05, 0.05, 0.01],
+      rot: [-0.12, 0, side * 0.5],
+      shadow: false,
+    });
+  }
+
+  const banner = new THREE.Group();
+  banner.position.set(0, 0.09, -0.135);
+  banner.rotation.x = -0.3;
+  body.add(banner);
+  part(banner, cached('crab-banner-pole', () => new THREE.CylinderGeometry(0.007, 0.009, 0.22, 8)), mats.gold, {
+    pos: [0, 0.11, 0],
+  });
+  part(banner, cached('crab-banner-cloth', () => new THREE.BoxGeometry(0.11, 0.085, 0.012)), mats.cloth, {
+    pos: [0.052, 0.15, 0],
+    rot: [0, 0, -0.1],
+  });
+  part(banner, cached('crab-banner-crest', () => new THREE.OctahedronGeometry(0.019, 0)), mats.trim, {
+    pos: [0.052, 0.15, 0.012],
+    shadow: false,
+  });
+  part(banner, cached('crab-banner-tip', () => new THREE.ConeGeometry(0.014, 0.04, 6)), mats.trim, {
+    pos: [0, 0.24, 0],
+    shadow: false,
+  });
+
+  // Face sits in the notch under the front lip, where the shell overhangs it.
+  const head = new THREE.Group();
+  head.position.set(0, -0.012, 0.132);
+  body.add(head);
+  part(head, cached('crab-face-plate', () => new THREE.BoxGeometry(0.13, 0.058, 0.06)), shellDeepMat, {
+    pos: [0, 0, 0.005],
+    rot: [0.12, 0, 0],
+  });
+  part(head, cached('crab-maxilliped', () => new THREE.BoxGeometry(0.075, 0.036, 0.03)), bellyMat, {
+    pos: [0, -0.03, 0.026],
+    rot: [0.24, 0, 0],
+    shadow: false,
+  });
+  const mandibleGeo = cached('crab-mandible', () => new THREE.ConeGeometry(0.014, 0.05, 6));
+  for (const side of [-1, 1]) {
+    part(head, mandibleGeo, jointMat, {
+      pos: [side * 0.042, -0.026, 0.03],
+      rot: [1.5, 0, side * 0.34],
+      shadow: false,
+    });
+  }
+
+  const eyeStalks = {};
+  for (const side of [-1, 1]) {
+    eyeStalks[side < 0 ? 'left' : 'right'] = addCrabEyeStalk(head, side, mats, shellMat);
+  }
+  const eyes = [eyeStalks.left.eye, eyeStalks.right.eye];
+
+  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat);
+  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat);
+  body.add(clawL);
+  body.add(clawR);
+
+  for (const [z, fan, splay] of [
+    [0.055, 0.34, 0.92],
+    [-0.03, 0.02, 1.06],
+    [-0.11, -0.32, 0.96],
+  ]) {
+    for (const side of [-1, 1]) {
+      addCrabLeg(body, side, z, fan, splay, mats, legMat, jointMat);
+    }
+  }
+
+  return {
+    group,
+    torso: body,
+    head,
+    armL: clawL,
+    armR: clawR,
+    eyes,
+    crest,
+    banner,
+    eyeStalkL: eyeStalks.left.stalk,
+    eyeStalkR: eyeStalks.right.stalk,
+    extraMaterials,
+  };
+}
+
 function buildFallback(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);
@@ -1722,6 +2080,7 @@ const BUILDERS = {
   priest: buildPriest,
   ghost: buildGhost,
   viper: buildViper,
+  crabGeneral: buildCrabGeneral,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -1740,6 +2099,7 @@ const SILHOUETTE = {
   priest: [0.94, 1, 0.94],
   ghost: [0.9, 1.08, 0.9],
   viper: [0.98, 1.04, 0.98],
+  crabGeneral: [1.14, 0.86, 1.14],
 };
 
 export function buildUnitModel(classId, team) {

@@ -1,3 +1,5 @@
+import { CLASSES } from '../units.js';
+
 // Attack coverage map.
 //
 // The old evaluator only had ad-hoc danger terms for archers and bombers, so it happily
@@ -5,7 +7,7 @@
 // cell, the strongest single hit the given team could land on a unit standing there.
 //
 // Reach mirrors js/rules.js exactly:
-//   melee/support - four neighbouring cells (death explosions are separate)
+//   melee/support - four neighbouring cells (diagonalOnly: four diagonal cells)
 //   ranged - four rays, up to `range` steps, stopping at the first occupied cell
 //   artillery - four orthogonal cells exactly two steps away (no melee on adjacent cells)
 //   tower  - four orthogonal rays, up to `range` steps, stopping at the first occupied cell
@@ -21,6 +23,7 @@ const ALL_DIRS = [
 ];
 
 const ORTHOGONAL_DIRS = ALL_DIRS.slice(0, 4);
+const DIAGONAL_DIRS = ALL_DIRS.slice(4);
 
 function createMap(cells) {
   return {
@@ -66,7 +69,10 @@ export function buildThreatMap(ctx, attackerTeam) {
       if (!unit || unit.team !== attackerTeam) continue;
 
       if (unit.type === 'melee' || unit.type === 'support') {
-        for (const [dr, dc] of ORTHOGONAL_DIRS) {
+        const dirs = (unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly)
+          ? DIAGONAL_DIRS
+          : ORTHOGONAL_DIRS;
+        for (const [dr, dc] of dirs) {
           const nr = r + dr;
           const nc = c + dc;
           if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;

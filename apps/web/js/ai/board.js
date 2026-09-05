@@ -123,6 +123,7 @@ function cloneUnit(unit, searchIndex) {
     passiveBlessing: unit.passiveBlessing ?? false,
     possessionOnKill: unit.possessionOnKill ?? false,
     poisonOnHit: unit.poisonOnHit ?? false,
+    diagonalOnly: unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly ?? false,
     poisoned: unit.poisoned ?? false,
     poisonFresh: unit.poisonFresh ?? false,
     immobilized: unit.immobilized ?? false,

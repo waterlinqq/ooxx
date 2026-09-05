@@ -27,6 +27,7 @@ const CLASS_BONUS = {
   priest: 8,
   ghost: 10,
   viper: 6,
+  crabGeneral: 6,
 };
 
 // A reserve unit is real material but contributes nothing to lines until it lands.

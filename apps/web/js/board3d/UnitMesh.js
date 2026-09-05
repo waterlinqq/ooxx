@@ -36,8 +36,8 @@ const CROUCH_DEPTH = {
 const TMP_DIR = new THREE.Vector3();
 const TMP_TARGET = new THREE.Vector3();
 
-const PICK_RADIUS = 0.36;
-const PICK_HEIGHT = 1.65;
+const PICK_RADIUS = 0.26;
+const PICK_HEIGHT = 0.95;
 const PICK_GEO = new THREE.CylinderGeometry(PICK_RADIUS, PICK_RADIUS, PICK_HEIGHT, 8);
 PICK_GEO.userData.shared = true;
 const PICK_MAT = new THREE.MeshBasicMaterial({ visible: false });
@@ -193,6 +193,10 @@ export class UnitMeshManager {
       bomb: captureRest(rig.bomb),
       wingL: captureRest(rig.wingL),
       wingR: captureRest(rig.wingR),
+      crest: captureRest(rig.crest),
+      banner: captureRest(rig.banner),
+      eyeStalkL: captureRest(rig.eyeStalkL),
+      eyeStalkR: captureRest(rig.eyeStalkR),
     };
 
     return {
@@ -707,6 +711,21 @@ export class UnitMeshManager {
         }
         if (rest.head) {
           rest.head.node.rotation.x -= entry.lean * 0.45;
+        }
+        break;
+      }
+      case 'crabGeneral': {
+        const pinch = Math.sin(t * 2.4) * 0.06 * idle;
+        if (rest.armL) rest.armL.node.rotation.x += pinch + entry.swing * 0.4;
+        if (rest.armR) rest.armR.node.rotation.x -= pinch + entry.swing * 0.4;
+        if (rest.eyeStalkL) {
+          rest.eyeStalkL.node.rotation.z += Math.sin(t * 1.8) * 0.08 * idle;
+        }
+        if (rest.eyeStalkR) {
+          rest.eyeStalkR.node.rotation.z -= Math.sin(t * 1.8 + 0.5) * 0.08 * idle;
+        }
+        if (rest.banner) {
+          rest.banner.node.rotation.z += Math.sin(t * 1.1) * 0.05 * idle;
         }
         break;
       }

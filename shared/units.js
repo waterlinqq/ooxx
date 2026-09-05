@@ -129,6 +129,18 @@ export const CLASSES = {
     poisonOnHit: true,
     desc: '上下左右近戰；命中使敵人中毒（攻擊-1，敵方行動結束後每回合扣 1 血，不可疊加）',
   },
+  crabGeneral: {
+    id: 'crabGeneral',
+    name: '蟹將',
+    icon: '🦀',
+    hp: 4,
+    atk: 2,
+    range: 1,
+    moveRange: 1,
+    diagonalOnly: true,
+    type: 'melee',
+    desc: '僅能斜角移動與攻擊，無法上下左右',
+  },
 };
 
 export const TEAM = {
@@ -189,9 +201,9 @@ export const BOARD_MODES = {
     turnDurationMs: 18000,
     turnBonusMs: 5000,
     matchDurationMs: 10 * 60 * 1000,
-    // All twelve classes, one each; longest board distance is 4 so range-3 no longer
+    // All classes, one each; longest board distance is 4 so range-3 no longer
     // covers the whole grid and mobility matters most.
-    rosterSize: 12,
+    rosterSize: 13,
     maxPerClass: 1,
     roster: Object.keys(CLASSES),
   },
@@ -288,6 +300,7 @@ export function createUnit(classId, teamId) {
     passiveBlessing: cls.passiveBlessing ?? false,
     possessionOnKill: cls.possessionOnKill ?? false,
     poisonOnHit: cls.poisonOnHit ?? false,
+    diagonalOnly: cls.diagonalOnly ?? false,
     poisoned: false,
     poisonFresh: false,
     immobilized: false,
