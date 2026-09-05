@@ -22,6 +22,7 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
   return searchBestAction(
     {
       board: state.board,
+      boardMode: state.boardMode ?? fallbackMode.id,
       mapProps: state.mapProps ?? null,
       shadowClones: state.shadowClones ?? [],
       blueReserve: state.blueReserve ?? [],

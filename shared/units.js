@@ -141,6 +141,18 @@ export const CLASSES = {
     type: 'melee',
     desc: '僅能斜角移動與攻擊，無法上下左右',
   },
+  castle: {
+    id: 'castle',
+    name: '城堡',
+    icon: '🏯',
+    hp: 15,
+    atk: 0,
+    range: 0,
+    moveRange: 0,
+    type: 'castle',
+    boardOnly: true,
+    desc: '不可移動、不攻擊；血量歸零時對手獲勝，可計入連線',
+  },
 };
 
 export const TEAM = {
@@ -195,21 +207,56 @@ export const BOARD_MODES = {
   },
   '5x5': {
     id: '5x5',
-    label: '二十五宮格',
+    label: '攻城戰',
     size: 5,
     actionsPerTurn: 1,
     turnDurationMs: 18000,
     turnBonusMs: 5000,
     matchDurationMs: 10 * 60 * 1000,
-    // All classes, one each; longest board distance is 4 so range-3 no longer
-    // covers the whole grid and mobility matters most.
+    // All deployable classes, one each; castles are placed on the board at start.
     rosterSize: 13,
     maxPerClass: 1,
-    roster: Object.keys(CLASSES),
+    roster: Object.keys(CLASSES).filter((id) => !CLASSES[id]?.boardOnly),
+    castles: {
+      red: { row: 0, col: 2 },
+      blue: { row: 4, col: 2 },
+    },
   },
 };
 
 export const CLASS_IDS = Object.keys(CLASSES);
+
+export function getRosterClassIds() {
+  return CLASS_IDS.filter((id) => !CLASSES[id]?.boardOnly);
+}
+
+export function isCastleUnit(unit) {
+  return unit?.classId === 'castle' || unit?.type === 'castle';
+}
+
+export function getCastleCells(modeId) {
+  const mode = getBoardMode(modeId);
+  if (!mode.castles) return [];
+  return Object.entries(mode.castles).map(([team, pos]) => ({
+    row: pos.row,
+    col: pos.col,
+    team,
+  }));
+}
+
+export function placeModeCastles(board, modeId) {
+  const mode = getBoardMode(modeId);
+  if (!mode.castles) return board;
+  const next = cloneBoard(board);
+  for (const [team, pos] of Object.entries(mode.castles)) {
+    const unit = createUnit('castle', team);
+    unit.id = `${team}-castle`;
+    unit.row = pos.row;
+    unit.col = pos.col;
+    next[pos.row][pos.col] = unit;
+  }
+  return next;
+}
 
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
@@ -238,7 +285,7 @@ export function countRosterClasses(roster) {
 }
 
 export function canAddToRoster(roster, classId, modeId) {
-  if (!CLASSES[classId]) return false;
+  if (!CLASSES[classId] || CLASSES[classId].boardOnly) return false;
   if (roster.length >= getRosterLimit(modeId)) return false;
   const used = roster.filter((id) => id === classId).length;
   return used < getMaxPerClass(modeId);
@@ -249,7 +296,7 @@ export function isValidRoster(roster, modeId) {
   if (roster.length !== getRosterLimit(modeId)) return false;
   const counts = countRosterClasses(roster);
   for (const classId of roster) {
-    if (!CLASSES[classId]) return false;
+    if (!CLASSES[classId] || CLASSES[classId].boardOnly) return false;
   }
   for (const count of Object.values(counts)) {
     if (count > getMaxPerClass(modeId)) return false;
@@ -270,7 +317,7 @@ export function createRandomRoster(modeId, rng = Math.random) {
   const roster = [];
 
   while (roster.length < limit) {
-    const pool = CLASS_IDS.filter((id) => (counts[id] ?? 0) < maxPerClass);
+    const pool = getRosterClassIds().filter((id) => (counts[id] ?? 0) < maxPerClass);
     if (pool.length === 0) break;
     const classId = pool[Math.floor(rng() * pool.length)];
     counts[classId] = (counts[classId] ?? 0) + 1;

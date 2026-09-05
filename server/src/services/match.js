@@ -9,6 +9,8 @@ import {
   createEmptyBoard,
   createTeamReserve,
   resolveRoster,
+  placeModeCastles,
+  getCastleCells,
 } from '../../../shared/units.js';
 import {
   getValidMoves,
@@ -21,6 +23,7 @@ import {
   applyPoisonTurnTicks,
   expireShadowClonesForTurnStart,
   checkWin,
+  checkCastleVictory,
   isTeamEliminated,
   resolveDeathExplosions,
 } from '../../../shared/rules.js';
@@ -78,13 +81,15 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
   const blueRoster = resolveRoster(rosters.blueRoster, boardMode);
   const redRoster = resolveRoster(rosters.redRoster, boardMode);
   const { generateMapProps } = mapPropsModule;
+  const castleCells = getCastleCells(boardMode).map(({ row, col }) => [row, col]);
+  const board = placeModeCastles(createEmptyBoard(mode.size), boardMode);
 
   return {
     boardMode,
     phase: 'battle',
     currentPlayer: 'blue',
-    board: createEmptyBoard(mode.size),
-    mapProps: generateMapProps(mode.size, rng),
+    board,
+    mapProps: generateMapProps(mode.size, rng, castleCells),
     shadowClones: [],
     blueRoster: [...blueRoster],
     redRoster: [...redRoster],
@@ -175,6 +180,12 @@ function checkWinAfterEffect(state, detail) {
     return true;
   }
 
+  if (checkCastleVictory(state.board, state.currentPlayer, state.boardMode)) {
+    state.lastWinLine = null;
+    finishGame(state, state.currentPlayer, `${TEAM[state.currentPlayer].name} ${detail}後攻破城堡！`, 'castle');
+    return true;
+  }
+
   state.message = detail;
   return false;
 }
@@ -256,6 +267,12 @@ function endAction(state, actionLabel, unitId, { isDeploy = false } = {}) {
   if (isTeamEliminated(state.board, enemy, enemyReserve)) {
     state.lastWinLine = null;
     finishGame(state, team, `${TEAM[team].name} ${actionLabel}後全滅對手！`, 'elimination');
+    return withFx({ ok: true, ended: true });
+  }
+
+  if (checkCastleVictory(state.board, team, state.boardMode)) {
+    state.lastWinLine = null;
+    finishGame(state, team, `${TEAM[team].name} ${actionLabel}後攻破城堡！`, 'castle');
     return withFx({ ok: true, ended: true });
   }
 

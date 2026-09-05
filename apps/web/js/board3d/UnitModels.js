@@ -1577,6 +1577,88 @@ function buildTower(mats) {
   return { group, turret };
 }
 
+function buildCastle(mats) {
+  const group = new THREE.Group();
+
+  // Wide foundation
+  part(group, cached('castle-foot', () => new THREE.BoxGeometry(0.78, 0.1, 0.78)), mats.armorDeep, {
+    pos: [0, 0.05, 0],
+  });
+  part(group, cached('castle-plinth', () => new THREE.BoxGeometry(0.72, 0.08, 0.72)), mats.armor, {
+    pos: [0, 0.14, 0],
+  });
+
+  // Outer curtain wall ring
+  const wallH = 0.28;
+  const wallY = 0.18 + wallH / 2;
+  const wallThick = 0.1;
+  const wallSpan = 0.66;
+  part(group, cached('castle-wall-n', () => new THREE.BoxGeometry(wallSpan, wallH, wallThick)), mats.armor, {
+    pos: [0, wallY, -0.28],
+  });
+  part(group, cached('castle-wall-s', () => new THREE.BoxGeometry(wallSpan, wallH, wallThick)), mats.armor, {
+    pos: [0, wallY, 0.28],
+  });
+  part(group, cached('castle-wall-w', () => new THREE.BoxGeometry(wallThick, wallH, wallSpan - wallThick * 2)), mats.armor, {
+    pos: [-0.28, wallY, 0],
+  });
+  part(group, cached('castle-wall-e', () => new THREE.BoxGeometry(wallThick, wallH, wallSpan - wallThick * 2)), mats.armor, {
+    pos: [0.28, wallY, 0],
+  });
+
+  // Gate opening on south face
+  part(group, cached('castle-gate-lintel', () => new THREE.BoxGeometry(0.2, 0.06, 0.08)), mats.trim, {
+    pos: [0, 0.24, 0.28],
+  });
+  part(group, cached('castle-gate-arch', () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 12, 1, false, 0, Math.PI)), mats.charcoal, {
+    pos: [0, 0.24, 0.28],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+
+  // Corner towers
+  const cornerGeo = cached('castle-corner', () => new THREE.CylinderGeometry(0.1, 0.11, 0.38, 10));
+  const cornerCapGeo = cached('castle-corner-cap', () => new THREE.ConeGeometry(0.12, 0.12, 10));
+  for (const [x, z] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) {
+    part(group, cornerGeo, mats.armorDeep, { pos: [x, 0.37, z] });
+    part(group, cornerCapGeo, mats.trim, { pos: [x, 0.65, z], shadow: false });
+  }
+
+  // Central keep
+  part(group, cached('castle-keep-base', () => new THREE.BoxGeometry(0.36, 0.12, 0.36)), mats.armorDeep, {
+    pos: [0, 0.24, 0],
+  });
+  part(group, cached('castle-keep-body', () => new THREE.BoxGeometry(0.32, 0.42, 0.32)), mats.armor, {
+    pos: [0, 0.51, 0],
+  });
+  part(group, cached('castle-keep-band', () => new THREE.BoxGeometry(0.34, 0.05, 0.34)), mats.trim, {
+    pos: [0, 0.4, 0],
+  });
+
+  const merlonGeo = cached('castle-merlon', () => new THREE.BoxGeometry(0.08, 0.1, 0.08));
+  for (const x of [-0.14, 0, 0.14]) {
+    for (const z of [-0.14, 0.14]) {
+      if (x === 0 && z === 0) continue;
+      part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.77, z] });
+    }
+  }
+
+  // Flag mast — primary team colour read
+  part(group, cached('castle-mast', () => new THREE.CylinderGeometry(0.016, 0.018, 0.42, 8)), mats.wood, {
+    pos: [0, 0.93, 0],
+  });
+  part(group, cached('castle-pennant', () => new THREE.BoxGeometry(0.008, 0.18, 0.28)), mats.ring, {
+    pos: [0, 1.02, 0.14],
+    shadow: false,
+  });
+  part(group, cached('castle-finial', () => new THREE.OctahedronGeometry(0.038, 0)), mats.gold, {
+    pos: [0, 1.16, 0],
+    shadow: false,
+  });
+
+  return { group };
+}
+
 // Shoulders that flare out and then draw back into a trailing wisp, so the
 // silhouette tapers instead of sitting on the tile like an egg.
 function ghostShroudGeometry() {
@@ -2101,6 +2183,7 @@ const BUILDERS = {
   ghost: buildGhost,
   viper: buildViper,
   crabGeneral: buildCrabGeneral,
+  castle: buildCastle,
 };
 
 // Keeps every class inside roughly one tile of height while preserving silhouette contrast.
@@ -2120,6 +2203,7 @@ const SILHOUETTE = {
   ghost: [0.9, 1.08, 0.9],
   viper: [0.98, 1.04, 0.98],
   crabGeneral: [1.14, 0.86, 1.14],
+  castle: [1.08, 1.08, 1.08],
 };
 
 export function buildUnitModel(classId, team) {

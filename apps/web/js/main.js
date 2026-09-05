@@ -5,7 +5,7 @@ import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.j
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit } from './units.js';
 import { isUnlockable } from './unlocks.js';
 import {
   loadSave,
@@ -80,11 +80,8 @@ const formationItemsEl = document.getElementById('formationItems');
 const formationItemHintEl = document.getElementById('formationItemHint');
 const bagGridEl = document.getElementById('bagGrid');
 const shopGridEl = document.getElementById('shopGrid');
-const itemBattleBarEl = document.getElementById('itemBattleBar');
+const itemBattleBtnEl = document.getElementById('itemBattleBtn');
 const itemBattleIconEl = document.getElementById('itemBattleIcon');
-const itemBattleNameEl = document.getElementById('itemBattleName');
-const useItemBtn = document.getElementById('useItemBtn');
-const cancelItemBtn = document.getElementById('cancelItemBtn');
 const startTutorialBtn = document.getElementById('startTutorial');
 const tutorialPanelEl = document.getElementById('tutorialPanel');
 const tutorialStepEl = document.getElementById('tutorialStep');
@@ -468,9 +465,11 @@ function clearWinConditionToast() {
   winConditionToastEl.classList.remove('dismissing');
 }
 
-function showWinConditionToast(winCount) {
+function showWinConditionToast(winCount, boardMode) {
   clearWinConditionToast();
-  winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手`;
+  winConditionTextEl.textContent = boardMode === '5x5'
+    ? `連成 ${winCount} 子 · 全滅對手 · 攻破城堡`
+    : `連成 ${winCount} 子 · 全滅對手`;
   winConditionToastEl.classList.remove('hidden', 'dismissing');
 
   winConditionHideTimer = setTimeout(() => {
@@ -491,6 +490,7 @@ function canControlUnit(state, unit) {
   if (state.phase !== 'battle' || state.animating) return false;
   const myTeam = state.yourTeam ?? 'blue';
   if (unit.team !== myTeam) return false;
+  if (isCastleUnit(unit)) return false;
   if (state.actedUnitIds.includes(unit.id)) return false;
   if (!state.isHumanTurn) return false;
   if (state.tutorial) {
@@ -767,7 +767,7 @@ function renderFormationItems(state) {
       formationItemHintEl.textContent = '背包沒有道具，請先到商店購買';
       formationItemHintEl.classList.remove('hidden');
     } else if (!state.equippedItem) {
-      formationItemHintEl.textContent = '選一個道具帶入對戰，開戰後可按「使用道具」';
+      formationItemHintEl.textContent = '選一個道具帶入對戰，開戰後點道具圖示使用';
       formationItemHintEl.classList.remove('hidden');
     } else {
       formationItemHintEl.classList.add('hidden');
@@ -842,25 +842,33 @@ function renderShop(state) {
 
 function renderBattleItem(state) {
   const show = state.phase === 'battle' && state.equippedItem && state.itemDef;
-  itemBattleBarEl.classList.toggle('hidden', !show);
+  itemBattleBtnEl.classList.toggle('hidden', !show);
   if (!show) return;
 
   itemBattleIconEl.className = 'item-battle-icon item-battle-icon-thumb';
   setItemIcon(itemBattleIconEl, state.itemDef);
-  itemBattleNameEl.textContent = state.itemDef.name;
 
   const targeting = Boolean(state.itemTargeting);
-  cancelItemBtn.classList.toggle('hidden', !targeting);
-  useItemBtn.classList.toggle('hidden', targeting || state.itemUsed);
+  const used = Boolean(state.itemUsed);
+  itemBattleBtnEl.classList.toggle('item-battle-targeting', targeting);
+  itemBattleBtnEl.classList.toggle('item-battle-used', used);
 
-  if (state.itemUsed) {
-    useItemBtn.disabled = true;
-    useItemBtn.textContent = '已使用';
+  if (used) {
+    itemBattleBtnEl.disabled = true;
+    itemBattleBtnEl.title = `${state.itemDef.name}（已使用）`;
     return;
   }
 
-  useItemBtn.textContent = '使用道具';
-  useItemBtn.disabled = !state.canUseItem || state.animating;
+  if (targeting) {
+    itemBattleBtnEl.disabled = state.animating;
+    itemBattleBtnEl.title = `${state.itemDef.name}（點擊取消）`;
+    return;
+  }
+
+  itemBattleBtnEl.disabled = !state.canUseItem || state.animating;
+  itemBattleBtnEl.title = state.canUseItem
+    ? `${state.itemDef.name}（點擊使用）`
+    : state.itemDef.name;
 }
 
 function renderFormation(state) {
@@ -886,6 +894,7 @@ function renderFormation(state) {
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
+    if (cls.boardOnly) continue;
     if (!isClassOwnedInState(state, cls.id)) continue;
 
     const selected = picked.includes(cls.id);
@@ -1240,7 +1249,7 @@ function render(state) {
     syncTurnTimer(state);
   }
   if (state.phase !== lastPhase && state.phase === 'battle' && !state.tutorial) {
-    showWinConditionToast(state.winCount);
+    showWinConditionToast(state.winCount, state.boardMode);
   } else if (state.phase !== 'battle' && state.phase !== 'gameEnd') {
     clearWinConditionToast();
   }
@@ -1362,8 +1371,10 @@ surrenderBtn.addEventListener('click', () => {
   if (isOnlinePlaying()) onlineClient.surrender();
   else game.surrender();
 });
-useItemBtn.addEventListener('click', () => game.beginUseItem());
-cancelItemBtn.addEventListener('click', () => game.cancelItemTargeting());
+itemBattleBtnEl.addEventListener('click', () => {
+  if (game.itemTargeting) game.cancelItemTargeting();
+  else game.beginUseItem();
+});
 startTutorialBtn.addEventListener('click', () => game.startTutorial());
 tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 

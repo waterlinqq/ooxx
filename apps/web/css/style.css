@@ -495,10 +495,7 @@ body {
   position: relative;
 }
 
-.battle-panels .item-battle-bar {
-  flex: 1;
-  min-width: 0;
-  max-width: min(100%, 280px);
+.battle-panels .item-battle-btn {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
@@ -2047,22 +2044,36 @@ body {
   margin-bottom: 6px;
 }
 
-.item-battle-bar {
+.item-battle-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--panel-2);
+  border-radius: 999px;
   background: var(--panel);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
 }
 
-.item-battle-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
+.item-battle-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.item-battle-btn.item-battle-targeting {
+  border-color: var(--accent);
+  background: rgba(251, 191, 36, 0.12);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.item-battle-btn.item-battle-used,
+.item-battle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .item-battle-icon {
@@ -2072,23 +2083,12 @@ body {
   font-size: 1.1rem;
   line-height: 1;
   flex-shrink: 0;
+  pointer-events: none;
 }
 
 .item-battle-icon-thumb {
-  width: 32px;
-  height: 32px;
-}
-
-.item-battle-name {
-  font-weight: 600;
-  font-size: 0.82rem;
-}
-
-.item-use-btn,
-#cancelItemBtn {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  font-size: 0.78rem;
+  width: 28px;
+  height: 28px;
 }
 
 #formationItemSection {

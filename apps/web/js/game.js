@@ -10,6 +10,9 @@ import {
   createRandomRoster,
   createEmptyBoard,
   createTeamReserve,
+  placeModeCastles,
+  getCastleCells,
+  isCastleUnit,
 } from './units.js';
 import {
   getValidMoves,
@@ -23,6 +26,7 @@ import {
   applyPoisonTurnTicks,
   expireShadowClonesForTurnStart,
   checkWin,
+  checkCastleVictory,
   isTeamEliminated,
   getValidPotionTargets,
   getValidBombCells,
@@ -363,6 +367,14 @@ export class Game {
       if (isTeamEliminated(this.board, enemy, enemyReserve)) {
         this.lastWinLine = null;
         this.handleRoundWin(team, '全滅');
+        return true;
+      }
+    }
+
+    for (const team of ['blue', 'red']) {
+      if (checkCastleVictory(this.board, team, this.boardMode)) {
+        this.lastWinLine = null;
+        this.handleRoundWin(team, '攻破城堡', 'castle');
         return true;
       }
     }
@@ -763,7 +775,9 @@ export class Game {
   startRound() {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
-    this.mapProps = generateMapProps(mode.size);
+    const castleCells = getCastleCells(this.boardMode).map(({ row, col }) => [row, col]);
+    this.mapProps = generateMapProps(mode.size, Math.random, castleCells);
+    this.board = placeModeCastles(this.board, this.boardMode);
     this.shadowClones = [];
     this.blueReserve = createTeamReserve(this.blueRoster, 'blue');
     this.redReserve = createTeamReserve(this.redRoster, 'red');
@@ -847,7 +861,7 @@ export class Game {
     }
     if (this.actedUnitIds.has(unitId)) return;
     const unit = this.board.flat().find((u) => u?.id === unitId);
-    if (!unit || !this.ownsHumanUnit(unit)) return;
+    if (!unit || !this.ownsHumanUnit(unit) || isCastleUnit(unit)) return;
     if (this.tutorial) {
       const actor = this.getTutorialActorCell();
       if (!actor || actor.row !== unit.row || actor.col !== unit.col) {
@@ -1126,6 +1140,12 @@ export class Game {
       return;
     }
 
+    if (checkCastleVictory(this.board, this.currentPlayer, this.boardMode)) {
+      this.lastWinLine = null;
+      this.handleRoundWin(this.currentPlayer, '攻破城堡', 'castle');
+      return;
+    }
+
     if (this.actionsRemaining > 0) {
       if (!this.hasValidActionsForTeam()) {
         this.message = `換 ${TEAM[enemy].name}`;
@@ -1171,6 +1191,7 @@ export class Game {
     const action = chooseAiAction(
       {
         board: this.board,
+        boardMode: this.boardMode,
         mapProps: this.mapProps,
         shadowClones: this.shadowClones,
         redReserve: this.redReserve,

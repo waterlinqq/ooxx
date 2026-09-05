@@ -1,4 +1,4 @@
-import { CLASSES, createEmptyBoard, cloneBoard } from './units.js';
+import { CLASSES, createEmptyBoard, cloneBoard, isCastleUnit, getBoardMode } from './units.js';
 
 /** @typedef {{ row: number, col: number, team: string, expiresOnTeamTurnStart: string }} ShadowClone */
 
@@ -124,7 +124,7 @@ export function getAdjacentCellsDiagonal(row, col, size = 3) {
 
 export function getValidMoves(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
-  if (unit.immobilized) return [];
+  if (unit.immobilized || isCastleUnit(unit)) return [];
 
   const size = boardSize(board);
 
@@ -277,6 +277,7 @@ function unitDiagonalOnly(unit) {
 
 export function getValidAttackTargets(board, unit) {
   if (unit.row < 0) return [];
+  if (isCastleUnit(unit) || (unit.atk ?? CLASSES[unit.classId]?.atk ?? 0) <= 0) return [];
 
   const size = boardSize(board);
   const targets = [];
@@ -378,7 +379,33 @@ export function checkWin(board, team, mapProps = null) {
 }
 
 export function isTeamEliminated(board, team, reserve) {
-  return countTeamOnBoard(board, team) === 0 && reserve.length === 0;
+  return countCombatUnitsOnBoard(board, team) === 0 && reserve.length === 0;
+}
+
+export function countCombatUnitsOnBoard(board, team) {
+  let count = 0;
+  for (const row of board) {
+    for (const cell of row) {
+      if (cell?.team === team && !isCastleUnit(cell)) count++;
+    }
+  }
+  return count;
+}
+
+export function findCastle(board, team) {
+  for (const row of board) {
+    for (const cell of row) {
+      if (cell?.team === team && isCastleUnit(cell)) return cell;
+    }
+  }
+  return null;
+}
+
+export function checkCastleVictory(board, actingTeam, modeId) {
+  const mode = getBoardMode(modeId);
+  if (!mode.castles) return false;
+  const enemy = actingTeam === 'blue' ? 'red' : 'blue';
+  return findCastle(board, enemy) === null;
 }
 
 export function applyMove(board, unit, row, col, shadowClones = null) {

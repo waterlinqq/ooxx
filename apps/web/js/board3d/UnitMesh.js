@@ -31,6 +31,7 @@ const CROUCH_DEPTH = {
   assassin: 1.2,
   bomber: 0.9,
   eagle: 0,
+  castle: 0,
 };
 
 const TMP_DIR = new THREE.Vector3();

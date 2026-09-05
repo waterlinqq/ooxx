@@ -53,12 +53,15 @@ export const MAP_PROPS = {
 
 const SPAWN_RATE = 0.02;
 
-export function generateMapProps(size, rng = Math.random) {
+export function generateMapProps(size, rng = Math.random, excludedCells = []) {
   const props = createEmptyMapProps(size);
   if (!isMapPropsEnabled(size)) return props;
 
+  const excluded = new Set(excludedCells.map(([r, c]) => `${r},${c}`));
+
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
+      if (excluded.has(`${r},${c}`)) continue;
       const roll = rng();
       if (roll < SPAWN_RATE) props[r][c] = { kind: 'potion' };
       else if (roll < SPAWN_RATE * 2) props[r][c] = { kind: 'spikes' };

@@ -6,7 +6,7 @@
 // actions in place with an undo record, keeping the same 2D-array-of-units shape that
 // js/rules.js reads. Win lines and the cells that feed them are memoized per board size
 // and the per-line occupancy counters are maintained incrementally.
-import { CLASSES, CLASS_IDS } from '../units.js';
+import { CLASSES, CLASS_IDS, isCastleUnit } from '../units.js';
 import { isFlagCell, cloneMapProps, getMapPropAt } from '../mapPropUtils.js';
 import {
   getWinLines,
@@ -199,6 +199,7 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
     acted: new Set(),
     actedStack: [],
     lastMover: null,
+    boardMode: state.boardMode ?? `${size}x${size}`,
     hashHi: 0,
     hashLo: 0,
   };
@@ -851,7 +852,12 @@ export function hasCompletedLine(ctx, team) {
 }
 
 export function isEliminated(ctx, team) {
-  return ctx.onBoard[team] === 0 && ctx.reserves[team].length === 0;
+  if (ctx.reserves[team].length > 0) return false;
+  let combat = 0;
+  forEachUnit(ctx, (unit) => {
+    if (unit.team === team && !isCastleUnit(unit)) combat++;
+  });
+  return combat === 0;
 }
 
 export function forEachUnit(ctx, callback) {

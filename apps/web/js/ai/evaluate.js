@@ -8,6 +8,7 @@
 import { enemyOf, hasCompletedLine, isEliminated, getWinLinesForSize } from './board.js';
 import { buildThreatMap, isLethalAt, coverageAt, damageAt } from './threat.js';
 import { isFlagCell } from '../mapPropUtils.js';
+import { checkCastleVictory } from '../rules.js';
 
 export const WIN_SCORE = 1000000;
 
@@ -28,6 +29,7 @@ const CLASS_BONUS = {
   ghost: 10,
   viper: 6,
   crabGeneral: 6,
+  castle: 55,
 };
 
 // A reserve unit is real material but contributes nothing to lines until it lands.
@@ -245,8 +247,13 @@ function scoreElimination(ctx, team) {
  */
 export function terminalScore(ctx, team) {
   const enemy = enemyOf(team);
-  const teamWon = hasCompletedLine(ctx, team) || isEliminated(ctx, enemy);
-  const enemyWon = hasCompletedLine(ctx, enemy) || isEliminated(ctx, team);
+  const boardMode = ctx.boardMode ?? `${ctx.size}x${ctx.size}`;
+  const teamWon = hasCompletedLine(ctx, team)
+    || isEliminated(ctx, enemy)
+    || checkCastleVictory(ctx.board, team, boardMode);
+  const enemyWon = hasCompletedLine(ctx, enemy)
+    || isEliminated(ctx, team)
+    || checkCastleVictory(ctx.board, enemy, boardMode);
 
   if (teamWon && enemyWon) {
     // Reachable: killing the opponent's last unit can be a bomber whose blast takes our

@@ -3,6 +3,9 @@
 import {
   createUnit,
   createEmptyBoard,
+  placeModeCastles,
+  getCastleCells,
+  getBoardMode,
 } from '../../apps/web/js/units.js';
 import {
   applyDeploy,
@@ -10,6 +13,7 @@ import {
   applyAttack,
   applyTeamPriestBlessings,
   checkWin,
+  checkCastleVictory,
   isTeamEliminated,
   getValidDeployCells,
   getValidMoves,
@@ -171,7 +175,7 @@ function applyAiAction(state, action, team) {
   return null;
 }
 
-function checkRoundEnd(state, actingTeam) {
+function checkRoundEnd(state, actingTeam, boardMode) {
   const enemy = actingTeam === 'blue' ? 'red' : 'blue';
   const enemyReserve = enemy === 'blue' ? state.blueReserve : state.redReserve;
   const winLine = checkWin(state.board, actingTeam, state.mapProps);
@@ -179,6 +183,9 @@ function checkRoundEnd(state, actingTeam) {
   if (winLine) return { winner: actingTeam, reason: 'line', winLine };
   if (isTeamEliminated(state.board, enemy, enemyReserve)) {
     return { winner: actingTeam, reason: 'elimination', winLine: null };
+  }
+  if (checkCastleVictory(state.board, actingTeam, boardMode)) {
+    return { winner: actingTeam, reason: 'castle', winLine: null };
   }
   return null;
 }
@@ -212,10 +219,13 @@ export function runMatch({
   const redRoster = rosters?.red ?? mode.roster;
   let unitCounter = unitCounterStart;
   const propRng = mapPropRng ?? createRng(unitCounterStart + size * 7919);
+  const modeConfig = getBoardMode(mode.id ?? mode);
+  const boardModeId = modeConfig.id ?? mode.id ?? mode;
+  const castleCells = getCastleCells(boardModeId).map(({ row, col }) => [row, col]);
 
   const state = {
-    board: createEmptyBoard(size),
-    mapProps: generateMapProps(size, propRng),
+    board: placeModeCastles(createEmptyBoard(size), boardModeId),
+    mapProps: generateMapProps(size, propRng, castleCells),
     shadowClones: [],
     blueReserve: createSimReserve(blueRoster, 'blue', unitCounter),
     redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length),
@@ -323,7 +333,7 @@ export function runMatch({
       });
     }
 
-    const end = checkRoundEnd(state, team);
+    const end = checkRoundEnd(state, team, boardModeId);
     if (end) return finish(end.winner, end.reason, end.winLine);
 
     const exhausted = state.actionsRemaining <= 0

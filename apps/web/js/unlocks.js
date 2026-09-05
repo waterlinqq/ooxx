@@ -1,4 +1,4 @@
-import { CLASS_IDS } from './units.js';
+import { CLASS_IDS, CLASSES } from './units.js';
 
 export const STARTER_CLASSES = ['archer', 'swordsman', 'shield'];
 
@@ -7,7 +7,7 @@ const DEFAULT_UNLOCK_PRICE = 100;
 /** @type {Record<string, number>} */
 export const UNLOCK_PRICES = Object.fromEntries(
   CLASS_IDS
-    .filter((id) => !STARTER_CLASSES.includes(id))
+    .filter((id) => !STARTER_CLASSES.includes(id) && !CLASSES[id]?.boardOnly)
     .map((id) => [id, DEFAULT_UNLOCK_PRICE]),
 );
 
