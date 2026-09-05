@@ -6,6 +6,7 @@ export function attachDevRendererStats(renderer, { parent = document.body } = {}
   stats.dom.style.top = '8px';
   stats.dom.style.left = '8px';
   stats.dom.style.zIndex = '10000';
+  stats.dom.style.pointerEvents = 'none';
 
   const callsPanel = stats.addPanel(new Stats.Panel('DC', '#ff8', '#221'));
   const trisPanel = stats.addPanel(new Stats.Panel('TRI', '#f8f', '#202'));

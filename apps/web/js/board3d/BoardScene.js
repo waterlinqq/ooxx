@@ -61,6 +61,7 @@ export class BoardScene {
     this.labelRenderer = new CSS2DRenderer();
     this.labelRenderer.setSize(width, height);
     this.labelRenderer.domElement.className = 'board-3d-labels';
+    this.labelRenderer.domElement.style.pointerEvents = 'none';
     containerEl.appendChild(this.labelRenderer.domElement);
 
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
@@ -119,7 +120,7 @@ export class BoardScene {
     });
 
     this.input = new InputController({
-      domElement: this.renderer.domElement,
+      domElement: containerEl,
       camera: this.camera,
       tileGrid: this.tileGrid,
       unitManager: this.unitManager,

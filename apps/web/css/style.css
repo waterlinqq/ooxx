@@ -510,6 +510,13 @@ body {
   border: 1px solid rgba(251, 191, 36, 0.4);
 }
 
+.tutorial-cta-icon,
+.tutorial-cta-body,
+.tutorial-cta-title,
+.tutorial-cta-sub {
+  pointer-events: none;
+}
+
 .tutorial-cta-icon {
   font-size: 1.5rem;
   line-height: 1;
@@ -696,6 +703,7 @@ body {
   width: 52px;
   height: 52px;
   line-height: 0;
+  pointer-events: none;
 }
 
 .nav-thumb {
@@ -730,6 +738,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.1;
+  pointer-events: none;
 }
 
 @media (min-width: 640px) {
@@ -778,11 +787,15 @@ body {
 .board-3d-labels {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  pointer-events: none !important;
   z-index: 2;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+.board-3d-labels * {
+  pointer-events: none !important;
 }
 
 .unit-3d-label {
@@ -1357,13 +1370,11 @@ body {
   box-shadow: 0 0 10px rgba(251, 191, 36, 0.45);
 }
 
-.reserve-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
+.reserve-card-icon,
+.reserve-card-name,
+.reserve-card-hp-text,
+.reserve-card-atk-text {
+  pointer-events: none;
 }
 
 .reserve-card-name {
@@ -1702,6 +1713,12 @@ body {
   cursor: not-allowed;
 }
 
+.class-name,
+.class-meta,
+.class-count {
+  pointer-events: none;
+}
+
 .class-icon {
   display: flex;
   align-items: center;
@@ -1709,6 +1726,7 @@ body {
   width: 76px;
   height: 76px;
   flex-shrink: 0;
+  pointer-events: none;
 }
 
 .unit-thumb {

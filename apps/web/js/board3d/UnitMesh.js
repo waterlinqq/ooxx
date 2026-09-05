@@ -36,9 +36,16 @@ const CROUCH_DEPTH = {
 const TMP_DIR = new THREE.Vector3();
 const TMP_TARGET = new THREE.Vector3();
 
+const PICK_RADIUS = 0.36;
+const PICK_HEIGHT = 1.65;
+const PICK_GEO = new THREE.CylinderGeometry(PICK_RADIUS, PICK_RADIUS, PICK_HEIGHT, 8);
+PICK_GEO.userData.shared = true;
+const PICK_MAT = new THREE.MeshBasicMaterial({ visible: false });
+
 function createHpLabel() {
   const wrap = document.createElement('div');
   wrap.className = 'unit-3d-label';
+  wrap.style.pointerEvents = 'none';
   wrap.innerHTML = `
     <div class="unit-3d-badge hidden"></div>
     <div class="unit-3d-name"></div>
@@ -49,7 +56,20 @@ function createHpLabel() {
     </div>
   `;
   const label = new CSS2DObject(wrap);
+  // CSS2DRenderer overwrites transform each frame; pin the label above the unit
+  // so HP/ATK text does not sit on the body.
+  label.center.set(0.5, 1);
   return { label, wrap };
+}
+
+function createPickCollider() {
+  const mesh = new THREE.Mesh(PICK_GEO, PICK_MAT);
+  mesh.position.y = PICK_HEIGHT / 2;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+  mesh.userData.pickCollider = true;
+  return mesh;
 }
 
 function captureRest(node) {
@@ -153,6 +173,7 @@ export class UnitMeshManager {
     const { label, wrap } = createHpLabel();
     label.position.set(0, model.height + 0.2, 0);
     root.add(label);
+    root.add(createPickCollider());
 
     const rig = model.rig;
     const rest = {

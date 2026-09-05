@@ -74,33 +74,88 @@ export class InputController {
     return this.raycaster.intersectObjects(targets, false);
   }
 
-  pickTarget(event) {
+  pickUnitFromLabel(event) {
+    let best = null;
+    let bestZ = -Infinity;
+    for (const [unitId, entry] of this.unitManager.units) {
+      const el = entry.wrap;
+      if (!el || el.style.display === 'none') continue;
+      if ((entry.labelFade ?? 1) < 0.2) continue;
+      const rect = el.getBoundingClientRect();
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      ) {
+        continue;
+      }
+      const z = Number.parseInt(el.style.zIndex, 10) || 0;
+      if (z >= bestZ) {
+        bestZ = z;
+        best = {
+          kind: 'unit',
+          row: entry.root.userData.row,
+          col: entry.root.userData.col,
+          unitId,
+        };
+      }
+    }
+    return best;
+  }
+
+  pickTarget(event, { fromLabel = false } = {}) {
     if (!this.updatePointer(event)) return null;
+
+    if (fromLabel) {
+      const labelPick = this.pickUnitFromLabel(event);
+      if (labelPick) return labelPick;
+    }
+
     const hits = this.raycastTargets();
+    let unitPick = null;
+    let tilePick = null;
     for (const hit of hits) {
       const root = this.findInteractiveRoot(hit.object);
       if (!root) continue;
 
-      if (root.userData.kind === 'tile') {
-        return { kind: 'tile', row: root.userData.row, col: root.userData.col, unitId: null };
+      if (root.userData.kind === 'unit') {
+        if (!unitPick) {
+          unitPick = {
+            kind: 'unit',
+            row: root.userData.row,
+            col: root.userData.col,
+            unitId: root.userData.unitId,
+          };
+        }
+        continue;
       }
 
-      if (root.userData.kind === 'unit') {
-        return {
-          kind: 'unit',
-          row: root.userData.row,
-          col: root.userData.col,
-          unitId: root.userData.unitId,
-        };
+      if (root.userData.kind === 'tile' && !tilePick) {
+        tilePick = { kind: 'tile', row: root.userData.row, col: root.userData.col, unitId: null };
       }
     }
+
+    if (unitPick) return unitPick;
+
+    if (tilePick) {
+      const occupant = this.state?.board?.[tilePick.row]?.[tilePick.col];
+      if (occupant) {
+        return {
+          kind: 'unit',
+          row: tilePick.row,
+          col: tilePick.col,
+          unitId: occupant.id,
+        };
+      }
+      return tilePick;
+    }
+
     return null;
   }
 
-  pickCell(event) {
-    const pick = this.pickTarget(event);
-    if (!pick) return null;
-    return pick;
+  pickCell(event, options) {
+    return this.pickTarget(event, options);
   }
 
   canControlUnit(unitId) {
@@ -123,7 +178,7 @@ export class InputController {
 
   onPointerDown = (event) => {
     if (event.button !== 0 || !this.state || this.state.animating) return;
-    const pick = this.pickCell(event);
+    const pick = this.pickCell(event, { fromLabel: true });
     if (!pick?.unitId || !this.canControlUnit(pick.unitId)) return;
 
     this.domElement.setPointerCapture(event.pointerId);
@@ -174,14 +229,14 @@ export class InputController {
     if (!this.state || this.state.animating) return;
 
     if (this.state.itemTargeting) {
-      const pick = this.pickTarget(event);
+      const pick = this.pickTarget(event, { fromLabel: true });
       if (pick && (pick.kind === 'tile' || pick.kind === 'unit')) {
         this.callbacks.onItemTarget(pick.row, pick.col);
       }
       return;
     }
 
-    const pick = this.pickTarget(event);
+    const pick = this.pickTarget(event, { fromLabel: true });
     if (!pick) {
       if (this.state.draggingUnitId) {
         this.callbacks.onDragCancel();
