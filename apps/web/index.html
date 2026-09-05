@@ -105,7 +105,6 @@
                     <button class="btn hidden" id="cancelItemBtn" type="button">取消</button>
                   </div>
                   <div class="panel end-panel hidden" id="endPanel">
-                    <div class="end-result" id="endResult"></div>
                     <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
                     <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
                   </div>
@@ -207,6 +206,11 @@
         <span class="nav-label">商店</span>
       </button>
     </nav>
+    <div id="gameEndOverlay" class="game-end-overlay hidden" aria-live="polite">
+      <div class="game-end-card">
+        <div class="end-result" id="endResult"></div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

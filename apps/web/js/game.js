@@ -94,8 +94,6 @@ export class Game {
     this.lastCoinReward = 0;
     this._endRevealTimer = null;
     this._endRevealPending = false;
-    this.onAutoReturnHome = null;
-    this.onClearEndSequence = null;
     /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done' } | null} */
     this.tutorial = null;
   }
@@ -411,7 +409,6 @@ export class Game {
       this._endRevealTimer = null;
     }
     this._endRevealPending = false;
-    this.onClearEndSequence?.();
   }
 
   clearEndRevealTimer() {
@@ -1300,7 +1297,6 @@ export class Game {
       this.message = endMessage;
       this.animating = false;
       this.notify();
-      this.onAutoReturnHome?.();
     }, GAME_END_REVEAL_MS);
   }
 

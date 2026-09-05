@@ -55,8 +55,6 @@ export class OnlineClient {
     /** @type {Map<string, { draggingUnitId: string|null, selectedReserveId: string|null }>} */
     this.pendingFire = new Map();
     this._gameEndRevealGen = 0;
-    this.onAutoReturnHome = null;
-    this.onClearEndSequence = null;
   }
 
   canSend() {
@@ -349,8 +347,6 @@ export class OnlineClient {
       this.gameState.phase = 'gameEnd';
       this.gameState.message = endMessage;
       this.animating = false;
-      this.notify();
-      this.onAutoReturnHome?.();
     }
 
     this.notify();
@@ -650,7 +646,6 @@ export class OnlineClient {
 
   async leaveOnline() {
     this._gameEndRevealGen += 1;
-    this.onClearEndSequence?.();
     this.matchmakingGen += 1;
     this.aiFallbackPending = false;
     this.clearMatchmakingWatch();

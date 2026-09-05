@@ -5,6 +5,7 @@ COPY server/package.json ./server/package.json
 RUN cd server && npm install --omit=dev
 
 COPY shared ./shared
+RUN mkdir -p node_modules/@ooxx && ln -s /ooxx/shared node_modules/@ooxx/shared
 COPY server/src ./server/src
 COPY apps/web/js ./apps/web/js
 

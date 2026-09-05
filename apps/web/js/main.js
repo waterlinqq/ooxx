@@ -53,6 +53,7 @@ const classDetailInfoEl = document.getElementById('classDetailInfo');
 const classPreviewHostEl = document.getElementById('classPreviewHost');
 const endPanelEl = document.getElementById('endPanel');
 const endResultEl = document.getElementById('endResult');
+const gameEndOverlayEl = document.getElementById('gameEndOverlay');
 const modeButtonsEl = document.getElementById('onlineModeButtons');
 const onlineLobbyActionsEl = document.getElementById('onlineLobbyActions');
 const onlineWaitingEl = document.getElementById('onlineWaiting');
@@ -388,39 +389,54 @@ function isOnlinePlaying() {
   return onlineModeActive && Boolean(onlineClient.gameState);
 }
 
-function returnToHome() {
-  clearGameEndLeaveSequence();
-  if (isOnlinePlaying() || onlineClient.roomState) {
-    onlineClient.leaveOnline().then(() => render(getAppState()));
-    return;
-  }
-  game.backToLobby();
-  render(getAppState());
-}
-
-let gameEndDismissing = false;
-let gameEndMessage = '';
+/** @type {'off' | 'shown' | 'fading' | 'leaving'} */
+let gameEndOverlayStage = 'off';
 /** @type {ReturnType<typeof setTimeout>[]} */
 let gameEndLeaveTimers = [];
 
-function clearGameEndLeaveSequence() {
+function clearGameEndLeaveTimers() {
   for (const timerId of gameEndLeaveTimers) clearTimeout(timerId);
   gameEndLeaveTimers = [];
-  gameEndDismissing = false;
-  gameEndMessage = '';
-  endPanelEl.classList.remove('dismissing');
-  battleContentEl.classList.remove('game-end-dismissing');
 }
 
-function onGameEndModalShown() {
-  clearGameEndLeaveSequence();
+function hideGameEndOverlay() {
+  clearGameEndLeaveTimers();
+  gameEndOverlayStage = 'off';
+  gameEndOverlayEl.classList.add('hidden');
+  gameEndOverlayEl.classList.remove('dismissing');
+}
+
+function beginGameEndOverlay(message) {
+  if (gameEndOverlayStage !== 'off') return;
+  gameEndOverlayStage = 'shown';
+  endResultEl.textContent = message || '';
+  gameEndOverlayEl.classList.remove('dismissing');
+  gameEndOverlayEl.classList.remove('hidden');
+
   gameEndLeaveTimers.push(window.setTimeout(() => {
-    gameEndDismissing = true;
-    render(getAppState());
+    gameEndOverlayStage = 'fading';
+    gameEndOverlayEl.classList.add('dismissing');
     gameEndLeaveTimers.push(window.setTimeout(() => {
       returnToHome();
     }, GAME_END_FADE_MS));
   }, GAME_END_MODAL_MS));
+}
+
+function returnToHome() {
+  clearGameEndLeaveTimers();
+  gameEndOverlayStage = 'leaving';
+  gameEndOverlayEl.classList.add('hidden');
+  gameEndOverlayEl.classList.remove('dismissing');
+  if (isOnlinePlaying() || onlineClient.roomState) {
+    onlineClient.leaveOnline().then(() => {
+      hideGameEndOverlay();
+      render(getAppState());
+    });
+    return;
+  }
+  game.backToLobby();
+  hideGameEndOverlay();
+  render(getAppState());
 }
 
 function withOnlineOrLocal(onlineFn, localFn) {
@@ -462,7 +478,7 @@ function showWinConditionToast(winCount) {
 const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
 
 function isBottomNavLocked(state) {
-  return state.phase === 'battle' || state.phase === 'onlineWaiting';
+  return state.phase === 'battle' || state.phase === 'gameEnd' || state.phase === 'onlineWaiting';
 }
 
 function canControlUnit(state, unit) {
@@ -536,10 +552,6 @@ game.playBlessFx = (fx) => board3d.playBlessFx(fx);
 onlineClient.playBlessFx = (fx) => board3d.playBlessFx(fx);
 game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
 onlineClient.playMapPropFx = (fx) => board3d.playMapPropFx(fx);
-game.onAutoReturnHome = onGameEndModalShown;
-onlineClient.onAutoReturnHome = onGameEndModalShown;
-game.onClearEndSequence = clearGameEndLeaveSequence;
-onlineClient.onClearEndSequence = clearGameEndLeaveSequence;
 
 function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
@@ -1149,21 +1161,14 @@ function renderTutorialPanel(state) {
 
 function renderBattlePanels(state) {
   const inBattle = state.phase === 'battle';
-  const showEnd = state.phase === 'gameEnd' || gameEndDismissing;
   const inTutorial = Boolean(state.tutorial);
 
   surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
   surrenderBtn.disabled = !inBattle || state.animating;
 
-  endPanelEl.classList.toggle('hidden', !showEnd);
-  endPanelEl.classList.toggle('dismissing', gameEndDismissing);
+  endPanelEl.classList.add('hidden');
   restartBtn.classList.add('hidden');
   backToLobbyBtn.classList.add('hidden');
-
-  if (showEnd) {
-    if (state.message) gameEndMessage = state.message;
-    endResultEl.textContent = gameEndMessage || state.message;
-  }
 }
 
 function updateBottomNav(state) {
@@ -1194,17 +1199,15 @@ function render(state) {
     switchNav('formation');
   }
 
-  const inCombat = inBattle && activeNav === 'battle';
+  const inCombat = (inBattle || state.phase === 'gameEnd') && activeNav === 'battle';
 
   appEl.classList.toggle('in-combat', inCombat);
   appEl.classList.toggle('game-end', state.phase === 'gameEnd');
   battleContentEl.classList.toggle('in-combat', inCombat);
   battleContentEl.classList.toggle('has-tutorial', inCombat && Boolean(state.tutorial));
-  battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd' || gameEndDismissing);
-  battleContentEl.classList.toggle('game-end-dismissing', gameEndDismissing);
+  battleContentEl.classList.toggle('game-end', state.phase === 'gameEnd');
   lobbyContentEl.classList.toggle('hidden', !inOnlineLobby && state.phase !== 'lobby');
   battleContentEl.classList.toggle('hidden', !inBattleFlow);
-  if (inBattleFlow) void battleContentEl.offsetWidth;
 
   if (state.onlineMode && state.timers) {
     syncOnlineTimers(state);
@@ -1218,6 +1221,12 @@ function render(state) {
     clearWinConditionToast();
   }
   lastPhase = state.phase;
+
+  if (state.phase === 'gameEnd') {
+    beginGameEndOverlay(state.message);
+  } else if (gameEndOverlayStage !== 'off') {
+    hideGameEndOverlay();
+  }
 
   renderBattlePanels(state);
   renderTutorialPanel(state);

@@ -491,38 +491,6 @@ body {
   position: relative;
 }
 
-.battle-layout.game-end::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  background: #0f172a;
-  pointer-events: auto;
-  opacity: 1;
-  transition: opacity 0.45s ease;
-}
-
-.battle-layout.game-end-dismissing::before {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.battle-panels .end-panel {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(92vw, 320px);
-  z-index: 160;
-  margin: 0;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
-  animation: endPanelIn 0.35s ease forwards;
-}
-
-.battle-panels .end-panel.dismissing {
-  animation: endPanelOut 0.45s ease forwards;
-}
-
 .battle-panels .item-battle-bar {
   flex: 1;
   min-width: 0;
@@ -986,25 +954,70 @@ body {
   }
 }
 
+.game-end-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.62);
+  animation: gameEndOverlayIn 0.35s ease forwards;
+}
+
+.game-end-overlay.hidden {
+  display: none;
+}
+
+.game-end-overlay.dismissing {
+  animation: gameEndOverlayOut 0.45s ease forwards;
+  pointer-events: none;
+}
+
+.game-end-card {
+  width: min(92vw, 320px);
+  text-align: center;
+  background: #1e293b;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: var(--radius-lg);
+  padding: 18px 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+  animation: endPanelIn 0.35s ease forwards;
+}
+
+.game-end-overlay.dismissing .game-end-card {
+  animation: endPanelOut 0.45s ease forwards;
+}
+
+@keyframes gameEndOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gameEndOverlayOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes endPanelIn {
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + 10px)) scale(0.94);
+    transform: translateY(10px) scale(0.94);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes endPanelOut {
   from {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translate(-50%, calc(-50% - 8px)) scale(0.98);
+    transform: translateY(-8px) scale(0.98);
   }
 }
 
