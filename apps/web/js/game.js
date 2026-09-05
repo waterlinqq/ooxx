@@ -350,11 +350,7 @@ export class Game {
     if (!item) return;
 
     if (this.itemTargeting) {
-      this.draggingUnitId = null;
-      this.selectedReserveId = null;
-      this.inspectedUnitId = null;
-      this.message = `${item.icon} ${this.getItemTargetingHint(item)}`;
-      this.notify();
+      this.cancelItemTargeting();
       return;
     }
 

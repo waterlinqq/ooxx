@@ -967,7 +967,7 @@ function renderBattleItem(state) {
 
   if (targeting) {
     itemBattleBtnEl.disabled = state.animating;
-    itemBattleBtnEl.title = `${state.itemDef.name}（使用中 · Esc 取消）`;
+    itemBattleBtnEl.title = `${state.itemDef.name}（使用中 · 再次點擊或 Esc 取消）`;
     return;
   }
 
