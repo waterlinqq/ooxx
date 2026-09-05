@@ -6,7 +6,7 @@ import { apiUrl } from './config.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
-/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]> }} SaveData */
+/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]>, equippedItem: string | null }} SaveData */
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
@@ -28,6 +28,12 @@ function normalizeOwnedClasses(raw) {
   return CLASS_IDS.filter((id) => owned.has(id));
 }
 
+function normalizeEquippedItem(raw) {
+  if (raw === null) return null;
+  if (typeof raw === 'string' && ITEM_IDS.includes(raw)) return raw;
+  return null;
+}
+
 function normalizeRostersByMode(raw) {
   /** @type {Record<string, string[]>} */
   const rosters = {};
@@ -46,6 +52,7 @@ const DEFAULT_SAVE = {
   tutorialDone: false,
   ownedClasses: createDefaultOwnedClasses(),
   rostersByMode: {},
+  equippedItem: null,
 };
 
 /** @type {SaveData | null} */
@@ -59,6 +66,7 @@ function normalizeSave(raw) {
     tutorialDone: raw?.tutorialDone === true,
     ownedClasses: normalizeOwnedClasses(raw),
     rostersByMode: normalizeRostersByMode(raw?.rostersByMode),
+    equippedItem: normalizeEquippedItem(raw?.equippedItem ?? null),
   };
 
   for (const id of ITEM_IDS) {
@@ -87,6 +95,8 @@ function mergeCloudLocal(cloud, local) {
     ...cloudNorm.rostersByMode,
     ...merged.rostersByMode,
   };
+
+  merged.equippedItem = merged.equippedItem ?? cloudNorm.equippedItem ?? null;
 
   return merged;
 }
@@ -157,11 +167,22 @@ export function getSaveSnapshot() {
     tutorialDone: save.tutorialDone,
     ownedClasses: [...save.ownedClasses],
     rostersByMode: { ...save.rostersByMode },
+    equippedItem: save.equippedItem ?? null,
   };
 }
 
 export function getSavedRostersByMode() {
   return { ...loadSave().rostersByMode };
+}
+
+export function getSavedEquippedItem() {
+  return loadSave().equippedItem ?? null;
+}
+
+export function persistEquippedItem(itemId) {
+  const save = loadSave();
+  save.equippedItem = itemId === null || ITEM_IDS.includes(itemId) ? itemId : null;
+  persistSave();
 }
 
 export function persistRostersByMode(rostersByMode) {

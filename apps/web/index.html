@@ -19,7 +19,6 @@
   <div class="app">
     <header class="status-bar" id="statusBar">
       <span class="status-icon">💰</span>
-      <span class="status-text hidden" id="statusMessage"></span>
       <span class="coin-badge" id="coinBalance" aria-label="金幣">0</span>
     </header>
     <main class="game-main" id="gameMain">
@@ -78,17 +77,19 @@
                 </div>
                 <div id="boardCanvas" class="board-canvas-host"></div>
                 <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
-                <div class="turn-toast hidden" id="turnToast" aria-live="polite">
-                  <span class="turn-toast-text" id="turnToastText"></span>
+                <div class="ui-overlay ui-overlay--board hidden" id="turnToast" aria-live="polite">
+                  <div class="ui-card" id="turnToastCard">
+                    <p class="ui-card__body ui-card__body--lg" id="turnToastText"></p>
+                  </div>
                 </div>
-                <div class="win-condition-toast hidden" id="winConditionToast" aria-live="polite">
-                  <div class="win-condition-card">
-                    <div class="win-condition-title">🏆 勝利條件</div>
-                    <p class="win-condition-text" id="winConditionText"></p>
+                <div class="ui-overlay ui-overlay--board ui-overlay--raised hidden" id="winConditionToast" aria-live="polite">
+                  <div class="ui-card ui-card--accent">
+                    <div class="ui-card__title">🏆 勝利條件</div>
+                    <p class="ui-card__body" id="winConditionText"></p>
                   </div>
                 </div>
                 <div class="battle-panels">
-                  <div class="tutorial-panel hidden" id="tutorialPanel" aria-live="polite">
+                  <div class="tutorial-panel ui-card ui-card--accent hidden" id="tutorialPanel" aria-live="polite">
                     <div class="tutorial-panel-head">
                       <span class="tutorial-badge" id="tutorialStep"></span>
                       <span class="tutorial-panel-title" id="tutorialTitle"></span>
@@ -99,10 +100,6 @@
                   <button class="item-battle-btn hidden" id="itemBattleBtn" type="button">
                     <span class="item-battle-icon" id="itemBattleIcon"></span>
                   </button>
-                  <div class="panel end-panel hidden" id="endPanel">
-                    <button class="btn primary btn-lg hidden" id="restart" type="button">再來一局</button>
-                    <button class="btn btn-lg hidden" id="backToLobby" type="button">換模式</button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -134,7 +131,6 @@
 
           <div id="formationItemSection">
             <div class="section-title section-title-compact">本場道具</div>
-            <p class="section-hint formation-item-hint hidden" id="formationItemHint"></p>
             <div class="item-picker" id="formationItems"></div>
           </div>
 
@@ -199,12 +195,22 @@
         <span class="nav-label">商店</span>
       </button>
     </nav>
-    <div class="purchase-toast hidden" id="purchaseToast" aria-live="polite">
-      <span class="purchase-toast-text" id="purchaseToastText"></span>
+    <div class="ui-overlay ui-overlay--toast hidden" id="purchaseToast" aria-live="polite">
+      <div class="ui-card ui-card--compact" id="purchaseToastCard">
+        <p class="ui-card__body ui-card__body--center" id="purchaseToastText"></p>
+      </div>
     </div>
-    <div id="gameEndOverlay" class="game-end-overlay hidden" aria-live="polite">
-      <div class="game-end-card">
-        <div class="end-result" id="endResult"></div>
+    <div id="gameEndOverlay" class="ui-overlay ui-overlay--modal hidden" aria-live="polite">
+      <div class="ui-card ui-card--accent">
+        <p class="ui-card__body ui-card__body--center ui-card__body--strong" id="endResult"></p>
+      </div>
+    </div>
+    <div id="alertOverlay" class="ui-overlay ui-overlay--modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="alertMessage">
+      <div class="ui-card ui-card--accent">
+        <p class="ui-card__body ui-card__body--center" id="alertMessage"></p>
+        <div class="ui-card__actions">
+          <button class="btn primary btn-lg" id="alertOkBtn" type="button">確定</button>
+        </div>
       </div>
     </div>
   </div>

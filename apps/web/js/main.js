@@ -18,8 +18,16 @@ import {
   initCloudSave,
   getSaveSnapshot,
   getSavedRostersByMode,
+  getSavedEquippedItem,
 } from './save.js';
 import { onlineClient } from './online.js';
+import {
+  dismissTimedOverlay,
+  hideTimedOverlay,
+  revealOverlay,
+  showAlert,
+  showTimedOverlay,
+} from './ui.js';
 
 loadSave();
 
@@ -41,7 +49,6 @@ const formationModeButtonsEl = document.getElementById('formationModeButtons');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
 const formationPoolEl = document.getElementById('formationPool');
-const backToLobbyBtn = document.getElementById('backToLobby');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
 const matchTimerEl = document.getElementById('matchTimer');
@@ -50,7 +57,6 @@ const matchTimerTextEl = document.getElementById('matchTimerText');
 const classPickerEl = document.getElementById('classPicker');
 const classDetailInfoEl = document.getElementById('classDetailInfo');
 const classPreviewHostEl = document.getElementById('classPreviewHost');
-const endPanelEl = document.getElementById('endPanel');
 const endResultEl = document.getElementById('endResult');
 const gameEndOverlayEl = document.getElementById('gameEndOverlay');
 const modeButtonsEl = document.getElementById('onlineModeButtons');
@@ -64,20 +70,16 @@ const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const cancelRoomBtn = document.getElementById('cancelRoomBtn');
-const confirmRosterBtn = document.getElementById('confirmRoster');
-const restartBtn = document.getElementById('restart');
 const surrenderBtn = document.getElementById('surrender');
 const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
 const turnToastEl = document.getElementById('turnToast');
 const turnToastTextEl = document.getElementById('turnToastText');
 const winConditionTextEl = document.getElementById('winConditionText');
-const statusMessageEl = document.getElementById('statusMessage');
 const coinBalanceEl = document.getElementById('coinBalance');
 const purchaseToastEl = document.getElementById('purchaseToast');
 const purchaseToastTextEl = document.getElementById('purchaseToastText');
 const formationItemsEl = document.getElementById('formationItems');
-const formationItemHintEl = document.getElementById('formationItemHint');
 const bagGridEl = document.getElementById('bagGrid');
 const shopGridEl = document.getElementById('shopGrid');
 const itemBattleBtnEl = document.getElementById('itemBattleBtn');
@@ -405,31 +407,29 @@ function clearGameEndLeaveTimers() {
 function hideGameEndOverlay() {
   clearGameEndLeaveTimers();
   gameEndOverlayStage = 'off';
-  gameEndOverlayEl.classList.add('hidden');
-  gameEndOverlayEl.classList.remove('dismissing');
+  hideTimedOverlay(gameEndOverlayEl);
 }
 
 function beginGameEndOverlay(message) {
   if (gameEndOverlayStage !== 'off') return;
   gameEndOverlayStage = 'shown';
-  endResultEl.textContent = message || '';
-  gameEndOverlayEl.classList.remove('dismissing');
-  gameEndOverlayEl.classList.remove('hidden');
+  revealOverlay(gameEndOverlayEl, () => {
+    endResultEl.textContent = message || '';
+  });
 
   gameEndLeaveTimers.push(window.setTimeout(() => {
     gameEndOverlayStage = 'fading';
-    gameEndOverlayEl.classList.add('dismissing');
-    gameEndLeaveTimers.push(window.setTimeout(() => {
-      returnToHome();
-    }, GAME_END_FADE_MS));
+    dismissTimedOverlay(gameEndOverlayEl, {
+      fadeMs: GAME_END_FADE_MS,
+      onHide: () => returnToHome(),
+    });
   }, GAME_END_MODAL_MS));
 }
 
 function returnToHome() {
   clearGameEndLeaveTimers();
   gameEndOverlayStage = 'leaving';
-  gameEndOverlayEl.classList.add('hidden');
-  gameEndOverlayEl.classList.remove('dismissing');
+  hideTimedOverlay(gameEndOverlayEl);
   if (isOnlinePlaying() || onlineClient.roomState) {
     onlineClient.leaveOnline().then(() => {
       hideGameEndOverlay();
@@ -451,7 +451,6 @@ let activeNav = 'battle';
 let selectedClassId = 'swordsman';
 let lastPhase = 'lobby';
 let lastInCombat = false;
-let winConditionHideTimer = null;
 
 const WIN_CONDITION_SHOW_MS = 2800;
 const WIN_CONDITION_FADE_MS = 450;
@@ -462,38 +461,32 @@ const PURCHASE_FEEDBACK_MS = 450;
 const PURCHASE_TOAST_SHOW_MS = 1600;
 const PURCHASE_TOAST_FADE_MS = 400;
 
-/** @type {ReturnType<typeof setTimeout> | null} */
-let purchaseToastTimer = null;
+/** @type {{ clear: () => void } | null} */
+let turnToastController = null;
+/** @type {{ clear: () => void } | null} */
+let winConditionController = null;
+/** @type {{ clear: () => void } | null} */
+let purchaseToastController = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let purchaseNotifyTimer = null;
-
-/** @type {ReturnType<typeof setTimeout> | null} */
-let turnToastHideTimer = null;
 let lastTurnToastPlayer = null;
 let lastTurnToastPhase = null;
 
 function clearTurnToast() {
-  if (turnToastHideTimer) {
-    clearTimeout(turnToastHideTimer);
-    turnToastHideTimer = null;
-  }
-  turnToastEl.classList.add('hidden');
-  turnToastEl.classList.remove('dismissing', 'your-turn', 'opponent-turn');
+  turnToastController?.clear();
+  turnToastController = null;
 }
 
 function showTurnToast(text, player) {
-  clearTurnToast();
-  turnToastTextEl.textContent = text;
-  turnToastEl.classList.remove('hidden', 'dismissing');
-  turnToastEl.classList.toggle('your-turn', player === 'blue');
-  turnToastEl.classList.toggle('opponent-turn', player === 'red');
-
-  turnToastHideTimer = setTimeout(() => {
-    turnToastEl.classList.add('dismissing');
-    turnToastHideTimer = setTimeout(() => {
-      clearTurnToast();
-    }, TURN_TOAST_FADE_MS);
-  }, TURN_TOAST_SHOW_MS);
+  const variant = player === 'blue' ? 'ui-card--blue' : 'ui-card--red';
+  turnToastController = showTimedOverlay(turnToastEl, {
+    showMs: TURN_TOAST_SHOW_MS,
+    fadeMs: TURN_TOAST_FADE_MS,
+    variantClasses: [variant],
+    setup: () => {
+      turnToastTextEl.textContent = text;
+    },
+  });
 }
 
 function syncTurnToast(state) {
@@ -523,27 +516,20 @@ function syncTurnToast(state) {
 }
 
 function clearWinConditionToast() {
-  if (winConditionHideTimer) {
-    clearTimeout(winConditionHideTimer);
-    winConditionHideTimer = null;
-  }
-  winConditionToastEl.classList.add('hidden');
-  winConditionToastEl.classList.remove('dismissing');
+  winConditionController?.clear();
+  winConditionController = null;
 }
 
 function showWinConditionToast(winCount, boardMode) {
-  clearWinConditionToast();
-  winConditionTextEl.textContent = boardMode === '5x5'
-    ? `連成 ${winCount} 子 · 全滅對手 · 攻破城堡`
-    : `連成 ${winCount} 子 · 全滅對手`;
-  winConditionToastEl.classList.remove('hidden', 'dismissing');
-
-  winConditionHideTimer = setTimeout(() => {
-    winConditionToastEl.classList.add('dismissing');
-    winConditionHideTimer = setTimeout(() => {
-      clearWinConditionToast();
-    }, WIN_CONDITION_FADE_MS);
-  }, WIN_CONDITION_SHOW_MS);
+  winConditionController = showTimedOverlay(winConditionToastEl, {
+    showMs: WIN_CONDITION_SHOW_MS,
+    fadeMs: WIN_CONDITION_FADE_MS,
+    setup: () => {
+      winConditionTextEl.textContent = boardMode === '5x5'
+        ? `連成 ${winCount} 子 · 全滅對手 · 攻破城堡`
+        : `連成 ${winCount} 子 · 全滅對手`;
+    },
+  });
 }
 
 const BATTLE_PHASES = new Set(['battle', 'gameEnd']);
@@ -733,18 +719,17 @@ function createItemChip(item, { count, equipped, onSelect }) {
   if (item.id !== null && owned <= 0) chip.disabled = true;
   chip.title = item.name ?? '';
 
-  const label = item.id === null ? '無' : item.name;
-  const badge = item.id !== null && owned > 0 ? `<span class="item-chip-badge">${owned}</span>` : '';
-
   const iconWrap = document.createElement('span');
   iconWrap.className = 'item-chip-icon';
   setItemIcon(iconWrap, item);
 
   chip.append(iconWrap);
-  chip.insertAdjacentHTML('beforeend', `
-    <span class="item-chip-label">${label}</span>
-    ${badge}
-  `);
+  if (item.id !== null && owned > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'item-chip-badge';
+    badge.textContent = String(owned);
+    chip.appendChild(badge);
+  }
   chip.addEventListener('click', () => onSelect(item.id));
   return chip;
 }
@@ -822,7 +807,6 @@ function createItemRow(item, { count, price, onBuy }) {
 
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
-  statusMessageEl.classList.add('hidden');
 }
 
 function clearPurchaseNotifyTimer() {
@@ -849,25 +833,15 @@ function playCoinSpendAnimation(price) {
 }
 
 function showPurchaseToast(message, { success = true } = {}) {
-  if (purchaseToastTimer) {
-    clearTimeout(purchaseToastTimer);
-    purchaseToastTimer = null;
-  }
-
-  purchaseToastEl.classList.remove('hidden', 'dismissing', 'visible', 'purchase-toast-error');
-  if (!success) purchaseToastEl.classList.add('purchase-toast-error');
-  purchaseToastTextEl.textContent = message;
-  void purchaseToastEl.offsetWidth;
-  purchaseToastEl.classList.add('visible');
-
-  purchaseToastTimer = window.setTimeout(() => {
-    purchaseToastEl.classList.add('dismissing');
-    purchaseToastTimer = window.setTimeout(() => {
-      purchaseToastEl.classList.add('hidden');
-      purchaseToastEl.classList.remove('visible', 'dismissing', 'purchase-toast-error');
-      purchaseToastTimer = null;
-    }, PURCHASE_TOAST_FADE_MS);
-  }, PURCHASE_TOAST_SHOW_MS);
+  const variant = success ? 'ui-card--success' : 'ui-card--error';
+  purchaseToastController = showTimedOverlay(purchaseToastEl, {
+    showMs: PURCHASE_TOAST_SHOW_MS,
+    fadeMs: PURCHASE_TOAST_FADE_MS,
+    variantClasses: [variant],
+    setup: () => {
+      purchaseToastTextEl.textContent = message;
+    },
+  });
 }
 
 function handlePurchaseSuccess({ name, price, rowEl, kind = 'item' }) {
@@ -893,25 +867,6 @@ function handlePurchaseFailure(reason, btn) {
 
 function renderFormationItems(state) {
   formationItemsEl.innerHTML = '';
-
-  const totalItems = ITEM_IDS.reduce((sum, id) => sum + (state.inventory[id] ?? 0), 0);
-  if (formationItemHintEl) {
-    if (totalItems <= 0) {
-      formationItemHintEl.textContent = '背包沒有道具，請先到商店購買';
-      formationItemHintEl.classList.remove('hidden');
-    } else if (!state.equippedItem) {
-      formationItemHintEl.textContent = '選一個道具帶入對戰，開戰後點道具圖示使用';
-      formationItemHintEl.classList.remove('hidden');
-    } else {
-      formationItemHintEl.classList.add('hidden');
-    }
-  }
-
-  const noneItem = { id: null, name: '無', icon: '➖' };
-  formationItemsEl.appendChild(createItemChip(noneItem, {
-    equipped: state.equippedItem === null,
-    onSelect: (id) => game.selectEquippedItem(id),
-  }));
 
   for (const item of Object.values(ITEMS)) {
     formationItemsEl.appendChild(createItemChip(item, {
@@ -991,7 +946,8 @@ function renderShop(state) {
 }
 
 function renderBattleItem(state) {
-  const show = state.phase === 'battle' && state.equippedItem && state.itemDef;
+  const inStock = state.equippedItem && (state.inventory[state.equippedItem] ?? 0) > 0;
+  const show = state.phase === 'battle' && inStock && state.itemDef;
   itemBattleBtnEl.classList.toggle('hidden', !show);
   if (!show) return;
 
@@ -1360,7 +1316,6 @@ function renderOnlineLobby(state) {
 function renderLobbyFooter(state) {
   const inLobby = state.phase === 'onlineLobby' || state.phase === 'lobby';
   startTutorialBtn.classList.toggle('hidden', !(inLobby && !isTutorialDone()));
-  if (confirmRosterBtn) confirmRosterBtn.classList.add('hidden');
 }
 
 function renderTutorialPanel(state) {
@@ -1380,10 +1335,6 @@ function renderBattlePanels(state) {
 
   surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
   surrenderBtn.disabled = !inBattle || state.animating;
-
-  endPanelEl.classList.add('hidden');
-  restartBtn.classList.add('hidden');
-  backToLobbyBtn.classList.add('hidden');
 }
 
 function updateBottomNav(state) {
@@ -1500,7 +1451,7 @@ findMatchBtn.addEventListener('click', async () => {
     await onlineClient.findMatch(selectedOnlineMode, undefined, roster);
     render(getAppState());
   } catch (e) {
-    alert(e.message ?? '匹配失敗');
+    await showAlert(e.message ?? '匹配失敗');
   } finally {
     findMatchBtn.disabled = false;
   }
@@ -1513,7 +1464,7 @@ createRoomBtn.addEventListener('click', async () => {
     await onlineClient.createRoom(selectedOnlineMode, undefined, roster);
     render(getAppState());
   } catch (e) {
-    alert(e.message ?? '建立房間失敗');
+    await showAlert(e.message ?? '建立房間失敗');
   } finally {
     createRoomBtn.disabled = false;
   }
@@ -1522,7 +1473,7 @@ createRoomBtn.addEventListener('click', async () => {
 joinRoomBtn.addEventListener('click', async () => {
   const code = roomCodeInput.value.trim().toUpperCase();
   if (code.length !== 6) {
-    alert('請輸入 6 位房間碼');
+    await showAlert('請輸入 6 位房間碼');
     return;
   }
   const roster = prepareRosterForMatch(selectedOnlineMode);
@@ -1530,7 +1481,7 @@ joinRoomBtn.addEventListener('click', async () => {
   try {
     await onlineClient.joinRoom(code, undefined, roster);
   } catch (e) {
-    alert(e.message ?? '加入失敗');
+    await showAlert(e.message ?? '加入失敗');
   } finally {
     joinRoomBtn.disabled = false;
   }
@@ -1540,15 +1491,6 @@ cancelRoomBtn.addEventListener('click', () => {
   onlineClient.leaveOnline().then(() => render(getAppState()));
 });
 
-if (confirmRosterBtn) confirmRosterBtn.addEventListener('click', () => {
-  game.openFormation();
-  switchNav('formation');
-});
-restartBtn.addEventListener('click', () => {
-  if (isOnlinePlaying() || onlineClient.roomState) return;
-  game.restartSeries();
-});
-backToLobbyBtn.addEventListener('click', () => returnToHome());
 surrenderBtn.addEventListener('click', () => {
   if (isOnlinePlaying()) onlineClient.surrender();
   else game.surrender();
@@ -1579,6 +1521,7 @@ game.subscribe(() => {
 initCloudSave()
   .then(() => {
     game.rostersByMode = getSavedRostersByMode();
+    game.equippedItem = getSavedEquippedItem();
     game.blueRoster = game.sanitizeRosterForMode([...(game.rostersByMode[game.boardMode] ?? [])]);
     return onlineClient.tryReconnectOnLoad();
   })

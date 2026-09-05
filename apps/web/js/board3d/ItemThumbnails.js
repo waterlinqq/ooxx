@@ -6,6 +6,14 @@ import { buildItemBombModel, buildItemLandmineModel } from './UnitModels.js';
 const THUMB_SIZE = 256;
 const PREVIEW_ROTATION_Y = 0.35;
 const FRAME_PADDING = 1.06;
+/** Normalized framing height so potion / bomb / landmine fill the icon similarly. */
+const TARGET_VIEW_HEIGHT = 0.3;
+
+const ITEM_THUMB_TUNING = {
+  potion: { widthFactor: 0.72, heightFactor: 1, scale: 1.05 },
+  bomb: { widthFactor: 0.72, heightFactor: 1, scale: 1 },
+  landmine: { widthFactor: 0.82, heightFactor: 1.35, scale: 0.92 },
+};
 
 function disposeObject(root) {
   root.traverse((obj) => {
@@ -60,11 +68,52 @@ function setupCamera() {
   return camera;
 }
 
-function fitCameraToModel(camera, object) {
+function getItemViewHeight(size, itemId) {
+  const tuning = ITEM_THUMB_TUNING[itemId] ?? { widthFactor: 0.72, heightFactor: 1 };
+  return Math.max(
+    size.y * tuning.heightFactor,
+    size.x * tuning.widthFactor,
+    size.z * tuning.widthFactor,
+  );
+}
+
+function getThumbnailFitTarget(root, itemId) {
+  if (itemId !== 'potion') return root;
+  const drink = root.children.find((child) => child.isGroup);
+  const flask = drink?.children.find((child) => child.isGroup);
+  return flask ?? drink ?? root;
+}
+
+function prepareItemForThumbnail(root, itemId) {
+  if (itemId !== 'potion') return;
+  for (const child of root.children) {
+    if (child.isMesh) child.visible = false;
+  }
+  const drink = root.children.find((child) => child.isGroup);
+  if (!drink) return;
+  for (const child of drink.children) {
+    if (child.isMesh) child.visible = false;
+  }
+}
+
+function normalizeItemForThumbnail(root, itemId) {
+  const fitTarget = getThumbnailFitTarget(root, itemId);
+  const box = new THREE.Box3().setFromObject(fitTarget);
+  const size = box.getSize(new THREE.Vector3());
+  const viewHeight = getItemViewHeight(size, itemId);
+  if (viewHeight <= 0) return;
+
+  const tuning = ITEM_THUMB_TUNING[itemId] ?? { scale: 1 };
+  const scale = (TARGET_VIEW_HEIGHT / viewHeight) * (tuning.scale ?? 1);
+  root.scale.setScalar(scale);
+  root.updateMatrixWorld(true);
+}
+
+function fitCameraToModel(camera, object, itemId) {
   const box = new THREE.Box3().setFromObject(object);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const viewHeight = Math.max(size.y, size.x * 0.72, size.z * 0.72) * FRAME_PADDING;
+  const viewHeight = getItemViewHeight(size, itemId) * FRAME_PADDING;
 
   camera.left = -viewHeight / 2;
   camera.right = viewHeight / 2;
@@ -107,8 +156,10 @@ export function generateItemThumbnails(itemIds) {
     const root = buildItemModel(itemId);
     if (!root) continue;
 
+    prepareItemForThumbnail(root, itemId);
+    normalizeItemForThumbnail(root, itemId);
     scene.add(root);
-    fitCameraToModel(camera, root);
+    fitCameraToModel(camera, root, itemId);
 
     renderer.render(scene, camera);
     thumbnails.set(itemId, renderer.domElement.toDataURL('image/png'));

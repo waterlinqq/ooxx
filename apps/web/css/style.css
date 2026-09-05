@@ -17,6 +17,12 @@
   --transition-fast: 0.15s ease;
   --board-max-width: 1100px;
   --board-max-height: 1100px;
+  --ui-backdrop: rgba(15, 23, 42, 0.62);
+  --ui-card-bg: var(--panel);
+  --ui-card-border: rgba(148, 163, 184, 0.28);
+  --ui-card-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --ui-anim-in: 0.35s;
+  --ui-anim-out: 0.45s;
 }
 
 * {
@@ -330,52 +336,177 @@ body {
   gap: 0;
 }
 
-.turn-toast {
-  position: absolute;
-  inset: 0;
-  z-index: 11;
+/* ── Unified overlays / modals / toasts ── */
+
+.ui-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
 }
 
-.turn-toast.hidden {
+.ui-overlay.hidden {
   display: none;
 }
 
-.turn-toast-text {
-  padding: 16px 34px;
-  border-radius: 18px;
-  font-size: clamp(1.35rem, 5vw, 1.85rem);
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.94);
-  background: rgba(15, 23, 42, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.28);
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-  animation: turnToastIn 0.32s ease forwards;
+.ui-overlay--board {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
 }
 
-.turn-toast.your-turn .turn-toast-text {
-  color: rgba(219, 234, 254, 0.98);
+.ui-overlay--raised {
+  z-index: 12;
+}
+
+.ui-overlay--modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--ui-backdrop);
+  pointer-events: auto;
+}
+
+.ui-overlay--toast {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 90;
+  align-items: flex-end;
+  padding: 0 16px;
+}
+
+.ui-overlay.ui-visible {
+  animation: uiOverlayIn var(--ui-anim-in) ease forwards;
+}
+
+.ui-overlay.ui-dismiss {
+  animation: uiOverlayOut var(--ui-anim-out) ease forwards;
+  pointer-events: none;
+}
+
+.ui-overlay--modal.ui-dismiss {
+  pointer-events: none;
+}
+
+.ui-overlay.ui-visible .ui-card {
+  animation: uiCardIn var(--ui-anim-in) ease forwards;
+}
+
+.ui-overlay.ui-dismiss .ui-card {
+  animation: uiCardOut var(--ui-anim-out) ease forwards;
+}
+
+.ui-card {
+  width: min(92vw, 320px);
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--ui-card-bg);
+  border: 1px solid var(--ui-card-border);
+  box-shadow: var(--ui-card-shadow);
+  pointer-events: auto;
+  text-align: center;
+}
+
+.ui-card--compact {
+  width: auto;
+  max-width: min(92vw, 360px);
+  padding: 12px 18px;
+  border-radius: 14px;
+}
+
+.ui-card--accent {
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.ui-card--blue {
   border-color: rgba(96, 165, 250, 0.35);
-  background: rgba(30, 58, 138, 0.38);
+  background: rgba(30, 41, 59, 0.96);
 }
 
-.turn-toast.opponent-turn .turn-toast-text {
-  color: rgba(254, 226, 226, 0.96);
+.ui-card--red {
   border-color: rgba(248, 113, 113, 0.32);
-  background: rgba(127, 29, 29, 0.34);
+  background: rgba(30, 41, 59, 0.96);
 }
 
-.turn-toast.dismissing .turn-toast-text {
-  animation: turnToastOut 0.9s ease forwards;
+.ui-card--success {
+  border-color: rgba(74, 222, 128, 0.35);
 }
 
-@keyframes turnToastIn {
+.ui-card--error {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.ui-card__title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fde68a;
+  letter-spacing: 0.04em;
+}
+
+.ui-card__body {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.ui-card__body--center {
+  margin: 0;
+  text-align: center;
+}
+
+.ui-card__body--strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.ui-card__body--lg {
+  margin: 0;
+  font-size: clamp(1.2rem, 4.5vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.ui-card--success .ui-card__body,
+.ui-card--success .ui-card__body--center {
+  color: #bbf7d0;
+}
+
+.ui-card--error .ui-card__body,
+.ui-card--error .ui-card__body--center {
+  color: #fecaca;
+}
+
+.ui-card--blue .ui-card__body--lg {
+  color: rgba(219, 234, 254, 0.98);
+}
+
+.ui-card--red .ui-card__body--lg {
+  color: rgba(254, 226, 226, 0.96);
+}
+
+.ui-card__actions {
+  margin-top: 14px;
+}
+
+.ui-card__actions .btn {
+  width: 100%;
+}
+
+@keyframes uiOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes uiOverlayOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes uiCardIn {
   from {
     opacity: 0;
     transform: translateY(10px) scale(0.94);
@@ -386,10 +517,14 @@ body {
   }
 }
 
-@keyframes turnToastOut {
+@keyframes uiCardOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
   to {
     opacity: 0;
-    transform: translateY(-8px) scale(0.97);
+    transform: translateY(-8px) scale(0.98);
   }
 }
 
@@ -592,11 +727,9 @@ body {
 
 .battle-panels .tutorial-panel {
   flex: 1 0 100%;
+  width: 100%;
   padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--panel);
-  border: 1px solid rgba(251, 191, 36, 0.42);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  text-align: left;
 }
 
 .tutorial-panel-head {
@@ -961,130 +1094,6 @@ body {
   overflow: hidden;
 }
 
-.win-condition-toast {
-  position: absolute;
-  inset: 0;
-  z-index: 12;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.win-condition-card {
-  background: var(--panel);
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  border-radius: 14px;
-  padding: 14px 22px;
-  text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
-  animation: winToastIn 0.35s ease forwards;
-}
-
-.win-condition-toast.dismissing .win-condition-card {
-  animation: winToastOut 0.45s ease forwards;
-}
-
-.win-condition-title {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #fde68a;
-  letter-spacing: 0.04em;
-}
-
-.win-condition-text {
-  margin: 6px 0 0;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  line-height: 1.45;
-}
-
-@keyframes winToastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes winToastOut {
-  to {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
-}
-
-.game-end-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(15, 23, 42, 0.62);
-  animation: gameEndOverlayIn 0.35s ease forwards;
-}
-
-.game-end-overlay.hidden {
-  display: none;
-}
-
-.game-end-overlay.dismissing {
-  animation: gameEndOverlayOut 0.45s ease forwards;
-  pointer-events: none;
-}
-
-.game-end-card {
-  width: min(92vw, 320px);
-  text-align: center;
-  background: #1e293b;
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  border-radius: var(--radius-lg);
-  padding: 18px 16px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
-  animation: endPanelIn 0.35s ease forwards;
-}
-
-.game-end-overlay.dismissing .game-end-card {
-  animation: endPanelOut 0.45s ease forwards;
-}
-
-@keyframes gameEndOverlayIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes gameEndOverlayOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-@keyframes endPanelIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes endPanelOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
-  }
-}
-
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -1263,27 +1272,8 @@ body {
   display: none;
 }
 
-.end-panel {
-  text-align: center;
-  background: #1e293b;
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
-}
-
-.end-result {
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.5;
-  margin-bottom: 0;
-  color: var(--text);
-}
-
 .battle-panels > .btn {
   margin-bottom: 0;
-}
-
-.end-panel .btn + .btn {
-  margin-top: 8px;
 }
 
 .panel {
@@ -1981,51 +1971,6 @@ body {
   animation: coinSpendFloat 0.75s ease forwards;
 }
 
-.purchase-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(72px + env(safe-area-inset-bottom));
-  z-index: 90;
-  max-width: min(92vw, 360px);
-  padding: 12px 18px;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(74, 222, 128, 0.35);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px) scale(0.96);
-}
-
-.purchase-toast.hidden {
-  display: none;
-}
-
-.purchase-toast.visible {
-  animation: purchaseToastIn 0.35s ease forwards;
-}
-
-.purchase-toast.dismissing {
-  animation: purchaseToastOut 0.4s ease forwards;
-}
-
-.purchase-toast.purchase-toast-error {
-  border-color: rgba(248, 113, 113, 0.4);
-}
-
-.purchase-toast-text {
-  display: block;
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: #bbf7d0;
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-
-.purchase-toast.purchase-toast-error .purchase-toast-text {
-  color: #fecaca;
-}
-
 .item-row.purchase-success {
   animation: purchaseRowFlash 0.45s ease;
 }
@@ -2048,20 +1993,6 @@ body {
   to {
     opacity: 0;
     transform: translateY(calc(-50% - 18px));
-  }
-}
-
-@keyframes purchaseToastIn {
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@keyframes purchaseToastOut {
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-8px) scale(0.98);
   }
 }
 
@@ -2098,13 +2029,15 @@ body {
 }
 
 .item-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 12px;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
   border: 1px solid var(--panel-2);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--panel-2);
   color: var(--text);
   cursor: pointer;
@@ -2130,19 +2063,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 100%;
+  height: 100%;
   font-size: 1.2rem;
   line-height: 1;
   flex-shrink: 0;
 }
 
-.item-chip-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
 .item-chip-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 999px;
@@ -2151,6 +2082,7 @@ body {
   font-weight: 700;
   color: #fbbf24;
   text-align: center;
+  pointer-events: none;
 }
 
 .item-list {
@@ -2271,11 +2203,6 @@ body {
 
 #formationItemSection {
   margin-bottom: 12px;
-}
-
-.formation-item-hint {
-  margin: 0 0 8px;
-  line-height: 1.4;
 }
 
 .online-section {

@@ -48,6 +48,8 @@ import {
   markTutorialDone,
   isClassOwned,
   persistRostersByMode,
+  getSavedEquippedItem,
+  persistEquippedItem,
 } from './save.js';
 import {
   TUTORIAL_BOARD_MODE,
@@ -201,9 +203,13 @@ export class Game {
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
-    this.equippedItem = null;
+    this.restoreEquippedItemPreference();
     this.message = '';
     this.notify();
+  }
+
+  restoreEquippedItemPreference() {
+    this.equippedItem = getSavedEquippedItem();
   }
 
   addToFormation(classId) {
@@ -258,6 +264,7 @@ export class Game {
 
     if (itemId === null) {
       this.equippedItem = null;
+      persistEquippedItem(null);
       this.message = '';
       this.notify();
       return;
@@ -272,7 +279,16 @@ export class Game {
       return;
     }
 
+    if (this.equippedItem === itemId) {
+      this.equippedItem = null;
+      persistEquippedItem(null);
+      this.message = '';
+      this.notify();
+      return;
+    }
+
     this.equippedItem = itemId;
+    persistEquippedItem(itemId);
     this.message = '';
     this.notify();
   }
@@ -282,6 +298,7 @@ export class Game {
       && this.canHumanAct()
       && !this.animating
       && this.equippedItem
+      && getInventoryCount(this.equippedItem) > 0
       && !this.itemUsed
       && !this.itemTargeting;
   }
@@ -535,14 +552,6 @@ export class Game {
     return this.checkWinAfterItemEffect(detail);
   }
 
-  validateEquippedItemForBattle() {
-    if (!this.equippedItem) return;
-    const item = getItem(this.equippedItem);
-    if (!item || getInventoryCount(this.equippedItem) <= 0) {
-      this.equippedItem = null;
-    }
-  }
-
   resetBattleItemState() {
     this.itemUsed = false;
     this.itemTargeting = null;
@@ -793,6 +802,7 @@ export class Game {
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
+    this.restoreEquippedItemPreference();
     this.message = message;
     this.notify();
   }
@@ -932,7 +942,6 @@ export class Game {
     if (!this.isFormationReady()) {
       this.blueRoster = [...this.getModeConfig().roster];
     }
-    this.validateEquippedItemForBattle();
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
