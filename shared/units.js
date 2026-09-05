@@ -321,26 +321,37 @@ export function canAddToRoster(roster, classId, modeId) {
   return used < getMaxPerClass(modeId);
 }
 
-export function isValidRoster(roster, modeId) {
-  if (!Array.isArray(roster)) return false;
+/** Normalize a roster: drop invalid classes, enforce per-class caps and size limit. */
+export function sanitizeRoster(roster, modeId) {
+  if (!Array.isArray(roster)) return [];
   const deployable = getDeployableRoster(roster, modeId);
-  if (deployable.length !== getRosterLimit(modeId)) return false;
-  const counts = countRosterClasses(deployable);
+  const limit = getRosterLimit(modeId);
+  const maxPerClass = getMaxPerClass(modeId);
+  const counts = {};
+  const result = [];
   for (const classId of deployable) {
-    if (!CLASSES[classId]) return false;
+    if (!CLASSES[classId]) continue;
+    const used = counts[classId] ?? 0;
+    if (used >= maxPerClass) continue;
+    counts[classId] = used + 1;
+    result.push(classId);
+    if (result.length >= limit) break;
   }
-  for (const count of Object.values(counts)) {
-    if (count > getMaxPerClass(modeId)) return false;
-  }
-  return true;
+  return sortRosterByClass(result);
 }
 
-/** Use the player's lineup when valid; otherwise fall back to the mode preset. */
+export function hasPlayableRoster(roster, modeId) {
+  return sanitizeRoster(roster, modeId).length > 0;
+}
+
+export function isValidRoster(roster, modeId) {
+  const deployable = sanitizeRoster(roster, modeId);
+  return deployable.length === getRosterLimit(modeId);
+}
+
+/** Use the player's lineup as-is (partial rosters are allowed). */
 export function resolveRoster(roster, modeId) {
-  if (isValidRoster(roster, modeId)) {
-    return sortRosterByClass(getDeployableRoster(roster, modeId));
-  }
-  return sortRosterByClass([...getBoardMode(modeId).roster]);
+  return sanitizeRoster(roster, modeId);
 }
 
 export function createRandomRoster(modeId, rng = Math.random) {

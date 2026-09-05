@@ -676,6 +676,177 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+/* ── Battle action menu (emoji + item + surrender) ── */
+
+.battle-action-menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.battle-action-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--panel-2);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.battle-action-fab:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.battle-action-fab[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.battle-action-fab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.battle-action-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  min-width: 0;
+}
+
+.battle-action-emojis {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.battle-action-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--panel-2);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.battle-action-emoji:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+
+.battle-action-emoji:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.battle-action-emoji-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+}
+
+.battle-action-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.battle-action-tool {
+  flex-shrink: 0;
+}
+
+.battle-action-surrender {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 44px;
+}
+
+.battle-action-surrender-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.battle-panels .battle-action-tool.item-battle-btn {
+  width: 52px;
+  height: 52px;
+}
+
+.battle-panels .battle-action-tool.item-battle-btn .item-battle-icon-thumb {
+  width: 44px;
+  height: 44px;
+}
+
+/* ── Opponent reaction bubble ── */
+
+.reaction-bubble {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  z-index: 13;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.reaction-bubble-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.45));
+}
+
+.reaction-bubble.is-visible .reaction-bubble-icon {
+  animation: reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.reaction-bubble.is-dismissing .reaction-bubble-icon {
+  animation: reactionFadeOut 0.35s ease forwards;
+}
+
+@keyframes reactionPop {
+  0% { transform: scale(0.2); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes reactionFadeOut {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.75); opacity: 0; }
+}
+
 .battle-layout.game-end {
   position: relative;
 }

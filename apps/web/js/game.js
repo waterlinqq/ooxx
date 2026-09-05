@@ -65,6 +65,7 @@ import {
   isObstacleCell,
   cloneMapProps,
 } from './mapProps.js';
+import { REACTION_COOLDOWN_MS } from './reactions.js';
 
 export const GAME_END_REVEAL_MS = 1000;
 export const GAME_END_MODAL_MS = 3000;
@@ -109,6 +110,9 @@ export class Game {
     this._endRevealPending = false;
     /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done' } | null} */
     this.tutorial = null;
+    /** @type {{ id: string, at: number }|null} */
+    this.incomingReaction = null;
+    this.lastReactionSentAt = 0;
   }
 
   subscribe(fn) {
@@ -609,6 +613,7 @@ export class Game {
       tutorialSelectableClassIds: this.getTutorialSelectableClassIds(),
       tutorialActorCell: this.getTutorialActorCell(),
       tutorialPointer: this.getTutorialPointer(),
+      incomingReaction: this.incomingReaction,
     };
   }
 
@@ -884,13 +889,15 @@ export class Game {
     this.resolveAttack(attacker, target, enemy.label);
   }
 
-  /** 匹配逾時：用玩家編組（若未完成則退回預設）立刻開打 AI */
+  /** 匹配逾時：用玩家當前編組立刻開打 AI */
   startQuickAiBattle(boardMode) {
     if (!BOARD_MODES[boardMode]) return;
     this.tutorial = null;
     this.syncFormationMode(boardMode);
-    if (!this.isFormationReady()) {
-      this.blueRoster = [...this.getModeConfig().roster];
+    if (getDeployableRoster(this.blueRoster, this.boardMode).length === 0) {
+      this.message = '請先編組至少一名角色';
+      this.notify();
+      return;
     }
     this.itemUsed = false;
     this.itemTargeting = null;
@@ -1424,6 +1431,21 @@ export class Game {
     this.inspectedUnitId = null;
     this.lastWinLine = null;
     this.handleRoundWin('red', `${TEAM.blue.name}投降`);
+  }
+
+  sendReaction(reactionId) {
+    const now = Date.now();
+    if (now - this.lastReactionSentAt < REACTION_COOLDOWN_MS) return false;
+    if (this.phase !== 'battle' || this.animating || this.tutorial) return false;
+
+    this.lastReactionSentAt = now;
+    this.incomingReaction = { id: reactionId, at: now };
+    this.notify();
+    return true;
+  }
+
+  clearIncomingReaction() {
+    this.incomingReaction = null;
   }
 
   endMatchByTime() {

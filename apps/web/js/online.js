@@ -14,6 +14,7 @@ import {
   remapTeamForView,
 } from './onlineView.js';
 import { GAME_END_REVEAL_MS } from './game.js';
+import { REACTION_COOLDOWN_MS } from './reactions.js';
 
 export class OnlineClient {
   constructor() {
@@ -56,6 +57,9 @@ export class OnlineClient {
     /** @type {Map<string, { draggingUnitId: string|null, selectedReserveId: string|null }>} */
     this.pendingFire = new Map();
     this._gameEndRevealGen = 0;
+    /** @type {{ id: string, at: number }|null} */
+    this.incomingReaction = null;
+    this.lastReactionSentAt = 0;
   }
 
   canSend() {
@@ -253,6 +257,11 @@ export class OnlineClient {
       case MSG.GAME_OVER:
         this.handleGamePayload(payload, { gameEnd: true }).catch(console.error);
         return;
+      case MSG.REACTION:
+        if (payload.fromGuestId !== this.guestId) {
+          this.incomingReaction = { id: payload.reactionId, at: Date.now() };
+        }
+        break;
       default:
         break;
     }
@@ -441,6 +450,7 @@ export class OnlineClient {
       itemUsed: true,
       canUseItem: false,
       tutorial: null,
+      incomingReaction: this.incomingReaction,
     };
   }
 
@@ -578,6 +588,27 @@ export class OnlineClient {
 
   surrender() {
     this.fire(MSG.SURRENDER, {});
+  }
+
+  sendReaction(reactionId) {
+    const now = Date.now();
+    if (now - this.lastReactionSentAt < REACTION_COOLDOWN_MS) {
+      this.notifyError('表情冷卻中，請稍後再試');
+      return false;
+    }
+    if (!this.gameState || this.gameState.phase !== 'battle') return false;
+
+    this.lastReactionSentAt = now;
+    const reqId = this.fire(MSG.SEND_REACTION, { reactionId });
+    if (!reqId) {
+      this.lastReactionSentAt = 0;
+      return false;
+    }
+    return true;
+  }
+
+  clearIncomingReaction() {
+    this.incomingReaction = null;
   }
 
   beginDragUnit(unitId) {

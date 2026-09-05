@@ -1,4 +1,4 @@
-import { MSG } from '../../../shared/protocol.js';
+import { MSG, REACTION_IDS } from '../../../shared/protocol.js';
 import { pool } from '../db.js';
 import * as room from './messages.js';
 import {
@@ -285,9 +285,14 @@ export async function handleWsMessage(ws, guest, raw) {
 
       if (payload.nickname) await updateGuestNickname(guest.id, payload.nickname);
 
-      const match = await createWaitingRoom(guest.id, boardMode, payload.nickname, {
+      const result = await createWaitingRoom(guest.id, boardMode, payload.nickname, {
         roster: payload.roster,
       });
+      if (!result.ok) {
+        err(ws, result.error, 'EMPTY_ROSTER', reqId);
+        return;
+      }
+      const match = result.match;
       room.bindMatch(guest.id, match.id, null);
       const guests = await fetchGuestNicknames(match);
       room.send(ws, MSG.ROOM_STATE, roomStatePayload(match, guests), reqId);
@@ -421,6 +426,33 @@ export async function handleWsMessage(ws, guest, raw) {
         winner: state.winner,
         reason: state.endReason,
       }));
+      break;
+    }
+
+    case MSG.SEND_REACTION: {
+      const conn = room.getConnection(guest.id);
+      if (!conn?.matchId || !conn.team) {
+        err(ws, '尚未加入對局', 'NOT_IN_GAME', reqId);
+        return;
+      }
+
+      const match = await getMatchById(conn.matchId);
+      if (!match || match.status !== 'playing') {
+        err(ws, '對局已結束', 'NOT_IN_GAME', reqId);
+        return;
+      }
+
+      const reactionId = payload?.reactionId;
+      if (!REACTION_IDS.includes(reactionId)) {
+        err(ws, '無效的表情', 'INVALID_REACTION', reqId);
+        return;
+      }
+
+      room.broadcastMatch(conn.matchId, MSG.REACTION, {
+        reactionId,
+        fromGuestId: guest.id,
+        fromTeam: conn.team,
+      });
       break;
     }
 

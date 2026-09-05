@@ -88,6 +88,9 @@
                     <p class="ui-card__body" id="winConditionText"></p>
                   </div>
                 </div>
+                <div class="reaction-bubble hidden" id="reactionBubble" aria-hidden="true">
+                  <div class="reaction-bubble-icon" id="reactionBubbleIcon"></div>
+                </div>
                 <div class="battle-panels">
                   <div class="tutorial-panel ui-card ui-card--accent hidden" id="tutorialPanel" aria-live="polite">
                     <div class="tutorial-panel-head">
@@ -96,10 +99,27 @@
                       <button class="btn tutorial-skip" id="tutorialSkip" type="button">跳過</button>
                     </div>
                   </div>
-                  <button class="btn danger battle-fab hidden" id="surrender" type="button" title="投降">🏳️</button>
-                  <button class="item-battle-btn hidden" id="itemBattleBtn" type="button">
-                    <span class="item-battle-icon" id="itemBattleIcon"></span>
-                  </button>
+                  <div class="battle-action-menu hidden" id="battleActionMenu">
+                    <div class="battle-action-sheet hidden" id="battleActionSheet" aria-hidden="true">
+                      <div class="battle-action-emojis" id="battleActionEmojis"></div>
+                      <div class="battle-action-tools">
+                        <button class="item-battle-btn battle-action-tool hidden" id="itemBattleBtn" type="button">
+                          <span class="item-battle-icon" id="itemBattleIcon"></span>
+                        </button>
+                        <button class="btn danger battle-action-tool battle-action-surrender hidden" id="surrender" type="button" title="投降">
+                          <span class="battle-action-surrender-icon" aria-hidden="true">🏳️</span>
+                          <span class="battle-action-surrender-label">投降</span>
+                        </button>
+                      </div>
+                    </div>
+                    <button class="battle-action-fab" id="battleActionFab" type="button" title="動作" aria-expanded="false" aria-controls="battleActionSheet">
+                      <svg class="battle-action-fab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                        <circle cx="12" cy="5" r="2" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                        <circle cx="12" cy="19" r="2" fill="currentColor"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

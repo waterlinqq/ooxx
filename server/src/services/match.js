@@ -9,6 +9,7 @@ import {
   createEmptyBoard,
   createTeamReserve,
   resolveRoster,
+  hasPlayableRoster,
   placeModeCastles,
 } from '../../../shared/units.js';
 import {
@@ -479,9 +480,15 @@ export function resetTurnDeadline(mode, actedCount = 0) {
   };
 }
 
+const EMPTY_ROSTER_ERROR = '請先編組至少一名角色';
+
 export async function createWaitingRoom(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
   const { matchmaking = false, q = pool, roster = null } = options;
+
+  if (!hasPlayableRoster(roster, boardMode)) {
+    return { ok: false, error: EMPTY_ROSTER_ERROR };
+  }
 
   let roomCode = generateRoomCode();
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -514,7 +521,7 @@ export async function createWaitingRoom(guestId, boardMode, nickname, options = 
     await q.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
   }
 
-  return rows[0];
+  return { ok: true, match: rows[0] };
 }
 
 export async function joinRoom(guestId, roomCode, nickname, options = {}) {
@@ -529,6 +536,9 @@ export async function joinRoom(guestId, roomCode, nickname, options = {}) {
   if (!match) return { ok: false, error: '房間不存在或已開始' };
   if (match.blue_guest_id === guestId) return { ok: false, error: '你已在房間中' };
   if (match.red_guest_id) return { ok: false, error: '房間已滿' };
+  if (!hasPlayableRoster(roster, match.board_mode)) {
+    return { ok: false, error: EMPTY_ROSTER_ERROR };
+  }
 
   if (nickname) {
     await q.query('UPDATE guests SET nickname = $1 WHERE id = $2', [nickname, guestId]);
@@ -630,13 +640,17 @@ export async function findMatch(guestId, boardMode, nickname, options = {}) {
       return result;
     }
 
-    const match = await createWaitingRoom(guestId, boardMode, nickname, {
+    const created = await createWaitingRoom(guestId, boardMode, nickname, {
       matchmaking: true,
       q: client,
       roster,
     });
+    if (!created.ok) {
+      await client.query('ROLLBACK');
+      return created;
+    }
     await client.query('COMMIT');
-    return { ok: true, waiting: true, match };
+    return { ok: true, waiting: true, match: created.match };
   } catch (e) {
     try {
       await client.query('ROLLBACK');

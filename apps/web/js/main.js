@@ -5,7 +5,7 @@ import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.j
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster } from './units.js';
 import { isUnlockable, getUnlockPrice } from './unlocks.js';
 import {
   loadSave,
@@ -28,6 +28,12 @@ import {
   showAlert,
   showTimedOverlay,
 } from './ui.js';
+import {
+  REACTIONS,
+  REACTION_DISPLAY_MS,
+  REACTION_COOLDOWN_MS,
+  fillReactionIcon,
+} from './reactions.js';
 
 loadSave();
 
@@ -71,6 +77,12 @@ const joinRoomBtn = document.getElementById('joinRoomBtn');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const cancelRoomBtn = document.getElementById('cancelRoomBtn');
 const surrenderBtn = document.getElementById('surrender');
+const battleActionMenuEl = document.getElementById('battleActionMenu');
+const battleActionSheetEl = document.getElementById('battleActionSheet');
+const battleActionFabEl = document.getElementById('battleActionFab');
+const battleActionEmojisEl = document.getElementById('battleActionEmojis');
+const reactionBubbleEl = document.getElementById('reactionBubble');
+const reactionBubbleIconEl = document.getElementById('reactionBubbleIcon');
 const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
 const turnToastEl = document.getElementById('turnToast');
@@ -353,6 +365,12 @@ function prepareRosterForMatch(modeId) {
   return getRosterForMode(modeId);
 }
 
+function ensureRosterForMatch(modeId) {
+  const roster = prepareRosterForMatch(modeId);
+  if (!hasPlayableRoster(roster, modeId)) return null;
+  return roster;
+}
+
 function isLocalMatchActive(local = game.getState()) {
   return local.tutorial
     || local.phase === 'battle'
@@ -463,6 +481,14 @@ const PURCHASE_TOAST_FADE_MS = 400;
 
 /** @type {{ clear: () => void } | null} */
 let turnToastController = null;
+let battleMenuOpen = false;
+let lastReactionShownAt = 0;
+/** @type {ReturnType<typeof setTimeout>|null} */
+let reactionDismissTimer = null;
+/** @type {ReturnType<typeof setTimeout>|null} */
+let reactionHideTimer = null;
+let reactionButtonsReady = false;
+let lastReactionCooldownUntil = 0;
 /** @type {{ clear: () => void } | null} */
 let winConditionController = null;
 /** @type {{ clear: () => void } | null} */
@@ -947,7 +973,7 @@ function renderShop(state) {
 
 function renderBattleItem(state) {
   const inStock = state.equippedItem && (state.inventory[state.equippedItem] ?? 0) > 0;
-  const show = state.phase === 'battle' && inStock && state.itemDef;
+  const show = state.phase === 'battle' && inStock && state.itemDef && !state.tutorial;
   itemBattleBtnEl.classList.toggle('hidden', !show);
   if (!show) return;
 
@@ -1316,11 +1342,129 @@ function renderTutorialPanel(state) {
 }
 
 function renderBattlePanels(state) {
+  renderBattleActionMenu(state);
+}
+
+function ensureReactionButtons() {
+  if (reactionButtonsReady || !battleActionEmojisEl) return;
+  reactionButtonsReady = true;
+  battleActionEmojisEl.innerHTML = '';
+  for (const reaction of REACTIONS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'battle-action-emoji';
+    btn.dataset.reactionId = reaction.id;
+    btn.title = reaction.label;
+    btn.setAttribute('aria-label', reaction.label);
+    const icon = document.createElement('span');
+    icon.className = 'battle-action-emoji-icon';
+    fillReactionIcon(icon, reaction.id, 36);
+    btn.appendChild(icon);
+    btn.addEventListener('click', () => sendBattleReaction(reaction.id));
+    battleActionEmojisEl.appendChild(btn);
+  }
+}
+
+function setBattleMenuOpen(open) {
+  battleMenuOpen = open;
+  battleActionSheetEl.classList.toggle('hidden', !open);
+  battleActionSheetEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  battleActionFabEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function closeBattleMenu() {
+  if (!battleMenuOpen) return;
+  setBattleMenuOpen(false);
+}
+
+function canSendBattleReaction(state) {
+  return state.phase === 'battle' && !state.tutorial && !state.animating;
+}
+
+function sendBattleReaction(reactionId) {
+  const state = getAppState();
+  if (!canSendBattleReaction(state)) return;
+
+  const now = Date.now();
+  if (now < lastReactionCooldownUntil) return;
+
+  const sent = isOnlinePlaying()
+    ? onlineClient.sendReaction(reactionId)
+    : game.sendReaction(reactionId);
+
+  if (!sent) return;
+
+  lastReactionCooldownUntil = now + REACTION_COOLDOWN_MS;
+  updateReactionButtonCooldown();
+  closeBattleMenu();
+}
+
+function updateReactionButtonCooldown() {
+  if (!battleActionEmojisEl) return;
+  const remaining = Math.max(0, lastReactionCooldownUntil - Date.now());
+  const disabled = remaining > 0;
+  for (const btn of battleActionEmojisEl.querySelectorAll('.battle-action-emoji')) {
+    btn.disabled = disabled;
+  }
+  if (disabled) {
+    setTimeout(updateReactionButtonCooldown, remaining + 30);
+  }
+}
+
+function renderBattleActionMenu(state) {
+  ensureReactionButtons();
+
   const inBattle = state.phase === 'battle';
   const inTutorial = Boolean(state.tutorial);
+  const showMenu = inBattle && !inTutorial;
 
-  surrenderBtn.classList.toggle('hidden', !inBattle || inTutorial);
+  battleActionMenuEl.classList.toggle('hidden', !showMenu);
+  if (!showMenu) {
+    closeBattleMenu();
+    return;
+  }
+
+  battleActionFabEl.disabled = state.animating;
+  surrenderBtn.classList.toggle('hidden', !showMenu);
   surrenderBtn.disabled = !inBattle || state.animating;
+
+  updateReactionButtonCooldown();
+}
+
+function dismissReactionBubble() {
+  if (reactionBubbleEl.classList.contains('hidden')) return;
+  reactionBubbleEl.classList.remove('is-visible');
+  reactionBubbleEl.classList.add('is-dismissing');
+  if (reactionHideTimer) clearTimeout(reactionHideTimer);
+  reactionHideTimer = setTimeout(() => {
+    reactionBubbleEl.classList.add('hidden');
+    reactionBubbleEl.classList.remove('is-dismissing');
+    reactionBubbleEl.setAttribute('aria-hidden', 'true');
+    if (isOnlinePlaying()) onlineClient.clearIncomingReaction();
+    else game.clearIncomingReaction();
+  }, 350);
+}
+
+function showReactionBubble(reaction) {
+  if (!reaction?.id) return;
+  if (reaction.at <= lastReactionShownAt) return;
+  lastReactionShownAt = reaction.at;
+
+  if (reactionDismissTimer) clearTimeout(reactionDismissTimer);
+  if (reactionHideTimer) clearTimeout(reactionHideTimer);
+
+  fillReactionIcon(reactionBubbleIconEl, reaction.id, 88);
+  reactionBubbleEl.classList.remove('hidden', 'is-dismissing');
+  reactionBubbleEl.classList.add('is-visible');
+  reactionBubbleEl.setAttribute('aria-hidden', 'false');
+
+  reactionDismissTimer = setTimeout(dismissReactionBubble, REACTION_DISPLAY_MS);
+}
+
+function renderIncomingReaction(state) {
+  if (state.incomingReaction) {
+    showReactionBubble(state.incomingReaction);
+  }
 }
 
 function updateBottomNav(state) {
@@ -1394,6 +1538,7 @@ function render(state) {
     renderFormationModePicker(state);
   }
   if (inBattleFlow) renderBattleItem(state);
+  if (inBattleFlow) renderIncomingReaction(state);
   if (inBattleFlow) renderReserveBars(state);
   if (activeNav === 'bag') renderBag(state);
   if (activeNav === 'shop') renderShop(state);
@@ -1431,7 +1576,11 @@ bottomNavEl.addEventListener('click', (e) => {
 });
 
 findMatchBtn.addEventListener('click', async () => {
-  const roster = prepareRosterForMatch(selectedOnlineMode);
+  const roster = ensureRosterForMatch(selectedOnlineMode);
+  if (!roster) {
+    await showAlert('請先編組至少一名角色');
+    return;
+  }
   findMatchBtn.disabled = true;
   try {
     await onlineClient.findMatch(selectedOnlineMode, undefined, roster);
@@ -1444,7 +1593,11 @@ findMatchBtn.addEventListener('click', async () => {
 });
 
 createRoomBtn.addEventListener('click', async () => {
-  const roster = prepareRosterForMatch(selectedOnlineMode);
+  const roster = ensureRosterForMatch(selectedOnlineMode);
+  if (!roster) {
+    await showAlert('請先編組至少一名角色');
+    return;
+  }
   createRoomBtn.disabled = true;
   try {
     await onlineClient.createRoom(selectedOnlineMode, undefined, roster);
@@ -1462,7 +1615,11 @@ joinRoomBtn.addEventListener('click', async () => {
     await showAlert('請輸入 6 位房間碼');
     return;
   }
-  const roster = prepareRosterForMatch(selectedOnlineMode);
+  const roster = ensureRosterForMatch(selectedOnlineMode);
+  if (!roster) {
+    await showAlert('請先編組至少一名角色');
+    return;
+  }
   joinRoomBtn.disabled = true;
   try {
     await onlineClient.joinRoom(code, undefined, roster);
@@ -1478,14 +1635,29 @@ cancelRoomBtn.addEventListener('click', () => {
 });
 
 surrenderBtn.addEventListener('click', () => {
+  closeBattleMenu();
   if (isOnlinePlaying()) onlineClient.surrender();
   else game.surrender();
 });
+battleActionFabEl.addEventListener('click', () => {
+  setBattleMenuOpen(!battleMenuOpen);
+});
 itemBattleBtnEl.addEventListener('click', () => {
+  closeBattleMenu();
   game.beginUseItem();
+});
+document.addEventListener('click', (event) => {
+  if (!battleMenuOpen) return;
+  const target = event.target;
+  if (battleActionMenuEl.contains(target)) return;
+  closeBattleMenu();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || event.repeat) return;
+  if (battleMenuOpen) {
+    closeBattleMenu();
+    return;
+  }
   if (isOnlinePlaying() || !game.itemTargeting) return;
   game.cancelItemTargeting();
 });
