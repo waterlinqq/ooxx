@@ -287,18 +287,52 @@ export class Game {
     return [];
   }
 
+  getValidPotionReserveTargetIds() {
+    if (this.itemTargeting !== 'potion') return [];
+    return this.blueReserve
+      .filter((u) => this.ownsHumanUnit(u) && u.hp < u.maxHp)
+      .map((u) => u.id);
+  }
+
+  showItemTargetHint(text) {
+    const item = getItem(this.itemTargeting);
+    this.message = `${item?.icon ?? ''} ${text}`;
+    this.notify();
+  }
+
   beginUseItem() {
     if (!this.canUseItem()) return;
 
     const item = getItem(this.equippedItem);
     if (!item) return;
 
+    if (item.targeting === 'friendly_unit') {
+      const boardTargets = getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
+      const reserveTargets = this.blueReserve.filter((u) => this.ownsHumanUnit(u) && u.hp < u.maxHp);
+      if (boardTargets.length === 0 && reserveTargets.length === 0) {
+        this.message = `${item.icon} 目前沒有可治療的單位`;
+        this.notify();
+        return;
+      }
+    } else if (item.targeting === 'empty_cell') {
+      const occupied = new Set(this.pendingBombs.map(({ row, col }) => `${row},${col}`));
+      const bombTargets = getValidBombCells(this.board, this.mapProps)
+        .filter(([r, c]) => !occupied.has(`${r},${c}`));
+      if (bombTargets.length === 0) {
+        this.message = `${item.icon} 目前沒有可放置的空格`;
+        this.notify();
+        return;
+      }
+    }
+
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
 
     this.itemTargeting = this.equippedItem;
-    const hint = item.targeting === 'friendly_unit' ? '選單位' : '選空格';
+    const hint = item.targeting === 'friendly_unit'
+      ? '點選受傷的己方單位（棋盤或牌列）'
+      : '點選棋盤空格';
     this.message = `${item.icon} ${hint}`;
     this.notify();
   }
@@ -315,10 +349,16 @@ export class Game {
 
     if (this.itemTargeting === 'potion') {
       const unit = this.board[row]?.[col];
-      if (!unit || !this.ownsHumanUnit(unit)) return;
+      if (!unit || !this.ownsHumanUnit(unit)) {
+        this.showItemTargetHint('請點選棋盤或牌列中受傷的己方單位');
+        return;
+      }
 
       const valid = this.getHighlightItemTargets();
-      if (!valid.some(([r, c]) => r === row && c === col)) return;
+      if (!valid.some(([r, c]) => r === row && c === col)) {
+        this.showItemTargetHint(unit.hp >= unit.maxHp ? '該單位生命已滿' : '無法選定此單位');
+        return;
+      }
 
       const amount = getItem('potion')?.effect?.amount ?? 2;
       const result = healUnitAt(this.board, row, col, amount);
@@ -329,14 +369,45 @@ export class Game {
     }
 
     if (this.itemTargeting === 'bomb') {
-      if (this.board[row]?.[col]) return;
+      if (this.board[row]?.[col]) {
+        this.showItemTargetHint('請點選空格');
+        return;
+      }
 
       const valid = this.getHighlightItemTargets();
-      if (!valid.some(([r, c]) => r === row && c === col)) return;
+      if (!valid.some(([r, c]) => r === row && c === col)) {
+        this.showItemTargetHint('此格無法放置炸彈');
+        return;
+      }
 
       this.pendingBombs.push({ row, col });
       this.finishItemUse('放置炸彈');
     }
+  }
+
+  tryItemTargetReserve(unitId) {
+    if (!this.itemTargeting || this.phase !== 'battle' || !this.canHumanAct()) return;
+
+    if (this.itemTargeting !== 'potion') {
+      this.showItemTargetHint('請點選棋盤空格');
+      return;
+    }
+
+    const unit = this.blueReserve.find((u) => u.id === unitId);
+    if (!unit || !this.ownsHumanUnit(unit)) {
+      this.showItemTargetHint('請點選牌列中受傷的己方單位');
+      return;
+    }
+
+    if (!this.getValidPotionReserveTargetIds().includes(unitId)) {
+      this.showItemTargetHint(unit.hp >= unit.maxHp ? '該單位生命已滿' : '無法選定此單位');
+      return;
+    }
+
+    const amount = getItem('potion')?.effect?.amount ?? 2;
+    unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+    const cls = CLASSES[unit.classId];
+    this.finishItemUse(`使用紅藥水治療 ${cls.name}`);
   }
 
   finishItemUse(label) {
@@ -345,7 +416,7 @@ export class Game {
     this.itemTargeting = null;
 
     if (!this.checkWinAfterItemEffect(label)) {
-      this.message = `${label} · ${this.actionsRemaining}/${this.getActionsPerTurn()}`;
+      this.message = this.getPlayerTurnMessage();
       this.notify();
     }
   }
@@ -511,6 +582,7 @@ export class Game {
       itemUsed: this.itemUsed,
       itemTargeting: this.itemTargeting,
       validItemTargets: this.getHighlightItemTargets(),
+      validItemReserveTargets: this.getValidPotionReserveTargetIds(),
       pendingBombs: this.pendingBombs.map((b) => ({ ...b })),
       coins: save.coins,
       inventory: save.inventory,
@@ -540,12 +612,8 @@ export class Game {
   }
 
   getPlayerTurnMessage() {
-    const mode = this.getModeConfig();
     if (this.tutorial) return '';
-
-    const team = TEAM[this.currentPlayer];
-    const remain = `${this.actionsRemaining}/${mode.actionsPerTurn}`;
-    return `${team.name} ${remain}`;
+    return this.currentPlayer === 'blue' ? '你的回合' : '對手回合';
   }
 
   hasValidActionsForTeam(team = this.currentPlayer) {
@@ -790,11 +858,7 @@ export class Game {
     this.resetTurnActions();
     this.resetBattleItemState();
 
-    if (this.tutorial) {
-      this.message = '';
-    } else {
-      this.message = `${TEAM[this.currentPlayer].name}先攻`;
-    }
+    this.message = this.tutorial ? '' : this.getPlayerTurnMessage();
 
     this.notify();
     this.scheduleAiIfNeeded();
@@ -815,7 +879,10 @@ export class Game {
 
   selectReserve(unitId) {
     if (!this.canHumanAct()) return;
-    if (this.itemTargeting) return;
+    if (this.itemTargeting) {
+      this.tryItemTargetReserve(unitId);
+      return;
+    }
     const unit = this.getCurrentReserve().find((u) => u.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit)) return;
     const selectable = this.getTutorialSelectableClassIds();
@@ -1146,12 +1213,10 @@ export class Game {
 
     if (this.actionsRemaining > 0) {
       if (!this.hasValidActionsForTeam()) {
-        this.message = `換 ${TEAM[enemy].name}`;
-        this.notify();
         this.switchPlayer();
         return;
       }
-      this.message = `剩 ${this.actionsRemaining}`;
+      this.message = this.getPlayerTurnMessage();
       this.notify();
       if (this.currentPlayer === 'red') {
         setTimeout(() => this.runAiTurn(), 500);

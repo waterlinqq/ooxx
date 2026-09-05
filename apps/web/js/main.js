@@ -71,10 +71,10 @@ const restartBtn = document.getElementById('restart');
 const surrenderBtn = document.getElementById('surrender');
 const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
+const turnToastEl = document.getElementById('turnToast');
+const turnToastTextEl = document.getElementById('turnToastText');
 const winConditionTextEl = document.getElementById('winConditionText');
 const statusMessageEl = document.getElementById('statusMessage');
-const battleStatusPillEl = document.getElementById('battleStatusPill');
-const battleStatusTextEl = document.getElementById('battleStatusText');
 const coinBalanceEl = document.getElementById('coinBalance');
 const formationItemsEl = document.getElementById('formationItems');
 const formationItemHintEl = document.getElementById('formationItemHint');
@@ -456,6 +456,64 @@ let winConditionHideTimer = null;
 const WIN_CONDITION_SHOW_MS = 2800;
 const WIN_CONDITION_FADE_MS = 450;
 
+const TURN_TOAST_SHOW_MS = 1400;
+const TURN_TOAST_FADE_MS = 900;
+
+/** @type {ReturnType<typeof setTimeout> | null} */
+let turnToastHideTimer = null;
+let lastTurnToastPlayer = null;
+let lastTurnToastPhase = null;
+
+function clearTurnToast() {
+  if (turnToastHideTimer) {
+    clearTimeout(turnToastHideTimer);
+    turnToastHideTimer = null;
+  }
+  turnToastEl.classList.add('hidden');
+  turnToastEl.classList.remove('dismissing', 'your-turn', 'opponent-turn');
+}
+
+function showTurnToast(text, player) {
+  clearTurnToast();
+  turnToastTextEl.textContent = text;
+  turnToastEl.classList.remove('hidden', 'dismissing');
+  turnToastEl.classList.toggle('your-turn', player === 'blue');
+  turnToastEl.classList.toggle('opponent-turn', player === 'red');
+
+  turnToastHideTimer = setTimeout(() => {
+    turnToastEl.classList.add('dismissing');
+    turnToastHideTimer = setTimeout(() => {
+      clearTurnToast();
+    }, TURN_TOAST_FADE_MS);
+  }, TURN_TOAST_SHOW_MS);
+}
+
+function syncTurnToast(state) {
+  if (state.phase !== 'battle' || state.tutorial) {
+    if (state.phase !== 'battle') {
+      lastTurnToastPlayer = null;
+      lastTurnToastPhase = null;
+      clearTurnToast();
+    }
+    return;
+  }
+
+  const player = state.currentPlayer;
+  const battleJustStarted = lastTurnToastPhase !== 'battle';
+  lastTurnToastPhase = state.phase;
+
+  if (!battleJustStarted && player === lastTurnToastPlayer) return;
+  lastTurnToastPlayer = player;
+
+  const text = player === 'blue' ? '你的回合' : '對手回合';
+  const delay = battleJustStarted ? WIN_CONDITION_SHOW_MS + 250 : 0;
+  if (delay > 0) {
+    setTimeout(() => showTurnToast(text, player), delay);
+  } else {
+    showTurnToast(text, player);
+  }
+}
+
 function clearWinConditionToast() {
   if (winConditionHideTimer) {
     clearTimeout(winConditionHideTimer);
@@ -750,12 +808,6 @@ function createItemRow(item, { count, price, onBuy }) {
 function renderCoinBalance(state) {
   coinBalanceEl.textContent = String(state.coins ?? 0);
   statusMessageEl.classList.add('hidden');
-
-  const inBattle = state.phase === 'battle' && !state.tutorial;
-  battleStatusPillEl.classList.toggle('hidden', !inBattle);
-  if (inBattle) {
-    battleStatusTextEl.textContent = state.message ?? '';
-  }
 }
 
 function renderFormationItems(state) {
@@ -935,7 +987,16 @@ function createReserveCard(unit, { side, state }) {
   const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
   const selected = state.selectedReserveId === unit.id;
   const inspected = state.inspectedUnitId === unit.id;
-  const selectable = side === 'blue' && state.isHumanTurn && tutorialAllowsReserve(state, unit);
+  const itemTargeting = Boolean(state.itemTargeting);
+  const itemReserveTarget = side === 'blue'
+    && state.itemTargeting === 'potion'
+    && (state.validItemReserveTargets ?? []).includes(unit.id);
+  const potionTargeting = side === 'blue' && state.itemTargeting === 'potion';
+  const deploySelectable = side === 'blue'
+    && state.isHumanTurn
+    && tutorialAllowsReserve(state, unit)
+    && !itemTargeting;
+  const selectable = deploySelectable || potionTargeting;
 
   const card = document.createElement('button');
   card.type = 'button';
@@ -944,12 +1005,13 @@ function createReserveCard(unit, { side, state }) {
   if (side === 'enemy') card.classList.add('reserve-card-enemy');
   card.classList.toggle('selected', selected);
   card.classList.toggle('inspected', inspected);
-  card.classList.toggle('disabled', side === 'blue' && !selectable);
+  card.classList.toggle('item-target', itemReserveTarget);
+  card.classList.toggle('disabled', side === 'blue' && !selectable && !itemReserveTarget);
   card.classList.toggle(
     'tutorial-focus',
-    side === 'blue' && selectable && !selected && state.tutorialSelectableClassIds != null,
+    side === 'blue' && deploySelectable && !selected && state.tutorialSelectableClassIds != null,
   );
-  if (side === 'blue' && !selectable) card.disabled = true;
+  if (side === 'blue' && !selectable && !itemReserveTarget) card.disabled = true;
 
   const iconWrap = document.createElement('span');
   iconWrap.className = 'reserve-card-icon';
@@ -989,10 +1051,16 @@ function createReserveCard(unit, { side, state }) {
     });
   } else {
     card.addEventListener('click', () => {
-      if (!selectable) return;
       withOnlineOrLocal(
         () => onlineClient.selectReserve(unit.id),
-        () => game.selectReserve(unit.id),
+        () => {
+          if (game.itemTargeting) {
+            game.tryItemTargetReserve(unit.id);
+            return;
+          }
+          if (!deploySelectable) return;
+          game.selectReserve(unit.id);
+        },
       );
     });
   }
@@ -1266,6 +1334,7 @@ function render(state) {
   renderLobbyFooter(state);
   renderOnlineLobby(state);
   renderCoinBalance(state);
+  syncTurnToast(state);
   if (inFormation || (activeNav === 'formation' && game.canEditRoster())) {
     renderFormation(state);
     renderFormationItems(state);

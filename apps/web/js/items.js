@@ -7,7 +7,7 @@ export const ITEMS = {
     id: 'potion',
     name: '紅藥水',
     icon: '🧪',
-    desc: '選定一個場上己方單位，恢復 2 點生命',
+    desc: '選定一個己方單位（棋盤或牌列），恢復 2 點生命',
     effect: { type: 'heal', amount: 2 },
     targeting: 'friendly_unit',
   },

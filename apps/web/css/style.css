@@ -228,7 +228,10 @@ body {
   bottom: auto;
 }
 
-.battle-layout.in-combat .reserve-bar-scroll,
+.battle-layout.in-combat .reserve-bar-scroll {
+  pointer-events: none;
+}
+
 .battle-layout.in-combat .reserve-card {
   pointer-events: auto;
 }
@@ -326,21 +329,67 @@ body {
   gap: 0;
 }
 
-.battle-status-pill {
+.turn-toast {
   position: absolute;
-  top: 10px;
-  left: 8px;
-  max-width: min(72%, 320px);
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.turn-toast.hidden {
+  display: none;
+}
+
+.turn-toast-text {
+  padding: 16px 34px;
+  border-radius: 18px;
+  font-size: clamp(1.35rem, 5vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(6px);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--text);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.28);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+  animation: turnToastIn 0.32s ease forwards;
+}
+
+.turn-toast.your-turn .turn-toast-text {
+  color: rgba(219, 234, 254, 0.98);
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(30, 58, 138, 0.38);
+}
+
+.turn-toast.opponent-turn .turn-toast-text {
+  color: rgba(254, 226, 226, 0.96);
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(127, 29, 29, 0.34);
+}
+
+.turn-toast.dismissing .turn-toast-text {
+  animation: turnToastOut 0.9s ease forwards;
+}
+
+@keyframes turnToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes turnToastOut {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
 }
 
 .battle-layout.in-combat .match-timer {
@@ -1371,6 +1420,15 @@ body {
   box-shadow: 0 0 10px rgba(251, 191, 36, 0.45);
 }
 
+.reserve-card.item-target {
+  border-color: #a855f7;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+}
+
+.reserve-card.item-target .reserve-card-name {
+  color: #d8b4fe;
+}
+
 .reserve-card-icon,
 .reserve-card-name,
 .reserve-card-hp-text,
@@ -1952,9 +2010,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  font-size: 1rem;
+  width: 38px;
+  height: 38px;
+  font-size: 1.2rem;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -2048,8 +2106,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   border: 1px solid var(--panel-2);
   border-radius: 999px;
@@ -2087,8 +2145,8 @@ body {
 }
 
 .item-battle-icon-thumb {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
 }
 
 #formationItemSection {

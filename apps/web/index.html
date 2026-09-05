@@ -62,9 +62,6 @@
             <div class="board-area">
               <div class="board-container">
                 <div class="board-hud" id="boardHud">
-                  <div class="battle-status-pill hidden" id="battleStatusPill" aria-live="polite">
-                    <span id="battleStatusText"></span>
-                  </div>
                   <div class="board-timers">
                     <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
                       <time class="match-timer-time" id="matchTimerText">00:00</time>
@@ -81,6 +78,9 @@
                 </div>
                 <div id="boardCanvas" class="board-canvas-host"></div>
                 <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+                <div class="turn-toast hidden" id="turnToast" aria-live="polite">
+                  <span class="turn-toast-text" id="turnToastText"></span>
+                </div>
                 <div class="win-condition-toast hidden" id="winConditionToast" aria-live="polite">
                   <div class="win-condition-card">
                     <div class="win-condition-title">🏆 勝利條件</div>
