@@ -17,6 +17,7 @@ import {
   isTutorialDone,
   initCloudSave,
   getSaveSnapshot,
+  getSavedRostersByMode,
 } from './save.js';
 import { onlineClient } from './online.js';
 
@@ -344,8 +345,12 @@ let selectedOnlineMode = '3x3';
 let onlineTimerInterval = null;
 
 function getRosterForMode(modeId) {
-  if (game.boardMode === modeId) return game.blueRoster;
-  return game.rostersByMode[modeId] ?? [];
+  game.syncFormationMode(modeId);
+  return [...game.blueRoster];
+}
+
+function prepareRosterForMatch(modeId) {
+  return getRosterForMode(modeId);
 }
 
 function isLocalMatchActive(local = game.getState()) {
@@ -889,7 +894,10 @@ function renderFormation(state) {
   }
 
   startBattleBtn.disabled = !state.formationReady;
-  formationFooterEl.classList.toggle('hidden', state.phase !== 'formation');
+  formationFooterEl.classList.toggle(
+    'hidden',
+    state.phase !== 'formation' && state.phase !== 'onlineLobby',
+  );
 }
 
 function tutorialAllowsReserve(state, unit) {
@@ -1278,9 +1286,10 @@ bottomNavEl.addEventListener('click', (e) => {
 });
 
 findMatchBtn.addEventListener('click', async () => {
+  const roster = prepareRosterForMatch(selectedOnlineMode);
   findMatchBtn.disabled = true;
   try {
-    await onlineClient.findMatch(selectedOnlineMode);
+    await onlineClient.findMatch(selectedOnlineMode, undefined, roster);
     render(getAppState());
   } catch (e) {
     alert(e.message ?? '匹配失敗');
@@ -1290,9 +1299,10 @@ findMatchBtn.addEventListener('click', async () => {
 });
 
 createRoomBtn.addEventListener('click', async () => {
+  const roster = prepareRosterForMatch(selectedOnlineMode);
   createRoomBtn.disabled = true;
   try {
-    await onlineClient.createRoom(selectedOnlineMode);
+    await onlineClient.createRoom(selectedOnlineMode, undefined, roster);
     render(getAppState());
   } catch (e) {
     alert(e.message ?? '建立房間失敗');
@@ -1307,9 +1317,10 @@ joinRoomBtn.addEventListener('click', async () => {
     alert('請輸入 6 位房間碼');
     return;
   }
+  const roster = prepareRosterForMatch(selectedOnlineMode);
   joinRoomBtn.disabled = true;
   try {
-    await onlineClient.joinRoom(code);
+    await onlineClient.joinRoom(code, undefined, roster);
   } catch (e) {
     alert(e.message ?? '加入失敗');
   } finally {
@@ -1353,7 +1364,11 @@ game.subscribe(() => {
   }
 });
 initCloudSave()
-  .then(() => onlineClient.tryReconnectOnLoad())
+  .then(() => {
+    game.rostersByMode = getSavedRostersByMode();
+    game.blueRoster = [...(game.rostersByMode[game.boardMode] ?? [])];
+    return onlineClient.tryReconnectOnLoad();
+  })
   .then(() => {
     appReady = true;
     render(getAppState());

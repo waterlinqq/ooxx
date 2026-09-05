@@ -233,6 +233,25 @@ export function canAddToRoster(roster, classId, modeId) {
   return used < getMaxPerClass(modeId);
 }
 
+export function isValidRoster(roster, modeId) {
+  if (!Array.isArray(roster)) return false;
+  if (roster.length !== getRosterLimit(modeId)) return false;
+  const counts = countRosterClasses(roster);
+  for (const classId of roster) {
+    if (!CLASSES[classId]) return false;
+  }
+  for (const count of Object.values(counts)) {
+    if (count > getMaxPerClass(modeId)) return false;
+  }
+  return true;
+}
+
+/** Use the player's lineup when valid; otherwise fall back to the mode preset. */
+export function resolveRoster(roster, modeId) {
+  if (isValidRoster(roster, modeId)) return sortRosterByClass([...roster]);
+  return sortRosterByClass([...getBoardMode(modeId).roster]);
+}
+
 export function createRandomRoster(modeId, rng = Math.random) {
   const limit = getRosterLimit(modeId);
   const maxPerClass = getMaxPerClass(modeId);

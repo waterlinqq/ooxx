@@ -40,6 +40,7 @@ import {
   consumeItem,
   markTutorialDone,
   isClassOwned,
+  persistRostersByMode,
 } from './save.js';
 import {
   TUTORIAL_BOARD_MODE,
@@ -139,12 +140,17 @@ export class Game {
 
   syncFormationMode(modeId) {
     if (!BOARD_MODES[modeId] || !this.canEditRoster()) return;
-    if (this.boardMode === modeId) return;
 
     this.rostersByMode[this.boardMode] = [...this.blueRoster];
+    if (this.boardMode === modeId) {
+      persistRostersByMode(this.rostersByMode);
+      return;
+    }
+
     this.boardMode = modeId;
     this.blueRoster = [...(this.rostersByMode[modeId] ?? [])];
     this.redRoster = [];
+    persistRostersByMode(this.rostersByMode);
   }
 
   setBoardMode(modeId) {
@@ -193,6 +199,8 @@ export class Game {
     const existing = this.blueRoster.indexOf(classId);
     if (existing >= 0) {
       this.blueRoster = this.blueRoster.filter((id) => id !== classId);
+      this.rostersByMode[this.boardMode] = [...this.blueRoster];
+      persistRostersByMode(this.rostersByMode);
       this.message = '';
       this.notify();
       return;
@@ -210,6 +218,8 @@ export class Game {
       return;
     }
     this.blueRoster = sortRosterByClass([...this.blueRoster, classId]);
+    this.rostersByMode[this.boardMode] = [...this.blueRoster];
+    persistRostersByMode(this.rostersByMode);
     this.message = '';
     this.notify();
   }
@@ -218,6 +228,8 @@ export class Game {
     if (!this.canEditRoster()) return;
     if (index < 0 || index >= this.blueRoster.length) return;
     this.blueRoster = this.blueRoster.filter((_, i) => i !== index);
+    this.rostersByMode[this.boardMode] = [...this.blueRoster];
+    persistRostersByMode(this.rostersByMode);
     this.message = '';
     this.notify();
   }
@@ -714,25 +726,28 @@ export class Game {
   }
 
   startBattle() {
-    if (this.phase !== 'formation') return;
+    if (!this.canEditRoster()) return;
     if (!this.isFormationReady()) return;
     this.tutorial = null;
+    this.syncFormationMode(this.boardMode);
     this.validateEquippedItemForBattle();
     this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
   }
 
-  /** 匹配逾時：用該模式預設編隊立刻開打 AI */
+  /** 匹配逾時：用玩家編組（若未完成則退回預設）立刻開打 AI */
   startQuickAiBattle(boardMode) {
     if (!BOARD_MODES[boardMode]) return;
     this.tutorial = null;
-    this.boardMode = boardMode;
+    this.syncFormationMode(boardMode);
+    if (!this.isFormationReady()) {
+      this.blueRoster = [...this.getModeConfig().roster];
+    }
     this.equippedItem = null;
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
     this.animating = false;
-    this.blueRoster = [...this.getModeConfig().roster];
     this.redRoster = createRandomRoster(this.boardMode);
     this.startRound();
   }

@@ -6,7 +6,7 @@ import { apiUrl } from './config.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
-/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[] }} SaveData */
+/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]> }} SaveData */
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
@@ -28,11 +28,24 @@ function normalizeOwnedClasses(raw) {
   return CLASS_IDS.filter((id) => owned.has(id));
 }
 
+function normalizeRostersByMode(raw) {
+  /** @type {Record<string, string[]>} */
+  const rosters = {};
+  if (!raw || typeof raw !== 'object') return rosters;
+
+  for (const [modeId, roster] of Object.entries(raw)) {
+    if (!Array.isArray(roster)) continue;
+    rosters[modeId] = roster.filter((classId) => CLASSES[classId]);
+  }
+  return rosters;
+}
+
 const DEFAULT_SAVE = {
   coins: STARTING_COINS,
   inventory: createDefaultInventory(),
   tutorialDone: false,
   ownedClasses: createDefaultOwnedClasses(),
+  rostersByMode: {},
 };
 
 /** @type {SaveData | null} */
@@ -45,6 +58,7 @@ function normalizeSave(raw) {
     inventory: createDefaultInventory(),
     tutorialDone: raw?.tutorialDone === true,
     ownedClasses: normalizeOwnedClasses(raw),
+    rostersByMode: normalizeRostersByMode(raw?.rostersByMode),
   };
 
   for (const id of ITEM_IDS) {
@@ -68,6 +82,11 @@ function mergeCloudLocal(cloud, local) {
   for (const id of ITEM_IDS) {
     merged.inventory[id] = Math.max(merged.inventory[id] ?? 0, cloudNorm.inventory[id] ?? 0);
   }
+
+  merged.rostersByMode = {
+    ...cloudNorm.rostersByMode,
+    ...merged.rostersByMode,
+  };
 
   return merged;
 }
@@ -137,7 +156,20 @@ export function getSaveSnapshot() {
     inventory: { ...save.inventory },
     tutorialDone: save.tutorialDone,
     ownedClasses: [...save.ownedClasses],
+    rostersByMode: { ...save.rostersByMode },
   };
+}
+
+export function getSavedRostersByMode() {
+  return { ...loadSave().rostersByMode };
+}
+
+export function persistRostersByMode(rostersByMode) {
+  const save = loadSave();
+  save.rostersByMode = Object.fromEntries(
+    Object.entries(rostersByMode).map(([modeId, roster]) => [modeId, [...roster]]),
+  );
+  persistSave();
 }
 
 export function isTutorialDone() {

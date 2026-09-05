@@ -285,7 +285,9 @@ export async function handleWsMessage(ws, guest, raw) {
 
       if (payload.nickname) await updateGuestNickname(guest.id, payload.nickname);
 
-      const match = await createWaitingRoom(guest.id, boardMode, payload.nickname);
+      const match = await createWaitingRoom(guest.id, boardMode, payload.nickname, {
+        roster: payload.roster,
+      });
       room.bindMatch(guest.id, match.id, null);
       const guests = await fetchGuestNicknames(match);
       room.send(ws, MSG.ROOM_STATE, roomStatePayload(match, guests), reqId);
@@ -307,7 +309,9 @@ export async function handleWsMessage(ws, guest, raw) {
 
       if (payload.nickname) await updateGuestNickname(guest.id, payload.nickname);
 
-      const result = await findMatch(guest.id, boardMode, payload.nickname);
+      const result = await findMatch(guest.id, boardMode, payload.nickname, {
+        roster: payload.roster,
+      });
       if (!result.ok) {
         err(ws, result.error, 'FIND_FAILED', reqId);
         return;
@@ -337,7 +341,9 @@ export async function handleWsMessage(ws, guest, raw) {
         return;
       }
 
-      const result = await joinRoom(guest.id, code, payload.nickname);
+      const result = await joinRoom(guest.id, code, payload.nickname, {
+        roster: payload.roster,
+      });
       if (!result.ok) {
         err(ws, result.error, 'JOIN_FAILED', reqId);
         return;

@@ -8,6 +8,7 @@ import {
   getBoardMode,
   createEmptyBoard,
   createTeamReserve,
+  resolveRoster,
 } from '../../../shared/units.js';
 import {
   getValidMoves,
@@ -71,9 +72,10 @@ function seededRng(seed) {
   };
 }
 
-export function createGameState(boardMode, rng = Math.random) {
+export function createGameState(boardMode, rng = Math.random, rosters = {}) {
   const mode = getBoardMode(boardMode);
-  const roster = [...mode.roster];
+  const blueRoster = resolveRoster(rosters.blueRoster, boardMode);
+  const redRoster = resolveRoster(rosters.redRoster, boardMode);
   const { generateMapProps } = mapPropsModule;
 
   return {
@@ -82,10 +84,10 @@ export function createGameState(boardMode, rng = Math.random) {
     currentPlayer: 'blue',
     board: createEmptyBoard(mode.size),
     mapProps: generateMapProps(mode.size, rng),
-    blueRoster: [...roster],
-    redRoster: [...roster],
-    blueReserve: createTeamReserve(roster, 'blue'),
-    redReserve: createTeamReserve(roster, 'red'),
+    blueRoster: [...blueRoster],
+    redRoster: [...redRoster],
+    blueReserve: createTeamReserve(blueRoster, 'blue'),
+    redReserve: createTeamReserve(redRoster, 'red'),
     actedUnitIds: [],
     actionsRemaining: mode.actionsPerTurn,
     message: `${TEAM.blue.name}先攻：每回合 ${mode.actionsPerTurn} 次行動`,
@@ -449,7 +451,7 @@ export function resetTurnDeadline(mode, actedCount = 0) {
 
 export async function createWaitingRoom(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
-  const { matchmaking = false, q = pool } = options;
+  const { matchmaking = false, q = pool, roster = null } = options;
 
   let roomCode = generateRoomCode();
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -463,7 +465,13 @@ export async function createWaitingRoom(guestId, boardMode, nickname, options = 
 
   const ttl = matchmaking ? MATCHMAKING_TTL_MS : WAITING_TTL_MS;
   const expiresAt = new Date(Date.now() + ttl);
-  const state = { waiting: true, hostGuestId: guestId, boardMode, matchmaking };
+  const state = {
+    waiting: true,
+    hostGuestId: guestId,
+    boardMode,
+    matchmaking,
+    blueRoster: resolveRoster(roster, boardMode),
+  };
 
   const { rows } = await q.query(
     `INSERT INTO matches (room_code, board_mode, status, blue_guest_id, state, expires_at)
@@ -479,8 +487,9 @@ export async function createWaitingRoom(guestId, boardMode, nickname, options = 
   return rows[0];
 }
 
-export async function joinRoom(guestId, roomCode, nickname, q = pool) {
+export async function joinRoom(guestId, roomCode, nickname, options = {}) {
   await ensureDeps();
+  const { q = pool, roster = null } = options;
 
   const { rows } = await q.query(
     "SELECT * FROM matches WHERE room_code = $1 AND status = 'waiting' FOR UPDATE",
@@ -500,8 +509,12 @@ export async function joinRoom(guestId, roomCode, nickname, q = pool) {
   const rng = seededRng(seedNum);
   const blueGuestId = match.blue_guest_id;
   const redGuestId = guestId;
+  const waitingState = typeof match.state === 'string' ? JSON.parse(match.state) : match.state ?? {};
 
-  const gameState = createGameState(match.board_mode, rng);
+  const gameState = createGameState(match.board_mode, rng, {
+    blueRoster: waitingState.blueRoster,
+    redRoster: roster,
+  });
   const mode = getBoardMode(match.board_mode);
   const now = new Date();
   const matchDeadline = new Date(now.getTime() + mode.matchDurationMs);
@@ -545,8 +558,9 @@ export async function joinRoom(guestId, roomCode, nickname, q = pool) {
   };
 }
 
-export async function findMatch(guestId, boardMode, nickname) {
+export async function findMatch(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
+  const { roster = null } = options;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -577,7 +591,7 @@ export async function findMatch(guestId, boardMode, nickname) {
     );
 
     if (rows[0]) {
-      const result = await joinRoom(guestId, rows[0].room_code, nickname, client);
+      const result = await joinRoom(guestId, rows[0].room_code, nickname, { q: client, roster });
       if (!result.ok) {
         await client.query('ROLLBACK');
         return result;
@@ -589,6 +603,7 @@ export async function findMatch(guestId, boardMode, nickname) {
     const match = await createWaitingRoom(guestId, boardMode, nickname, {
       matchmaking: true,
       q: client,
+      roster,
     });
     await client.query('COMMIT');
     return { ok: true, waiting: true, match };

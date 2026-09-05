@@ -433,29 +433,29 @@ export class OnlineClient {
     };
   }
 
-  async createRoom(boardMode, nickname) {
+  async createRoom(boardMode, nickname, roster) {
     this.selectedBoardMode = boardMode;
     await this.connect();
     this.lastError = null;
-    const payload = await this.send(MSG.CREATE_ROOM, { boardMode, nickname });
+    const payload = await this.send(MSG.CREATE_ROOM, { boardMode, nickname, roster });
     this.roomState = payload;
     this.roomCode = payload.roomCode;
     this.notify();
   }
 
-  async findMatch(boardMode, nickname) {
+  async findMatch(boardMode, nickname, roster) {
     this.selectedBoardMode = boardMode;
     this.lastError = null;
     this.beginLocalMatchmaking(boardMode);
-    void this.tryServerMatch(boardMode, nickname);
+    void this.tryServerMatch(boardMode, nickname, roster);
   }
 
-  async tryServerMatch(boardMode, nickname) {
+  async tryServerMatch(boardMode, nickname, roster) {
     const gen = this.matchmakingGen;
     try {
       await this.connect();
       if (gen !== this.matchmakingGen || this.gameState) return;
-      await this.send(MSG.FIND_MATCH, { boardMode, nickname });
+      await this.send(MSG.FIND_MATCH, { boardMode, nickname, roster });
     } catch (e) {
       if (gen !== this.matchmakingGen) return;
       if (String(e?.message ?? '').includes('已在其他房間')) {
@@ -539,11 +539,11 @@ export class OnlineClient {
     this.onAiFallback?.(boardMode);
   }
 
-  async joinRoom(roomCode, nickname) {
+  async joinRoom(roomCode, nickname, roster) {
     await this.connect();
     this.lastError = null;
     this.roomCode = roomCode.toUpperCase();
-    await this.send(MSG.JOIN_ROOM, { roomCode: this.roomCode, nickname });
+    await this.send(MSG.JOIN_ROOM, { roomCode: this.roomCode, nickname, roster });
     this.notify();
   }
 
