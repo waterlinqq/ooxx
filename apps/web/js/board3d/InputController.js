@@ -75,6 +75,8 @@ export class InputController {
 
   onPointerDown = (event) => {
     if (event.button !== 0 || !this.state || this.state.animating) return;
+    // Item targeting uses click-to-select; starting a unit drag would cancel it.
+    if (this.state.itemTargeting) return;
     const pick = this.pickCell(event);
     if (!pick?.unitId || !this.canControlUnit(pick.unitId)) return;
 

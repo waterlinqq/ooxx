@@ -449,7 +449,7 @@ function applyTerrainOnEnter(ctx, unit, undo) {
   const { kind } = prop;
 
   if (kind === 'potion') {
-    const gained = heal(ctx, unit, 2);
+    const gained = heal(ctx, unit, 3);
     undo.terrainRecords.push({ kind, row, col, prop, unit, gained });
   } else if (kind === 'spikes') {
     const record = { unit, prevHp: unit.hp, row, col, died: false };

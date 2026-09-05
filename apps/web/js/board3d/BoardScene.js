@@ -245,6 +245,8 @@ export class BoardScene {
   }
 
   sync(state) {
+    // Input must stay in sync even while attack animations block board updates.
+    this.input.setState(state);
     if (state.animating) return;
 
     this.boardSize = state.boardSize;
@@ -258,7 +260,6 @@ export class BoardScene {
     this.shadowCloneManager.sync(state.shadowClones ?? []);
     this.unitManager.syncBoard(state.board, state);
     this.syncTutorialPointer(state);
-    this.input.setState(state);
     this.updateTurnAmbience(state);
 
     if (this.visible) {

@@ -24,7 +24,7 @@ export const MAP_PROPS = {
     kind: 'potion',
     name: '紅藥水',
     icon: '🧪',
-    desc: '進入時恢復 2 點生命',
+    desc: '進入時恢復 3 點生命',
   },
   spikes: {
     kind: 'spikes',
@@ -112,11 +112,11 @@ export function resolveMapPropOnEnter(board, mapProps, row, col, unitId) {
 
   if (prop.kind === 'potion') {
     const before = board[row][col]?.hp ?? 0;
-    const healed = healUnitAt(board, row, col, 2);
+    const healed = healUnitAt(board, row, col, 3);
     nextProps[row][col] = null;
     trigger.heal = healed.unit ? healed.unit.hp - before : 0;
     if (healed.unit) {
-      events.push(`${MAP_PROPS.potion.icon} 紅藥水 +2`);
+      events.push(`${MAP_PROPS.potion.icon} 紅藥水 +3`);
     }
     return { board: healed.board, mapProps: nextProps, events, killed, trigger };
   }

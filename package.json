@@ -13,9 +13,7 @@
     "docker:up": "docker compose up -d db",
     "migrate": "npm run migrate --workspace=@ooxx/server",
     "build": "npm run build --workspace=@ooxx/web",
-    "preview": "npm run preview --workspace=@ooxx/web",
-    "sim": "node scripts/simulate.mjs",
-    "arena": "node scripts/arena.mjs"
+    "preview": "npm run preview --workspace=@ooxx/web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

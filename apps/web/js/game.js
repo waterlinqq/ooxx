@@ -29,7 +29,6 @@ import {
   checkWin,
   checkCastleVictory,
   isTeamEliminated,
-  getValidPotionTargets,
   getValidBombCells,
   healUnitAt,
   applyTrapDamage,
@@ -64,6 +63,7 @@ import {
   generateMapPropsForMode,
   resolveMapPropOnEnter,
   isObstacleCell,
+  cloneMapProps,
 } from './mapProps.js';
 
 export const GAME_END_REVEAL_MS = 1000;
@@ -310,16 +310,29 @@ export class Game {
     return occupied;
   }
 
+  getEmptyItemDropCells() {
+    const occupied = this.getOccupiedTrapCells();
+    return getValidBombCells(this.board, this.mapProps)
+      .filter(([r, c]) => !occupied.has(`${r},${c}`));
+  }
+
   getHighlightItemTargets() {
     if (!this.itemTargeting) return [];
 
     if (this.itemTargeting === 'potion') {
-      return getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
+      const cells = this.getEmptyItemDropCells();
+      const size = this.board.length;
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const unit = this.board[r][c];
+          if (unit && this.ownsHumanUnit(unit)) cells.push([r, c]);
+        }
+      }
+      return cells;
     }
 
     if (this.itemTargeting === 'bomb' || this.itemTargeting === 'landmine') {
-      const occupied = this.getOccupiedTrapCells();
-      return getValidBombCells(this.board, this.mapProps).filter(([r, c]) => !occupied.has(`${r},${c}`));
+      return this.getEmptyItemDropCells();
     }
 
     return [];
@@ -328,27 +341,11 @@ export class Game {
   getValidPotionReserveTargetIds() {
     if (this.itemTargeting !== 'potion') return [];
     return this.blueReserve
-      .filter((u) => this.ownsHumanUnit(u) && u.hp < u.maxHp)
+      .filter((u) => this.ownsHumanUnit(u))
       .map((u) => u.id);
   }
 
-  showItemTargetHint(text) {
-    const item = getItem(this.itemTargeting);
-    this.message = `${item?.icon ?? ''} ${text}`;
-    this.notify();
-  }
-
-  getItemTargetingHint(item) {
-    if (!item) return '';
-    return item.targeting === 'friendly_unit'
-      ? '點選受傷的己方單位（棋盤或牌列）'
-      : '點選棋盤空格';
-  }
-
   beginUseItem() {
-    const item = getItem(this.equippedItem);
-    if (!item) return;
-
     if (this.itemTargeting) {
       this.cancelItemTargeting();
       return;
@@ -356,31 +353,12 @@ export class Game {
 
     if (!this.canUseItem()) return;
 
-    if (item.targeting === 'friendly_unit') {
-      const boardTargets = getValidPotionTargets(this.board, 'blue', (u) => this.ownsHumanUnit(u));
-      const reserveTargets = this.blueReserve.filter((u) => this.ownsHumanUnit(u) && u.hp < u.maxHp);
-      if (boardTargets.length === 0 && reserveTargets.length === 0) {
-        this.message = `${item.icon} 目前沒有可治療的單位`;
-        this.notify();
-        return;
-      }
-    } else if (item.targeting === 'empty_cell') {
-      const occupied = this.getOccupiedTrapCells();
-      const trapTargets = getValidBombCells(this.board, this.mapProps)
-        .filter(([r, c]) => !occupied.has(`${r},${c}`));
-      if (trapTargets.length === 0) {
-        this.message = `${item.icon} 目前沒有可放置的空格`;
-        this.notify();
-        return;
-      }
-    }
-
     this.draggingUnitId = null;
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
 
     this.itemTargeting = this.equippedItem;
-    this.message = `${item.icon} ${this.getItemTargetingHint(item)}`;
+    this.message = this.getPlayerTurnMessage();
     this.notify();
   }
 
@@ -396,90 +374,66 @@ export class Game {
 
     if (this.itemTargeting === 'potion') {
       const unit = this.board[row]?.[col];
-      if (!unit || !this.ownsHumanUnit(unit)) {
-        this.showItemTargetHint('請點選棋盤或牌列中受傷的己方單位');
+      if (unit && this.ownsHumanUnit(unit)) {
+        const amount = getItem('potion')?.effect?.amount ?? 3;
+        if (unit.hp < unit.maxHp) {
+          const result = healUnitAt(this.board, row, col, amount);
+          this.board = result.board;
+          this.playBlessFx?.({
+            targets: [{ row, col, amount }],
+          });
+        }
+        this.finishItemUse();
         return;
       }
 
-      const valid = this.getHighlightItemTargets();
-      if (!valid.some(([r, c]) => r === row && c === col)) {
-        this.showItemTargetHint(unit.hp >= unit.maxHp ? '該單位生命已滿' : '無法選定此單位');
-        return;
+      if (!unit && !isObstacleCell(this.mapProps, row, col)) {
+        const next = cloneMapProps(this.mapProps);
+        next[row][col] = { kind: 'potion' };
+        this.mapProps = next;
+        this.finishItemUse();
       }
-
-      const amount = getItem('potion')?.effect?.amount ?? 3;
-      const result = healUnitAt(this.board, row, col, amount);
-      this.board = result.board;
-      const cls = CLASSES[unit.classId];
-      this.finishItemUse(`使用紅藥水治療 ${cls.name}`);
       return;
     }
 
     if (this.itemTargeting === 'bomb') {
-      if (this.board[row]?.[col]) {
-        this.showItemTargetHint('請點選空格');
-        return;
-      }
-
-      const valid = this.getHighlightItemTargets();
-      if (!valid.some(([r, c]) => r === row && c === col)) {
-        this.showItemTargetHint('此格無法放置炸彈');
-        return;
-      }
+      if (this.board[row]?.[col] || isObstacleCell(this.mapProps, row, col)) return;
+      if (this.getOccupiedTrapCells().has(`${row},${col}`)) return;
 
       this.pendingBombs.push({ row, col });
-      this.finishItemUse('放置炸彈');
+      this.finishItemUse();
       return;
     }
 
     if (this.itemTargeting === 'landmine') {
-      if (this.board[row]?.[col]) {
-        this.showItemTargetHint('請點選空格');
-        return;
-      }
-
-      const valid = this.getHighlightItemTargets();
-      if (!valid.some(([r, c]) => r === row && c === col)) {
-        this.showItemTargetHint('此格無法放置地雷');
-        return;
-      }
+      if (this.board[row]?.[col] || isObstacleCell(this.mapProps, row, col)) return;
+      if (this.getOccupiedTrapCells().has(`${row},${col}`)) return;
 
       this.pendingLandmines.push({ row, col });
-      this.finishItemUse('放置地雷');
+      this.finishItemUse();
     }
   }
 
   tryItemTargetReserve(unitId) {
     if (!this.itemTargeting || this.phase !== 'battle' || !this.canHumanAct()) return;
-
-    if (this.itemTargeting !== 'potion') {
-      this.showItemTargetHint('請點選棋盤空格');
-      return;
-    }
+    if (this.itemTargeting !== 'potion') return;
 
     const unit = this.blueReserve.find((u) => u.id === unitId);
-    if (!unit || !this.ownsHumanUnit(unit)) {
-      this.showItemTargetHint('請點選牌列中受傷的己方單位');
-      return;
-    }
-
-    if (!this.getValidPotionReserveTargetIds().includes(unitId)) {
-      this.showItemTargetHint(unit.hp >= unit.maxHp ? '該單位生命已滿' : '無法選定此單位');
-      return;
-    }
+    if (!unit || !this.ownsHumanUnit(unit)) return;
 
     const amount = getItem('potion')?.effect?.amount ?? 3;
-    unit.hp = Math.min(unit.maxHp, unit.hp + amount);
-    const cls = CLASSES[unit.classId];
-    this.finishItemUse(`使用紅藥水治療 ${cls.name}`);
+    if (unit.hp < unit.maxHp) {
+      unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+    }
+    this.finishItemUse();
   }
 
-  finishItemUse(label) {
+  finishItemUse() {
     consumeItem(this.equippedItem);
     this.itemUsed = true;
     this.itemTargeting = null;
 
-    if (!this.checkWinAfterItemEffect(label)) {
+    if (!this.checkWinAfterItemEffect('')) {
       this.message = this.getPlayerTurnMessage();
       this.notify();
     }

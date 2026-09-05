@@ -959,22 +959,8 @@ function renderBattleItem(state) {
   itemBattleBtnEl.classList.toggle('item-battle-targeting', targeting);
   itemBattleBtnEl.classList.toggle('item-battle-used', used);
 
-  if (used) {
-    itemBattleBtnEl.disabled = true;
-    itemBattleBtnEl.title = `${state.itemDef.name}（已使用）`;
-    return;
-  }
-
-  if (targeting) {
-    itemBattleBtnEl.disabled = state.animating;
-    itemBattleBtnEl.title = `${state.itemDef.name}（使用中 · 再次點擊或 Esc 取消）`;
-    return;
-  }
-
-  itemBattleBtnEl.disabled = !state.canUseItem || state.animating;
-  itemBattleBtnEl.title = state.canUseItem
-    ? `${state.itemDef.name}（點擊使用）`
-    : state.itemDef.name;
+  itemBattleBtnEl.disabled = used || state.animating || (!targeting && !state.canUseItem);
+  itemBattleBtnEl.title = state.itemDef.name;
 }
 
 function renderFormation(state) {

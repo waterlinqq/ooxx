@@ -7,9 +7,9 @@ export const ITEMS = {
     id: 'potion',
     name: '紅藥水',
     icon: '🧪',
-    desc: '選定一個己方單位（棋盤或牌列），恢復 3 點生命',
+    desc: '丟在空格成為地圖紅藥水，或點己方單位直接恢復 3 點生命',
     effect: { type: 'heal', amount: 3 },
-    targeting: 'friendly_unit',
+    targeting: 'empty_cell',
   },
   bomb: {
     id: 'bomb',
