@@ -6,6 +6,7 @@ import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
 import { MapPropManager } from './MapPropManager.js';
+import { ShadowCloneManager } from './ShadowCloneManager.js';
 import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { TutorialPointer, DEFAULT_ANCHOR_HEIGHT, UNIT_ANCHOR_HEIGHT } from './TutorialPointer.js';
@@ -109,6 +110,7 @@ export class BoardScene {
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
     this.mapPropManager = new MapPropManager(this.tileGrid);
+    this.shadowCloneManager = new ShadowCloneManager(this.tileGrid);
     this.tutorialPointer = new TutorialPointer(this.scene);
     this.attackFx = new AttackFx3d({
       scene: this.scene,
@@ -251,6 +253,7 @@ export class BoardScene {
     this.highlightSystem.update(state);
     this.bombMarkers.sync(state.pendingBombs ?? []);
     this.mapPropManager.sync(state.mapProps ?? null);
+    this.shadowCloneManager.sync(state.shadowClones ?? []);
     this.unitManager.syncBoard(state.board, state);
     this.syncTutorialPointer(state);
     this.input.setState(state);
@@ -303,6 +306,7 @@ export class BoardScene {
     this.highlightSystem.clear();
     this.bombMarkers.clear();
     this.mapPropManager.clear();
+    this.shadowCloneManager.clear();
     this.tutorialPointer.hide();
   }
 

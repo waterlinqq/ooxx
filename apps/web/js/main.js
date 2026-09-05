@@ -594,6 +594,7 @@ function formatClassTrait(cls) {
   if (cls.poisonOnHit) return '上下左右近戰 · 命中使敵中毒';
   if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
   if (cls.deathExplosion) return `上下左右近戰 · 亡語自爆 ${cls.deathExplosion} 傷（周圍八格）`;
+  if (cls.shadowCloneOnMove) return '上下左右近戰 · 移動時原格留下影分身佔位一回合';
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
   if (cls.moveRange === Infinity) return '移動距離無限';
   if (cls.type === 'mage') return '上下左右光束穿透攻擊';

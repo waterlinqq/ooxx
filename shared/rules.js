@@ -1,4 +1,27 @@
 import { CLASSES, createEmptyBoard, cloneBoard } from './units.js';
+
+/** @typedef {{ row: number, col: number, team: string, expiresOnTeamTurnStart: string }} ShadowClone */
+
+export function cloneShadowClones(shadowClones) {
+  return (shadowClones ?? []).map((clone) => ({ ...clone }));
+}
+
+export function hasShadowClone(shadowClones, row, col) {
+  return (shadowClones ?? []).some((clone) => clone.row === row && clone.col === col);
+}
+
+export function placeShadowClone(shadowClones, row, col, team) {
+  const next = cloneShadowClones(shadowClones).filter(
+    (clone) => !(clone.row === row && clone.col === col),
+  );
+  next.push({ row, col, team, expiresOnTeamTurnStart: team });
+  return next;
+}
+
+/** Removes shadows that expire when the given team's turn begins. */
+export function expireShadowClonesForTurnStart(shadowClones, team) {
+  return (shadowClones ?? []).filter((clone) => clone.expiresOnTeamTurnStart !== team);
+}
 import { isFlagCell, isObstacleCell } from './mapPropUtils.js';
 
 export function getWinLines(size, winLength = size) {
@@ -85,7 +108,7 @@ export function getAdjacentCells8(row, col, size = 3) {
   return cells;
 }
 
-export function getValidMoves(board, unit, mapProps = null) {
+export function getValidMoves(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
   if (unit.immobilized) return [];
 
@@ -96,7 +119,7 @@ export function getValidMoves(board, unit, mapProps = null) {
     const moves = [];
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (board[r][c] || (r === unit.row && c === unit.col)) continue;
+        if (board[r][c] || hasShadowClone(shadowClones, r, c) || (r === unit.row && c === unit.col)) continue;
         if (isObstacleCell(mapProps, r, c)) continue;
         if (chebyshev(unit.row, unit.col, r, c) <= maxJump) moves.push([r, c]);
       }
@@ -115,7 +138,7 @@ export function getValidMoves(board, unit, mapProps = null) {
       if (steps >= maxSteps) continue;
       for (const [nr, nc] of getAdjacentCells(r, c, size)) {
         const key = `${nr},${nc}`;
-        if (board[nr][nc] || visited.has(key)) continue;
+        if (board[nr][nc] || hasShadowClone(shadowClones, nr, nc) || visited.has(key)) continue;
         if (isObstacleCell(mapProps, nr, nc)) continue;
         visited.add(key);
         moves.push([nr, nc]);
@@ -303,12 +326,14 @@ export function getPriestBlessingTargets(board, priest) {
     .filter((target) => target && target.team === priest.team && target.id !== priest.id);
 }
 
-export function getValidDeployCells(board, mapProps = null) {
+export function getValidDeployCells(board, mapProps = null, shadowClones = null) {
   const size = boardSize(board);
   const cells = [];
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
-      if (!board[r][c] && !isObstacleCell(mapProps, r, c)) cells.push([r, c]);
+      if (!board[r][c] && !hasShadowClone(shadowClones, r, c) && !isObstacleCell(mapProps, r, c)) {
+        cells.push([r, c]);
+      }
     }
   }
   return cells;
@@ -332,12 +357,22 @@ export function isTeamEliminated(board, team, reserve) {
   return countTeamOnBoard(board, team) === 0 && reserve.length === 0;
 }
 
-export function applyMove(board, unit, row, col) {
+export function applyMove(board, unit, row, col, shadowClones = null) {
   const next = cloneBoard(board);
-  next[unit.row][unit.col] = null;
+  const fromRow = unit.row;
+  const fromCol = unit.col;
+  next[fromRow][fromCol] = null;
   const moved = { ...unit, row, col };
   next[row][col] = moved;
-  return { board: next, unit: moved };
+
+  let nextShadowClones = shadowClones;
+  if (shadowClones !== null && (unit.shadowCloneOnMove ?? CLASSES[unit.classId]?.shadowCloneOnMove)) {
+    if (fromRow !== row || fromCol !== col) {
+      nextShadowClones = placeShadowClone(shadowClones, fromRow, fromCol, unit.team);
+    }
+  }
+
+  return { board: next, unit: moved, shadowClones: nextShadowClones };
 }
 
 export function applyDeploy(board, unit, row, col) {
@@ -458,6 +493,7 @@ export function applyPossession(attacker, victim) {
     moveRange: attacker.moveRange,
     jumpMove: attacker.jumpMove,
     jumpRange: attacker.jumpRange,
+    shadowCloneOnMove: attacker.shadowCloneOnMove,
     type: attacker.type,
     deathExplosion: attacker.deathExplosion,
     passiveBlessing: attacker.passiveBlessing,
@@ -477,6 +513,7 @@ export function applyPossession(attacker, victim) {
   attacker.moveRange = cls.moveRange ?? 1;
   attacker.jumpMove = cls.jumpMove ?? false;
   attacker.jumpRange = cls.jumpRange ?? null;
+  attacker.shadowCloneOnMove = cls.shadowCloneOnMove ?? false;
   attacker.type = cls.type;
   attacker.deathExplosion = cls.deathExplosion ?? 0;
   attacker.passiveBlessing = cls.passiveBlessing ?? false;

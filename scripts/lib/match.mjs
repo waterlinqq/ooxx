@@ -14,6 +14,7 @@ import {
   getValidDeployCells,
   getValidMoves,
   getValidAttackTargets,
+  expireShadowClonesForTurnStart,
 } from '../../apps/web/js/rules.js';
 import { generateMapProps, resolveMapPropOnEnter } from '../../apps/web/js/mapProps.js';
 import { isObstacleCell } from '../../apps/web/js/mapPropUtils.js';
@@ -44,13 +45,13 @@ export function createSimReserve(roster, teamId, counterStart) {
   );
 }
 
-export function hasValidActions(board, reserve, team, actedUnitIds, mapProps = null) {
-  if (getValidDeployCells(board, mapProps).length > 0 && reserve.length > 0) return true;
+export function hasValidActions(board, reserve, team, actedUnitIds, mapProps = null, shadowClones = null) {
+  if (getValidDeployCells(board, mapProps, shadowClones).length > 0 && reserve.length > 0) return true;
 
   for (const row of board) {
     for (const unit of row) {
       if (!unit || unit.team !== team || actedUnitIds.has(unit.id)) continue;
-      if (getValidMoves(board, unit, mapProps).length > 0) return true;
+      if (getValidMoves(board, unit, mapProps, shadowClones).length > 0) return true;
       if (getValidAttackTargets(board, unit).length > 0) return true;
     }
   }
@@ -145,7 +146,9 @@ function applyAiAction(state, action, team) {
 
   if (action.type === 'move') {
     const unit = state.board.flat().find((u) => u?.id === action.unitId);
-    state.board = applyMove(state.board, unit, action.row, action.col).board;
+    const result = applyMove(state.board, unit, action.row, action.col, state.shadowClones ?? []);
+    state.board = result.board;
+    state.shadowClones = result.shadowClones ?? state.shadowClones;
     triggerMapPropAfterLanding(state, action.row, action.col, action.unitId);
     triggerPassiveBlessings(state, team);
     return { label: 'move', detail, landedAt: { row: action.row, col: action.col } };
@@ -213,6 +216,7 @@ export function runMatch({
   const state = {
     board: createEmptyBoard(size),
     mapProps: generateMapProps(size, propRng),
+    shadowClones: [],
     blueReserve: createSimReserve(blueRoster, 'blue', unitCounter),
     redReserve: createSimReserve(redRoster, 'red', unitCounter + blueRoster.length),
     currentPlayer: firstPlayer,
@@ -244,8 +248,9 @@ export function runMatch({
     const team = state.currentPlayer;
     const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
 
-    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps)) {
+    if (!hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps, state.shadowClones)) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.shadowClones = expireShadowClonesForTurnStart(state.shadowClones ?? [], state.currentPlayer);
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;
@@ -258,6 +263,7 @@ export function runMatch({
       {
         board: state.board,
         mapProps: state.mapProps,
+        shadowClones: state.shadowClones ?? [],
         blueReserve: state.blueReserve,
         redReserve: state.redReserve,
         actedUnitIds: state.actedUnitIds,
@@ -278,6 +284,7 @@ export function runMatch({
 
     if (!action) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.shadowClones = expireShadowClonesForTurnStart(state.shadowClones ?? [], state.currentPlayer);
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;
@@ -287,6 +294,7 @@ export function runMatch({
     const { landedAt, ...applied } = applyAiAction(state, action, team);
     if (applied.skipped) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.shadowClones = expireShadowClonesForTurnStart(state.shadowClones ?? [], state.currentPlayer);
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;
@@ -319,9 +327,10 @@ export function runMatch({
     if (end) return finish(end.winner, end.reason, end.winLine);
 
     const exhausted = state.actionsRemaining <= 0
-      || !hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps);
+      || !hasValidActions(state.board, reserve, team, state.actedUnitIds, state.mapProps, state.shadowClones);
     if (exhausted) {
       state.currentPlayer = team === 'blue' ? 'red' : 'blue';
+      state.shadowClones = expireShadowClonesForTurnStart(state.shadowClones ?? [], state.currentPlayer);
       state.actionsRemaining = actionsPerTurn;
       state.actedUnitIds = new Set();
       turn++;

@@ -12,8 +12,8 @@ const STRIDE = 0.3;
 const LEAP_DISTANCE = 1.6;
 
 // Magical and flying units materialise on the spot; everyone else drops in.
-const SPAWN_STYLE = { mage: 'warp', assassin: 'warp', eagle: 'warp' };
-const SPAWN_SPIN = { assassin: Math.PI * 2 };
+const SPAWN_STYLE = { mage: 'warp', eagle: 'warp' };
+const SPAWN_SPIN = {};
 
 function easeOutBack(x) {
   const c = x - 1;

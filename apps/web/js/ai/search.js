@@ -65,7 +65,7 @@ function generateActions(ctx) {
 
   const reserve = ctx.reserves[team];
   if (reserve.length > 0) {
-    const deployCells = getValidDeployCells(ctx.board, ctx.mapProps);
+    const deployCells = getValidDeployCells(ctx.board, ctx.mapProps, ctx.shadowClones);
     if (deployCells.length > 0) {
       const seenClasses = new Set();
       for (const unit of reserve) {
@@ -86,7 +86,7 @@ function generateActions(ctx) {
       if (!unit || unit.team !== team) continue;
       if (ctx.acted.has(unit.searchIndex)) continue;
 
-      for (const [row, col] of getValidMoves(board, unit, ctx.mapProps)) {
+      for (const [row, col] of getValidMoves(board, unit, ctx.mapProps, ctx.shadowClones)) {
         actions.push({ type: 'move', unitId: unit.id, row, col });
       }
       const attackTargets = getValidAttackTargets(board, unit);

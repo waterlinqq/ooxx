@@ -23,6 +23,7 @@ export function chooseAiAction(state, teamOrOptions = 'red') {
     {
       board: state.board,
       mapProps: state.mapProps ?? null,
+      shadowClones: state.shadowClones ?? [],
       blueReserve: state.blueReserve ?? [],
       redReserve: state.redReserve ?? [],
       actedUnitIds: state.actedUnitIds ?? new Set(),

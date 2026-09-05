@@ -21,6 +21,7 @@ import {
   applyAttack,
   applyTeamPriestBlessings,
   applyPoisonTurnTicks,
+  expireShadowClonesForTurnStart,
   checkWin,
   isTeamEliminated,
   getValidPotionTargets,
@@ -92,6 +93,7 @@ export class Game {
     this.itemUsed = false;
     this.itemTargeting = null;
     this.pendingBombs = [];
+    this.shadowClones = [];
     this.lastCoinReward = 0;
     this._endRevealTimer = null;
     this._endRevealPending = false;
@@ -477,6 +479,7 @@ export class Game {
       inspectedUnitId: this.inspectedUnitId,
       board: this.board,
       mapProps: this.mapProps,
+      shadowClones: this.shadowClones,
       blueRoster: this.blueRoster,
       redRoster: this.redRoster,
       blueReserve: this.blueReserve,
@@ -536,13 +539,13 @@ export class Game {
 
   hasValidActionsForTeam(team = this.currentPlayer) {
     const reserve = team === 'blue' ? this.blueReserve : this.redReserve;
-    const deployCells = getValidDeployCells(this.board, this.mapProps);
+    const deployCells = getValidDeployCells(this.board, this.mapProps, this.shadowClones);
     if (deployCells.length > 0 && reserve.length > 0) return true;
 
     for (const row of this.board) {
       for (const unit of row) {
         if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
-        if (getValidMoves(this.board, unit, this.mapProps).length > 0) return true;
+        if (getValidMoves(this.board, unit, this.mapProps, this.shadowClones).length > 0) return true;
         if (getValidAttackTargets(this.board, unit).length > 0) return true;
       }
     }
@@ -714,8 +717,9 @@ export class Game {
     if (!attacker || !target) return;
 
     if (enemy.type === 'move') {
-      const result = applyMove(this.board, attacker, enemy.to.row, enemy.to.col);
+      const result = applyMove(this.board, attacker, enemy.to.row, enemy.to.col, this.shadowClones);
       this.board = result.board;
+      this.shadowClones = result.shadowClones ?? this.shadowClones;
       const terrainEvents = this.applyTerrainAfterLanding(attacker.id, enemy.to.row, enemy.to.col);
       if (this.checkTerrainOutcome(enemy.label, terrainEvents)) return;
       this.endAction(this.appendTerrainToLabel(enemy.label, terrainEvents), attacker.id);
@@ -760,6 +764,7 @@ export class Game {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
     this.mapProps = generateMapProps(mode.size);
+    this.shadowClones = [];
     this.blueReserve = createTeamReserve(this.blueRoster, 'blue');
     this.redReserve = createTeamReserve(this.redRoster, 'red');
     this.currentPlayer = this.getRoundFirstPlayer();
@@ -925,7 +930,7 @@ export class Game {
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return this.narrowToTutorialGoal(getValidMoves(this.board, unit, this.mapProps), 'move');
+    return this.narrowToTutorialGoal(getValidMoves(this.board, unit, this.mapProps, this.shadowClones), 'move');
   }
 
   getHighlightTargets() {
@@ -939,7 +944,7 @@ export class Game {
 
   getHighlightDeploy() {
     if (!this.selectedReserveId) return [];
-    return this.narrowToTutorialGoal(getValidDeployCells(this.board, this.mapProps), 'deploy');
+    return this.narrowToTutorialGoal(getValidDeployCells(this.board, this.mapProps, this.shadowClones), 'deploy');
   }
 
   /** During tutorial, only highlight the one cell the current step asks for. */
@@ -998,13 +1003,14 @@ export class Game {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit) return false;
     if (this.actedUnitIds.has(unitId)) return false;
-    const valid = getValidMoves(this.board, unit, this.mapProps);
+    const valid = getValidMoves(this.board, unit, this.mapProps, this.shadowClones);
     if (!valid.some(([r, c]) => r === row && c === col)) return false;
     const move = { type: 'move', from: { row: unit.row, col: unit.col }, to: { row, col } };
     if (!this.isTutorialActionAllowed(move)) return false;
 
-    const result = applyMove(this.board, unit, row, col);
+    const result = applyMove(this.board, unit, row, col, this.shadowClones);
     this.board = result.board;
+    this.shadowClones = result.shadowClones ?? this.shadowClones;
     const terrainEvents = this.applyTerrainAfterLanding(unitId, row, col);
     if (this.checkTerrainOutcome('移動', terrainEvents)) return true;
     this.endAction(this.appendTerrainToLabel('移動', terrainEvents), unitId);
@@ -1142,6 +1148,7 @@ export class Game {
   switchPlayer() {
     const endedTeam = this.currentPlayer;
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
+    this.shadowClones = expireShadowClonesForTurnStart(this.shadowClones, this.currentPlayer);
     this.resetTurnActions();
 
     if (this.applyTurnBoundaryEffects(endedTeam)) return;
@@ -1165,6 +1172,7 @@ export class Game {
       {
         board: this.board,
         mapProps: this.mapProps,
+        shadowClones: this.shadowClones,
         redReserve: this.redReserve,
         blueReserve: this.blueReserve,
         actedUnitIds: this.actedUnitIds,
@@ -1205,13 +1213,14 @@ export class Game {
     if (action.type === 'move') {
       const unit = this.board.flat().find((u) => u?.id === action.unitId);
       if (!unit) return;
-      const valid = getValidMoves(this.board, unit, this.mapProps);
+      const valid = getValidMoves(this.board, unit, this.mapProps, this.shadowClones);
       if (!valid.some(([r, c]) => r === action.row && c === action.col)) {
         this.endAction(`${teamLabel} 略過`, action.unitId);
         return;
       }
-      const result = applyMove(this.board, unit, action.row, action.col);
+      const result = applyMove(this.board, unit, action.row, action.col, this.shadowClones);
       this.board = result.board;
+      this.shadowClones = result.shadowClones ?? this.shadowClones;
       const moveLabel = `${teamLabel} 移動`;
       const terrainEvents = this.applyTerrainAfterLanding(action.unitId, action.row, action.col);
       if (this.checkTerrainOutcome(moveLabel, terrainEvents)) return;

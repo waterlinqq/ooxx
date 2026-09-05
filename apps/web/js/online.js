@@ -366,7 +366,7 @@ export class OnlineClient {
     if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
     const unit = this.gameState.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return getValidMoves(this.gameState.board, unit, this.gameState.mapProps);
+    return getValidMoves(this.gameState.board, unit, this.gameState.mapProps, this.gameState.shadowClones);
   }
 
   getHighlightTargets() {
@@ -379,7 +379,7 @@ export class OnlineClient {
 
   getHighlightDeploy() {
     if (!this.selectedReserveId || !this.gameState) return [];
-    return getValidDeployCells(this.gameState.board, this.gameState.mapProps);
+    return getValidDeployCells(this.gameState.board, this.gameState.mapProps, this.gameState.shadowClones);
   }
 
   getDisplayState() {

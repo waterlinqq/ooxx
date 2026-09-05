@@ -19,6 +19,7 @@ import {
   applyAttack,
   applyTeamPriestBlessings,
   applyPoisonTurnTicks,
+  expireShadowClonesForTurnStart,
   checkWin,
   isTeamEliminated,
   resolveDeathExplosions,
@@ -84,6 +85,7 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
     currentPlayer: 'blue',
     board: createEmptyBoard(mode.size),
     mapProps: generateMapProps(mode.size, rng),
+    shadowClones: [],
     blueRoster: [...blueRoster],
     redRoster: [...redRoster],
     blueReserve: createTeamReserve(blueRoster, 'blue'),
@@ -120,13 +122,13 @@ function getMode(state) {
 
 function hasValidActionsForTeam(state, team) {
   const reserve = team === 'blue' ? state.blueReserve : state.redReserve;
-  const deployCells = getValidDeployCells(state.board, state.mapProps);
+  const deployCells = getValidDeployCells(state.board, state.mapProps, state.shadowClones);
   if (deployCells.length > 0 && reserve.length > 0) return true;
 
   for (const row of state.board) {
     for (const unit of row) {
       if (!unit || unit.team !== team || state.actedUnitIds.includes(unit.id)) continue;
-      if (getValidMoves(state.board, unit, state.mapProps).length > 0) return true;
+      if (getValidMoves(state.board, unit, state.mapProps, state.shadowClones).length > 0) return true;
       if (getValidAttackTargets(state.board, unit).length > 0) return true;
     }
   }
@@ -208,6 +210,7 @@ function applyTurnBoundaryEffects(state, endedTeam) {
 function switchPlayer(state) {
   const endedTeam = state.currentPlayer;
   state.currentPlayer = state.currentPlayer === 'blue' ? 'red' : 'blue';
+  state.shadowClones = expireShadowClonesForTurnStart(state.shadowClones ?? [], state.currentPlayer);
   const mode = getMode(state);
   state.actionsRemaining = mode.actionsPerTurn;
   state.actedUnitIds = [];
@@ -314,13 +317,14 @@ export function applyGameAction(state, action, team) {
     if (!unit || unit.team !== team) return { ok: false, error: '無此單位' };
     if (state.actedUnitIds.includes(unit.id)) return { ok: false, error: '此單位已行動' };
 
-    const valid = getValidMoves(state.board, unit, state.mapProps);
+    const valid = getValidMoves(state.board, unit, state.mapProps, state.shadowClones);
     if (!valid.some(([r, c]) => r === action.row && c === action.col)) {
       return { ok: false, error: '無法移動至此' };
     }
 
-    const result = applyMove(state.board, unit, action.row, action.col);
+    const result = applyMove(state.board, unit, action.row, action.col, state.shadowClones ?? []);
     state.board = result.board;
+    state.shadowClones = result.shadowClones ?? state.shadowClones;
     const terrain = applyTerrainAfterLanding(state, unit.id, action.row, action.col);
     const detail = terrain.events.length > 0 ? `移動 · ${terrain.events.join('、')}` : '移動';
     if (checkWinAfterEffect(state, detail)) {

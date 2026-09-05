@@ -18,6 +18,9 @@ import {
   canAttackTarget,
   applyPossession,
   applyPoisonEffect,
+  cloneShadowClones,
+  placeShadowClone,
+  expireShadowClonesForTurnStart,
 } from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
@@ -115,6 +118,7 @@ function cloneUnit(unit, searchIndex) {
     moveRange: unit.moveRange ?? 1,
     jumpMove: unit.jumpMove ?? false,
     jumpRange: unit.jumpRange ?? null,
+    shadowCloneOnMove: unit.shadowCloneOnMove ?? false,
     deathExplosion: unit.deathExplosion ?? 0,
     passiveBlessing: unit.passiveBlessing ?? false,
     possessionOnKill: unit.possessionOnKill ?? false,
@@ -173,6 +177,7 @@ export function createSearchContext(state, { team, actionsPerTurn }) {
     board,
     // Cloned, not shared: potions and spikes are consumed as the search tries actions.
     mapProps: state.mapProps ? cloneMapProps(state.mapProps) : null,
+    shadowClones: cloneShadowClones(state.shadowClones),
     reserves,
     unitsById,
     lines,
@@ -585,6 +590,13 @@ export function makeAction(ctx, action) {
     applyTerrainOnEnter(ctx, actor, undo);
   } else if (action.type === 'move') {
     lift(ctx, actor);
+    if (actor.shadowCloneOnMove && undo.fromRow >= 0) {
+      const prev = (ctx.shadowClones ?? []).find(
+        (clone) => clone.row === undo.fromRow && clone.col === undo.fromCol,
+      ) ?? null;
+      ctx.shadowClones = placeShadowClone(ctx.shadowClones ?? [], undo.fromRow, undo.fromCol, actor.team);
+      undo.shadowCloneUndo = { row: undo.fromRow, col: undo.fromCol, prev };
+    }
     place(ctx, actor, action.row, action.col);
     applyTerrainOnEnter(ctx, actor, undo);
   } else if (action.type === 'attack') {
@@ -680,17 +692,23 @@ function xorActionsLeft(ctx) {
   xorHash(ctx, ctx.zobrist.actionsLeft[Math.min(ctx.actionsLeft, 7)]);
 }
 
-function flipSide(ctx) {
+function flipSide(ctx, undo = null) {
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
   ctx.turn = enemyOf(ctx.turn);
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
+  const expired = (ctx.shadowClones ?? []).filter((clone) => clone.expiresOnTeamTurnStart === ctx.turn);
+  ctx.shadowClones = expireShadowClonesForTurnStart(ctx.shadowClones ?? [], ctx.turn);
+  if (undo && expired.length > 0) undo.expiredShadowClones = expired;
   ctx.actionsLeft = ctx.actionsPerTurn;
   xorActed(ctx);
   ctx.actedStack.push(ctx.acted);
   ctx.acted = new Set();
 }
 
-function unflipSide(ctx, previousTurn) {
+function unflipSide(ctx, previousTurn, undo = null) {
+  if (undo?.expiredShadowClones?.length) {
+    ctx.shadowClones = [...(ctx.shadowClones ?? []), ...undo.expiredShadowClones];
+  }
   ctx.acted = ctx.actedStack.pop();
   xorActed(ctx);
   xorHash(ctx, ctx.zobrist.side[TEAM_INDEX[ctx.turn]]);
@@ -703,14 +721,14 @@ function advanceTurn(ctx, undo) {
   ctx.actionsLeft--;
   if (ctx.actionsLeft <= 0) {
     applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
-    flipSide(ctx);
+    flipSide(ctx, undo);
   }
   xorActionsLeft(ctx);
 }
 
 function rewindTurn(ctx, undo) {
   xorActionsLeft(ctx);
-  if (ctx.turn !== undo.turn) unflipSide(ctx, undo.turn);
+  if (ctx.turn !== undo.turn) unflipSide(ctx, undo.turn, undo);
   ctx.actionsLeft = undo.actionsLeft;
   xorActionsLeft(ctx);
 }
@@ -730,14 +748,14 @@ export function passTurn(ctx) {
   };
   xorActionsLeft(ctx);
   applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
-  flipSide(ctx);
+  flipSide(ctx, undo);
   xorActionsLeft(ctx);
   return undo;
 }
 
 export function unpassTurn(ctx, undo) {
   xorActionsLeft(ctx);
-  unflipSide(ctx, undo.turn);
+  unflipSide(ctx, undo.turn, undo);
   ctx.actionsLeft = undo.actionsLeft;
   for (const rec of undo.poisonSkipRecords) {
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
@@ -793,6 +811,11 @@ export function unmakeAction(ctx, undo) {
     restoreTerrain(ctx, undo);
     lift(ctx, actor);
     place(ctx, actor, undo.fromRow, undo.fromCol);
+    if (undo.shadowCloneUndo) {
+      const { row, col, prev } = undo.shadowCloneUndo;
+      ctx.shadowClones = (ctx.shadowClones ?? []).filter((clone) => !(clone.row === row && clone.col === col));
+      if (prev) ctx.shadowClones.push(prev);
+    }
     return;
   }
 
