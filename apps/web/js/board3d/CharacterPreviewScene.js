@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { buildUnitModel } from './UnitModels.js';
+import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
 import { CLASSES, createEmptyBoard, createUnit } from '../units.js';
 import { getValidMoves, isInBounds } from '../rules.js';
 import {
@@ -324,9 +324,7 @@ export class CharacterPreviewScene {
     root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });
-    for (const material of materials) {
-      material.dispose();
-    }
+    disposeUnitMaterials(materials);
     this.preview = null;
   }
 

@@ -1,4 +1,4 @@
-import { buildUnitModel } from './UnitModels.js';
+import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
 import {
   PREVIEW_ROTATION_Y,
   setupBakeScene,
@@ -18,9 +18,7 @@ function disposeModel(model) {
       obj.geometry.dispose();
     }
   });
-  for (const material of model.materials) {
-    material.dispose();
-  }
+  disposeUnitMaterials(model.materials);
 }
 
 export function bakeUnitThumbnail(renderer, scene, camera, classId) {

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildMapPropModel } from './MapPropModels.js';
-import { buildItemBombModel, buildItemLandmineModel } from './UnitModels.js';
+import { buildItemBombModel, buildItemLandmineModel, safeDisposeMaterial } from './UnitModels.js';
 import {
   PREVIEW_ROTATION_Y,
   setupBakeScene,
@@ -36,7 +36,7 @@ function disposeObject(root) {
     if (!obj.material) return;
     const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const material of materials) {
-      material.dispose();
+      safeDisposeMaterial(material);
     }
   });
 }

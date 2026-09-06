@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
-import { buildUnitModel } from './UnitModels.js';
+import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
 import { applyStatBadge } from '../statIcons.js';
 import { CLASS_LEVEL_MIN } from '../units.js';
 
@@ -268,6 +268,7 @@ export class UnitMeshManager {
     if (entry.actedLook === acted) return;
     entry.actedLook = acted;
     for (const material of entry.materials) {
+      if (material.userData.globalShared) continue;
       if (material.userData.skipTint) {
         material.opacity = (material.userData.baseOpacity ?? 1) * (acted ? 0.6 : 1);
         continue;
@@ -488,6 +489,7 @@ export class UnitMeshManager {
     if (entry.fadeApplied === fade) return;
     entry.fadeApplied = fade;
     for (const material of entry.materials) {
+      if (material.userData.globalShared) continue;
       if (material.userData.skipTint) continue;
       const base = material.userData.baseOpacity ?? 1;
       material.opacity = base * fade;
@@ -838,9 +840,7 @@ export class UnitMeshManager {
     entry.root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });
-    for (const material of entry.materials) {
-      material.dispose();
-    }
+    disposeUnitMaterials(entry.materials);
     if (entry.label.element?.parentNode) {
       entry.label.element.parentNode.removeChild(entry.label.element);
     }

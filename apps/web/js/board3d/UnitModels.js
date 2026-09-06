@@ -51,7 +51,69 @@ function keepColor(material) {
   return material;
 }
 
-export function createMaterialSet(team) {
+const TEAM_MATERIAL_KEYS = ['armor', 'armorDeep', 'cloth', 'trim', 'eye', 'ring', 'shadow'];
+
+function markGlobalShared(material) {
+  material.userData.globalShared = true;
+  return material;
+}
+
+function markNeutralTemplate(material) {
+  material.userData.neutralTemplate = true;
+  return material;
+}
+
+function createNeutralCloneTemplates() {
+  return {
+    ember: markNeutralTemplate(standard(0xfff0c2, {
+      roughness: 0.4,
+      emissive: 0xffbe3d,
+      emissiveIntensity: 1.8,
+    })),
+    arcane: markNeutralTemplate(standard(0xd8b4fe, {
+      roughness: 0.25,
+      metalness: 0.1,
+      emissive: 0xa855f7,
+      emissiveIntensity: 1.7,
+      transparent: true,
+      opacity: 0.92,
+    })),
+  };
+}
+
+function createGlobalMaterials() {
+  return {
+    steel: markGlobalShared(standard(0xc9d4e2, { roughness: 0.32, metalness: 0.72 })),
+    gold: markGlobalShared(standard(0xf5c451, {
+      roughness: 0.3,
+      metalness: 0.68,
+      emissive: 0x6b3f04,
+      emissiveIntensity: 0.35,
+    })),
+    leather: markGlobalShared(standard(0x4a382c, { roughness: 0.9, metalness: 0.06 })),
+    wood: markGlobalShared(standard(0x7a5230, { roughness: 0.82, metalness: 0.05 })),
+    skin: markGlobalShared(standard(0xf0cba8, { roughness: 0.78, metalness: 0 })),
+    charcoal: markGlobalShared(standard(0x1b2333, { roughness: 0.68, metalness: 0.25 })),
+  };
+}
+
+const GLOBAL_MATERIALS = createGlobalMaterials();
+const NEUTRAL_CLONE_TEMPLATES = createNeutralCloneTemplates();
+const TEAM_MATERIAL_TEMPLATES = new Map();
+
+function cloneTintableMaterial(template) {
+  const copy = template.clone();
+  copy.userData = {
+    baseOpacity: template.userData.baseOpacity,
+    baseColor: template.userData.baseColor?.clone(),
+    baseEmissive: template.userData.baseEmissive,
+    keepColor: template.userData.keepColor,
+    skipTint: template.userData.skipTint,
+  };
+  return copy;
+}
+
+function buildTeamMaterialTemplate(team) {
   const base = new THREE.Color(resolveUnitColor(team));
   const deep = base.clone().lerp(new THREE.Color(0x0b1220), 0.55);
   const light = base.clone().lerp(new THREE.Color(0xffffff), 0.5);
@@ -65,8 +127,9 @@ export function createMaterialSet(team) {
   });
   shadow.userData.baseOpacity = 0.5;
   shadow.userData.skipTint = true;
+  shadow.userData.teamTemplate = true;
 
-  return {
+  const template = {
     armor: standard(base, {
       roughness: 0.4,
       metalness: 0.32,
@@ -85,34 +148,10 @@ export function createMaterialSet(team) {
       emissive: light,
       emissiveIntensity: 0.25,
     }),
-    steel: standard(0xc9d4e2, { roughness: 0.32, metalness: 0.72 }),
-    gold: standard(0xf5c451, {
-      roughness: 0.3,
-      metalness: 0.68,
-      emissive: 0x6b3f04,
-      emissiveIntensity: 0.35,
-    }),
-    leather: standard(0x4a382c, { roughness: 0.9, metalness: 0.06 }),
-    wood: standard(0x7a5230, { roughness: 0.82, metalness: 0.05 }),
-    skin: standard(0xf0cba8, { roughness: 0.78, metalness: 0 }),
-    charcoal: standard(0x1b2333, { roughness: 0.68, metalness: 0.25 }),
     eye: standard(glowColor, {
       roughness: 0.3,
       emissive: glowColor,
       emissiveIntensity: 1.6,
-    }),
-    ember: standard(0xfff0c2, {
-      roughness: 0.4,
-      emissive: 0xffbe3d,
-      emissiveIntensity: 1.8,
-    }),
-    arcane: standard(0xd8b4fe, {
-      roughness: 0.25,
-      metalness: 0.1,
-      emissive: 0xa855f7,
-      emissiveIntensity: 1.7,
-      transparent: true,
-      opacity: 0.92,
     }),
     ring: keepColor(
       standard(base, {
@@ -126,6 +165,52 @@ export function createMaterialSet(team) {
     ),
     shadow,
   };
+
+  for (const material of Object.values(template)) {
+    material.userData.teamTemplate = true;
+  }
+
+  return template;
+}
+
+function getTeamMaterialTemplate(team) {
+  let template = TEAM_MATERIAL_TEMPLATES.get(team);
+  if (!template) {
+    template = buildTeamMaterialTemplate(team);
+    TEAM_MATERIAL_TEMPLATES.set(team, template);
+  }
+  return template;
+}
+
+export function safeDisposeMaterial(material) {
+  if (
+    !material
+    || material.userData?.globalShared
+    || material.userData?.teamTemplate
+    || material.userData?.neutralTemplate
+  ) {
+    return;
+  }
+  material.dispose();
+}
+
+export function disposeUnitMaterials(materials) {
+  for (const material of materials) {
+    safeDisposeMaterial(material);
+  }
+}
+
+export function createMaterialSet(team) {
+  const template = getTeamMaterialTemplate(team);
+  const mats = { ...GLOBAL_MATERIALS };
+
+  for (const key of TEAM_MATERIAL_KEYS) {
+    mats[key] = cloneTintableMaterial(template[key]);
+  }
+  mats.ember = cloneTintableMaterial(NEUTRAL_CLONE_TEMPLATES.ember);
+  mats.arcane = cloneTintableMaterial(NEUTRAL_CLONE_TEMPLATES.arcane);
+
+  return mats;
 }
 
 const SHADOW_MIN_RADIUS = 0.04;
