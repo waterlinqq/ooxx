@@ -361,7 +361,7 @@ function buildPotion() {
 
 /* ---------------------------------------------------------------- spikes --- */
 
-const SPIKE_RING = [0.2, 0.165, 0.185, 0.152, 0.19, 0.17];
+const SPIKE_RING = [0.2, 0.165, 0.185, 0.152];
 const BLADE_REST_Y = 0.03;
 
 function buildSpikes(rng) {
@@ -382,9 +382,6 @@ function buildSpikes(rng) {
     metalness: 0.25,
   });
 
-  // A sunken iron socket: the spikes need something to come out of, otherwise
-  // they look like cones dropped on the tile. Everything lives under `pit` so
-  // the sprung trap can sink out of sight behind the tile in one move.
   const pit = new THREE.Group();
   root.add(pit);
 
@@ -394,24 +391,18 @@ function buildSpikes(rng) {
   socket.rotation.y = rng() * Math.PI * 2;
   pit.add(socket);
 
-  part(socket, cached('spike-plate', () => new THREE.CylinderGeometry(0.29, 0.32, 0.04, 20)), iron, {
+  part(socket, cached('spike-plate', () => new THREE.CylinderGeometry(0.29, 0.32, 0.04, 12)), iron, {
     pos: [0, 0.02, 0],
     shadow: true,
   });
-  part(socket, cached('spike-hollow', () => new THREE.CircleGeometry(0.245, 20)), pitFloor, {
+  part(socket, cached('spike-hollow', () => new THREE.CircleGeometry(0.245, 12)), pitFloor, {
     pos: [0, 0.041, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
-  part(socket, cached('spike-rim', () => new THREE.TorusGeometry(0.278, 0.022, 6, 26)), iron, {
+  part(socket, cached('spike-rim', () => new THREE.TorusGeometry(0.278, 0.022, 5, 14)), iron, {
     pos: [0, 0.04, 0],
     rot: [Math.PI / 2, 0, 0],
   });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + 0.2;
-    part(socket, cached('spike-bolt', () => new THREE.SphereGeometry(0.015, 8, 6)), steel, {
-      pos: [Math.cos(a) * 0.278, 0.052, Math.sin(a) * 0.278],
-    });
-  }
 
   const blades = new THREE.Group();
   blades.position.y = BLADE_REST_Y;
@@ -420,9 +411,7 @@ function buildSpikes(rng) {
   const spikeGeo = cached('spike-blade', () => new THREE.ConeGeometry(0.042, 1, 4));
   const tipGeo = cached('spike-tip', () => new THREE.ConeGeometry(0.009, 0.032, 4));
 
-  // `angle` is the spike's bearing from the pit centre; the pivot leans along it
-  // so the outer blades splay away from the middle one.
-  const addSpike = (angle, radius, height, tilt) => {
+  const addSpike = (angle, radius, height, tilt, { detailed = false } = {}) => {
     const pivot = new THREE.Group();
     pivot.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
     pivot.rotation.set(Math.sin(angle) * tilt, 0, -Math.cos(angle) * tilt);
@@ -433,13 +422,15 @@ function buildSpikes(rng) {
       scale: [1, height, 1],
       shadow: true,
     });
-    part(pivot, tipGeo, bloodied, { pos: [0, height - 0.014, 0], rot: [0, Math.PI / 4, 0] });
-    part(pivot, cached('spike-collar', () => new THREE.CylinderGeometry(0.05, 0.058, 0.026, 8)), iron, {
-      pos: [0, 0.01, 0],
-    });
+    if (detailed) {
+      part(pivot, tipGeo, bloodied, { pos: [0, height - 0.014, 0], rot: [0, Math.PI / 4, 0] });
+      part(pivot, cached('spike-collar', () => new THREE.CylinderGeometry(0.05, 0.058, 0.026, 6)), iron, {
+        pos: [0, 0.01, 0],
+      });
+    }
   };
 
-  addSpike(0, 0, 0.36, 0);
+  addSpike(0, 0, 0.36, 0, { detailed: true });
   SPIKE_RING.forEach((height, i) => {
     addSpike((i / SPIKE_RING.length) * Math.PI * 2 + 0.35, 0.16, height + 0.03, 0.2);
   });
@@ -469,25 +460,21 @@ function buildSpikes(rng) {
 /* ------------------------------------------------------------------- web --- */
 
 const WEB_RADIUS = 0.36;
-const WEB_SPOKES = 12;
+const WEB_SPOKES = 8;
 
-// Anchored high at the rim and sagging into the middle, so a unit that walks in
-// looks like it dropped into a funnel rather than standing on a doily.
 function webHeight(r) {
   return 0.012 + 0.072 * Math.pow(r / WEB_RADIUS, 1.7);
 }
 
 function webSpokeGeometry() {
   const points = [];
-  for (let i = 0; i <= 8; i++) {
-    const r = (WEB_RADIUS * i) / 8;
+  for (let i = 0; i <= 5; i++) {
+    const r = (WEB_RADIUS * i) / 5;
     points.push(new THREE.Vector3(r, webHeight(r), 0));
   }
-  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 10, 0.0055, 4, false);
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 6, 0.0055, 3, false);
 }
 
-// Chords dip between the spokes they hang from, which is what gives a web its
-// scalloped edge instead of looking like concentric hoops.
 function webRingGeometry(fraction) {
   const points = [];
   const r = WEB_RADIUS * fraction;
@@ -498,18 +485,16 @@ function webRingGeometry(fraction) {
     const am = ((i + 0.5) / WEB_SPOKES) * Math.PI * 2;
     points.push(new THREE.Vector3(Math.cos(am) * sag, webHeight(sag) - 0.003, Math.sin(am) * sag));
   }
-  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 64, 0.0045, 4, false);
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 20, 0.0045, 3, false);
 }
 
-// Every strand shares one material, so the whole web can collapse into a single
-// draw call instead of twenty.
 function webGeometry() {
   return cached('web-silk', () => {
     const strands = [];
     for (let i = 0; i < WEB_SPOKES; i++) {
       strands.push(webSpokeGeometry().rotateY((i / WEB_SPOKES) * Math.PI * 2));
     }
-    for (const fraction of [0.32, 0.52, 0.74, 0.95]) {
+    for (const fraction of [0.38, 0.62, 0.9]) {
       strands.push(webRingGeometry(fraction));
     }
     const merged = mergeGeometries(strands);
@@ -526,7 +511,6 @@ function addSpider(parent) {
     emissiveIntensity: 1.4,
     roughness: 0.3,
   });
-  // A dark spider on a pale web is a silhouette; the marking gives it a shape.
   const marking = new THREE.MeshStandardMaterial({
     color: 0xd8b25a,
     roughness: 0.5,
@@ -538,35 +522,31 @@ function addSpider(parent) {
 
   const body = new THREE.Group();
   spider.add(body);
-  part(body, cached('spider-abdomen', () => new THREE.SphereGeometry(0.04, 10, 8)), chitin, {
+  part(body, cached('spider-abdomen', () => new THREE.SphereGeometry(0.04, 8, 6)), chitin, {
     scale: [1, 0.82, 1.25],
   });
-  const markGeo = cached('spider-mark', () => new THREE.SphereGeometry(0.012, 8, 6));
-  part(body, markGeo, marking, { pos: [0, 0.031, -0.006], scale: [1.1, 0.35, 1.5] });
-  part(body, markGeo, marking, { pos: [0, 0.026, -0.03], scale: [0.7, 0.3, 0.7] });
-  part(body, cached('spider-head', () => new THREE.SphereGeometry(0.023, 8, 6)), chitin, {
+  part(body, cached('spider-mark', () => new THREE.SphereGeometry(0.012, 6, 5)), marking, {
+    pos: [0, 0.029, -0.018],
+    scale: [1.2, 0.32, 1.4],
+  });
+  part(body, cached('spider-head', () => new THREE.SphereGeometry(0.023, 6, 5)), chitin, {
     pos: [0, 0.004, 0.05],
   });
   for (const side of [-1, 1]) {
-    part(body, cached('spider-eye', () => new THREE.SphereGeometry(0.0055, 6, 5)), eye, {
+    part(body, cached('spider-eye', () => new THREE.SphereGeometry(0.0055, 5, 4)), eye, {
       pos: [side * 0.01, 0.009, 0.066],
     });
   }
 
-  const legGeo = cached('spider-leg', () => new THREE.CylinderGeometry(0.0035, 0.0022, 0.06, 5));
+  const legGeo = cached('spider-leg', () => new THREE.CylinderGeometry(0.0035, 0.0022, 0.085, 4));
   const legs = [];
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       const knee = new THREE.Group();
-      knee.position.set(side * 0.024, 0.004, 0.028 - i * 0.019);
-      knee.rotation.set(0, side * (0.5 - i * 0.32), side * 1.05);
+      knee.position.set(side * 0.024, 0.004, 0.032 - i * 0.022);
+      knee.rotation.set(0, side * (0.45 - i * 0.28), side * 1.05);
       body.add(knee);
-      part(knee, legGeo, chitin, { pos: [0, -0.028, 0] });
-      const shin = new THREE.Group();
-      shin.position.set(0, -0.056, 0);
-      shin.rotation.z = side * -1.5;
-      knee.add(shin);
-      part(shin, legGeo, chitin, { pos: [0, -0.026, 0], scale: [0.85, 0.85, 0.85] });
+      part(knee, legGeo, chitin, { pos: [0, -0.042, 0] });
       legs.push({ knee, restZ: knee.rotation.z, side, phase: i * 0.9 + (side + 1) * 0.4 });
     }
   }
@@ -626,8 +606,8 @@ function buildWeb(rng) {
 
   part(web, webGeometry(), silk);
 
-  const dewGeo = cached('web-dew', () => new THREE.SphereGeometry(0.011, 8, 6));
-  for (let i = 0; i < 5; i++) {
+  const dewGeo = cached('web-dew', () => new THREE.SphereGeometry(0.011, 6, 5));
+  for (let i = 0; i < 2; i++) {
     const a = rng() * Math.PI * 2;
     const r = WEB_RADIUS * (0.4 + rng() * 0.5);
     part(web, dewGeo, dew, {

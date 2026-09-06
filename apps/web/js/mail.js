@@ -10,7 +10,6 @@ const mailOverlayEl = document.getElementById('mailOverlay');
 const mailListEl = document.getElementById('mailList');
 const mailEmptyEl = document.getElementById('mailEmpty');
 const mailCloseBtn = document.getElementById('mailCloseBtn');
-const mailClaimAllWrapEl = document.getElementById('mailClaimAllWrap');
 const mailClaimAllBtn = document.getElementById('mailClaimAllBtn');
 
 /** @type {{ messages: import('@ooxx/shared/mail.js').MailMessage[], unreadCount: number, unclaimedCount: number }} */
@@ -99,11 +98,11 @@ function formatAttachmentSummary(attachments) {
   if (diamonds > 0) parts.push(renderCurrencyMetaHtml('diamond', diamonds, { prefix: '+' }));
   for (const [itemId, amount] of Object.entries(items)) {
     const item = ITEMS[itemId];
-    parts.push(`${item?.icon ?? '📦'}${amount > 1 ? `×${amount}` : ''}`);
+    parts.push(`${item?.name ?? itemId}${amount > 1 ? `×${amount}` : ''}`);
   }
   for (const [classId, amount] of Object.entries(fragments)) {
     const cls = CLASSES[classId];
-    parts.push(`${cls?.icon ?? '🧩'}碎片${amount > 1 ? `×${amount}` : ''}`);
+    parts.push(`${cls?.name ?? classId}碎片${amount > 1 ? `×${amount}` : ''}`);
   }
 
   return parts.join(' ');
@@ -129,7 +128,7 @@ function renderMailList() {
   mailListEl.innerHTML = '';
   const hasMessages = mailState.messages.length > 0;
   mailEmptyEl.classList.toggle('hidden', hasMessages);
-  mailClaimAllWrapEl?.classList.toggle('hidden', mailState.unclaimedCount <= 0);
+  mailClaimAllBtn?.classList.toggle('hidden', mailState.unclaimedCount <= 0);
 
   for (const msg of mailState.messages) {
     mailListEl.appendChild(createMailRow(msg));
@@ -143,55 +142,44 @@ function createMailRow(msg) {
   const row = document.createElement('div');
   row.className = 'item-row mail-row';
   if (msg.claimed || (!hasAttachments && msg.read)) row.classList.add('item-row--muted');
-  if (!msg.read || canClaim) row.classList.add('item-row--ready');
-
-  const iconWrap = document.createElement('span');
-  iconWrap.className = 'item-row-icon mail-row-icon';
-  iconWrap.textContent = msg.read ? '📭' : '📬';
+  if (!msg.read) row.classList.add('mail-row--unread');
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
-  const desc = msg.body || (hasAttachments ? '點擊領取附件' : '系統通知');
-  body.innerHTML = `
-    <span class="item-row-name">${msg.read ? '' : '● '}${msg.title}</span>
-    <span class="item-row-desc">${desc}</span>
-  `;
+  const nameEl = document.createElement('span');
+  nameEl.className = 'item-row-name';
+  nameEl.textContent = msg.title;
+  const descEl = document.createElement('span');
+  descEl.className = 'item-row-desc';
+  descEl.textContent = msg.body || (hasAttachments ? '點擊領取附件' : '系統通知');
+  body.append(nameEl, descEl);
 
-  row.append(iconWrap, body);
+  const trailing = document.createElement('div');
+  trailing.className = 'mail-row-trailing';
 
   if (hasAttachments) {
     const rewardMeta = document.createElement('span');
     rewardMeta.className = 'item-row-meta mail-row-reward';
     rewardMeta.innerHTML = formatAttachmentSummary(msg.attachments);
-    row.appendChild(rewardMeta);
+    trailing.appendChild(rewardMeta);
   }
 
-  if (msg.claimed) {
+  if (msg.claimed || (!canClaim && msg.read && !hasAttachments)) {
     const doneMeta = document.createElement('span');
     doneMeta.className = 'item-row-meta item-row-meta-owned';
     doneMeta.textContent = '✓';
-    row.appendChild(doneMeta);
-  } else if (canClaim) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn primary item-row-btn';
-    btn.textContent = '領取';
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleClaimMail(msg.id, btn);
-    });
-    row.appendChild(btn);
+    trailing.appendChild(doneMeta);
+  }
+
+  if (canClaim) {
+    row.classList.add('mail-row--clickable');
+    row.addEventListener('click', () => handleClaimMail(msg.id, row));
   } else if (!msg.read) {
+    row.classList.add('mail-row--clickable');
     row.addEventListener('click', () => handleReadMail(msg.id));
   }
 
-  if (!canClaim && msg.read && !hasAttachments) {
-    const doneMeta = document.createElement('span');
-    doneMeta.className = 'item-row-meta item-row-meta-owned';
-    doneMeta.textContent = '✓';
-    row.appendChild(doneMeta);
-  }
-
+  row.append(body, trailing);
   return row;
 }
 
@@ -206,8 +194,9 @@ async function handleReadMail(mailId) {
   }
 }
 
-async function handleClaimMail(mailId, btn) {
-  btn.disabled = true;
+async function handleClaimMail(mailId, row) {
+  if (row.dataset.busy) return;
+  row.dataset.busy = '1';
   try {
     const data = await authFetch(`/api/mail/${mailId}/claim`, { method: 'POST', body: '{}' });
     if (data.save) applySaveFromServer(data.save);
@@ -217,7 +206,7 @@ async function handleClaimMail(mailId, btn) {
     mailCallbacks?.showToast?.(formatClaimToast(data.summary ?? []), { html: true });
     mailCallbacks?.onClaim?.();
   } catch (e) {
-    btn.disabled = false;
+    delete row.dataset.busy;
     mailCallbacks?.showToast?.(e.message ?? '領取失敗', { success: false });
   }
 }
