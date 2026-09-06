@@ -7,6 +7,8 @@ import { NavIconAnimator } from './board3d/NavIconAnimator.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS, FRAGMENT_PRICE } from './items.js';
 import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, FRAGMENTS_PER_COPY, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX } from './units.js';
+import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
+import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml } from './uiIcons.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
 import { CODEX_TABS } from './codex.js';
 import { getClassDiamondPrice } from './unlocks.js';
@@ -662,6 +664,7 @@ const itemThumbnails = generateItemThumbnails(ITEM_IDS);
 const mapPropThumbnails = generateMapPropThumbnails(MAP_PROP_KINDS);
 const navThumbnails = generateNavThumbnails();
 applyNavIcons(bottomNavEl, navThumbnails);
+mountUiIcons();
 const navIconAnimator = new NavIconAnimator(bottomNavEl);
 navIconAnimator.onNavChange(activeNav);
 
@@ -912,21 +915,37 @@ function renderClassDetail(classId, state = getAppState()) {
 
   const previewLevel = Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, codexPreviewLevel));
   const stats = getClassCombatStats(classId, previewLevel);
-  const hpLabel = cls.id === 'castle'
-    ? `${stats.hp}（攻城戰 ${getCastleHpForMode('5x5') + getClassLevelBonuses('castle', previewLevel).hp}）`
-    : stats.hp;
+  const siegeCastleHp = getCastleHpForMode('5x5') + getClassLevelBonuses('castle', previewLevel).hp;
+  const hpDisplay = cls.id === 'castle'
+    ? `${renderStatBadgeHtml('hp', stats.hp)} <span class="codex-stat-note">（攻城戰 ${renderStatBadgeHtml('hp', siegeCastleHp)}）</span>`
+    : renderStatBadgeHtml('hp', stats.hp);
   const previewingHigher = owned && previewLevel > ownedLevel;
   const previewingUnowned = !owned;
 
+  const previewHint = previewingHigher || previewingUnowned
+    ? ' <span class="codex-level-hint">預覽</span>'
+    : '';
+
   codexDetailInfoEl.innerHTML = `
-    <h2 class="detail-name">${cls.name}</h2>
-    <div class="codex-level-picker" role="group" aria-label="等級預覽"></div>
-    <dl class="detail-stats">
-      <div><dt>等級</dt><dd>${getClassLevelLabel(previewLevel)}${previewingHigher || previewingUnowned ? ' <span class="codex-level-hint">預覽</span>' : ''}</dd></div>
-      <div><dt>HP</dt><dd>${hpLabel}</dd></div>
-      <div><dt>ATK</dt><dd>${stats.atk}</dd></div>
-      <div><dt>特性</dt><dd>${formatClassTrait(cls)}</dd></div>
-    </dl>
+    <div class="codex-detail-head">
+      <h2 class="detail-name">${cls.name}${previewHint}</h2>
+      <div class="codex-level-picker" role="group" aria-label="等級預覽"></div>
+    </div>
+    <div class="codex-stat-row" aria-label="能力數值">
+      <div class="codex-stat-chip">
+        <span class="codex-stat-label">等級</span>
+        <span class="codex-stat-value">${renderStatBadgeHtml('level', previewLevel)}</span>
+      </div>
+      <div class="codex-stat-chip">
+        <span class="codex-stat-label">HP</span>
+        <span class="codex-stat-value">${hpDisplay || '—'}</span>
+      </div>
+      <div class="codex-stat-chip">
+        <span class="codex-stat-label">ATK</span>
+        <span class="codex-stat-value">${renderStatBadgeHtml('atk', stats.atk) || '—'}</span>
+      </div>
+    </div>
+    <p class="codex-trait"><span class="codex-trait-label">特性</span>${formatClassTrait(cls)}</p>
   `;
 
   const picker = codexDetailInfoEl.querySelector('.codex-level-picker');
@@ -935,7 +954,7 @@ function renderClassDetail(classId, state = getAppState()) {
     btn.type = 'button';
     btn.className = 'codex-level-btn' + (level === previewLevel ? ' active' : '');
     if (owned && level === ownedLevel) btn.classList.add('owned');
-    btn.textContent = getClassLevelLabel(level);
+    btn.innerHTML = renderStatBadgeHtml('level', level, { size: 12 });
     btn.addEventListener('click', () => {
       codexPreviewLevel = level;
       renderClassDetail(classId, getAppState());
@@ -999,7 +1018,7 @@ function createClassUnlockRow(cls, { owned, price, onBuy }) {
 
   const priceEl = document.createElement('span');
   priceEl.className = 'item-row-meta';
-  priceEl.textContent = `💎 ${price}`;
+  setCurrencyMeta(priceEl, 'diamond', price);
   row.appendChild(priceEl);
 
   const canBuy = canAffordClass(cls.id);
@@ -1038,7 +1057,7 @@ function createFragmentRow(cls, { count, price, canBuy, canSynth, onBuy, onSynth
 
   const priceEl = document.createElement('span');
   priceEl.className = 'item-row-meta';
-  priceEl.textContent = `💰 ${price}`;
+  setCurrencyMeta(priceEl, 'coin', price);
   row.appendChild(priceEl);
 
   if (onBuy) {
@@ -1090,7 +1109,7 @@ function createItemRow(item, { count, price, onBuy }) {
   if (price != null) {
     const meta = document.createElement('span');
     meta.className = 'item-row-meta';
-    meta.textContent = `💰 ${price}`;
+    setCurrencyMeta(meta, 'coin', price);
     row.appendChild(meta);
   }
 
@@ -1134,7 +1153,7 @@ function createDailyQuestRow(quest, { isReady, isClaimed }) {
 
   const rewardMeta = document.createElement('span');
   rewardMeta.className = 'item-row-meta';
-  rewardMeta.textContent = `💎 ${quest.reward}`;
+  setCurrencyMeta(rewardMeta, 'diamond', quest.reward);
   row.appendChild(rewardMeta);
 
   if (isClaimed) {
@@ -1208,14 +1227,15 @@ function playDiamondEarnAnimation(amount) {
   window.setTimeout(() => floater.remove(), 750);
 }
 
-function showPurchaseToast(message, { success = true } = {}) {
+function showPurchaseToast(message, { success = true, html = false } = {}) {
   const variant = success ? 'ui-card--success' : 'ui-card--error';
   purchaseToastController = showTimedOverlay(purchaseToastEl, {
     showMs: PURCHASE_TOAST_SHOW_MS,
     fadeMs: PURCHASE_TOAST_FADE_MS,
     variantClasses: [variant],
     setup: () => {
-      purchaseToastTextEl.textContent = message;
+      if (html) purchaseToastTextEl.innerHTML = message;
+      else purchaseToastTextEl.textContent = message;
     },
   });
 }
@@ -1446,8 +1466,8 @@ function renderFormation(state) {
     setUnitIcon(iconWrap, cls.id);
     selectBtn.append(iconWrap);
     selectBtn.insertAdjacentHTML('beforeend', `
-      <span class="class-name">${cls.name} · ${getClassLevelLabel(progress.level)}</span>
-      <span class="class-meta">HP ${hpDisplay} · ATK ${stats.atk}</span>
+      <span class="class-name">${cls.name} · ${renderStatBadgeHtml('level', progress.level)}</span>
+      <span class="class-meta">${renderStatBadgeHtml('hp', hpDisplay)} · ${renderStatBadgeHtml('atk', stats.atk)}</span>
     `);
     if (!isFixedCastle) {
       selectBtn.addEventListener('click', () => game.addToFormation(cls.id));
@@ -1558,15 +1578,11 @@ function createReserveCard(unit, { side, state }) {
   const vitals = document.createElement('div');
   vitals.className = 'reserve-card-vitals';
 
-  const hpText = document.createElement('span');
-  hpText.className = 'reserve-card-hp-text';
-  hpText.textContent = String(unit.hp);
-
-  const atkText = document.createElement('span');
-  atkText.className = 'reserve-card-atk-text';
-  atkText.textContent = `ATK ${unit.atk}`;
-
-  vitals.append(hpText, atkText);
+  vitals.append(
+    createStatBadge('level', unit.level ?? CLASS_LEVEL_MIN),
+    createStatBadge('hp', unit.hp),
+    createStatBadge('atk', unit.atk),
+  );
   card.append(iconWrap, nameEl, hpBar, vitals);
 
   if (side === 'enemy') {
@@ -1856,7 +1872,7 @@ function handleClaimDailyQuest(modeId, btn) {
 
   const quest = getDailyQuestDefinitions().find((q) => q.modeId === modeId);
   playDiamondEarnAnimation(result.awarded);
-  showPurchaseToast(`已領取 ${quest?.label ?? '任務'} +${result.awarded}💎`);
+  showPurchaseToast(`已領取 ${quest?.label ?? '任務'} ${renderCurrencyMetaHtml('diamond', result.awarded, { prefix: '+' })}`, { html: true });
   render(getAppState());
 }
 

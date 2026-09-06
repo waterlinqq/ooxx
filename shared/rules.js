@@ -127,11 +127,6 @@ export function isFriendlyCastleCell(board, row, col, team) {
   return cell?.team === team && isCastleUnit(cell);
 }
 
-/** @deprecated use isFriendlyCastleCell */
-export function hasAdjacentFriendlyCastle(board, row, col, team) {
-  return isFriendlyCastleCell(board, row, col, team);
-}
-
 export function shouldRecycleOnLand(board, row, col, unit) {
   if (!unit || isCastleUnit(unit)) return false;
   return isFriendlyCastleCell(board, row, col, unit.team);

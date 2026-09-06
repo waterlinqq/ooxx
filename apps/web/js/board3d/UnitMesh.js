@@ -3,6 +3,8 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel } from './UnitModels.js';
+import { applyStatBadge } from '../statIcons.js';
+import { CLASS_LEVEL_MIN } from '../units.js';
 
 const UNIT_BASE_Y = 0.072;
 const FADED = new THREE.Color(0x64748b);
@@ -46,6 +48,7 @@ function createHpLabel() {
     <div class="unit-3d-name"></div>
     <div class="unit-3d-hp-bar"><div class="unit-3d-hp-fill"></div></div>
     <div class="unit-3d-vitals">
+      <div class="unit-3d-level"></div>
       <div class="unit-3d-hp-text"></div>
       <div class="unit-3d-stats"></div>
     </div>
@@ -323,11 +326,18 @@ export class UnitMeshManager {
 
     const pct = Math.max(0, Math.round((unit.hp / unit.maxHp) * 100));
     entry.wrap.querySelector('.unit-3d-hp-fill').style.width = `${pct}%`;
-    entry.wrap.querySelector('.unit-3d-hp-text').textContent = String(unit.hp);
+    applyStatBadge(entry.wrap.querySelector('.unit-3d-level'), 'level', unit.level ?? CLASS_LEVEL_MIN, {
+      className: 'unit-3d-level',
+    });
+    applyStatBadge(entry.wrap.querySelector('.unit-3d-hp-text'), 'hp', unit.hp, {
+      className: 'unit-3d-hp-text',
+    });
 
     const statsEl = entry.wrap.querySelector('.unit-3d-stats');
-    const poisonTag = unit.poisoned ? ' · 中毒' : '';
-    statsEl.textContent = `ATK ${unit.atk}${poisonTag}`;
+    applyStatBadge(statsEl, 'atk', unit.atk, { className: 'unit-3d-stats' });
+    if (unit.poisoned) {
+      statsEl.insertAdjacentHTML('beforeend', '<span class="unit-poison-tag"> · 中毒</span>');
+    }
 
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);

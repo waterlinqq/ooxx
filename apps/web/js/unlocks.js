@@ -1,6 +1,7 @@
 import { CLASS_IDS, CLASSES } from './units.js';
+import { STARTER_CLASSES } from '@ooxx/shared/save.js';
 
-export const STARTER_CLASSES = ['archer', 'swordsman', 'shield', 'castle'];
+export { STARTER_CLASSES };
 
 export const CLASS_DIAMOND_PRICE = 100;
 

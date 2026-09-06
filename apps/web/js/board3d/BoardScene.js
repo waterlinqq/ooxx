@@ -160,6 +160,8 @@ export class BoardScene {
       zoomViaScale: !isTouchDevice(),
       onChange: () => this.applyOrbitZoom(),
     });
+    // Game board uses automatic idle sway instead of player-controlled orbit.
+    this.orbitControls.enabled = false;
 
     this.layoutFrustum = null;
     this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'board') : null;
@@ -410,7 +412,6 @@ export class BoardScene {
 
   setVisible(show) {
     this.visible = show;
-    if (this.orbitControls) this.orbitControls.enabled = show;
     this.container.classList.toggle('hidden', !show);
     if (show) {
       this.scheduleResize();
@@ -432,6 +433,7 @@ export class BoardScene {
     const delta = this.clock.getDelta();
     const elapsed = this.clock.elapsedTime;
     if (this.visible) {
+      this.orbitControls.updateIdleSway(elapsed);
       this.unitManager.tick(delta, elapsed);
       this.mapPropManager.tick();
       this.landmineMarkers.tick(elapsed);

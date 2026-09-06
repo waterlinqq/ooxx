@@ -329,6 +329,19 @@ export class LimitedOrbitControls {
     this.emitChange();
   }
 
+  /** Gentle automatic sway for idle board cameras (no user input). */
+  updateIdleSway(elapsed) {
+    const az =
+      Math.sin(elapsed * 0.15) * 0.038 +
+      Math.sin(elapsed * 0.23 + 1.2) * 0.018;
+    const pol =
+      Math.sin(elapsed * 0.11 + 0.8) * 0.02 +
+      Math.sin(elapsed * 0.19 + 2.1) * 0.012;
+    this.azimuth = clamp(az, this.minAzimuth, this.maxAzimuth);
+    this.polar = clamp(pol, this.minPolar, this.maxPolar);
+    this.applyTransform();
+  }
+
   isGesturing() {
     return this.pointers.size > 0;
   }

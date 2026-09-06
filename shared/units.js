@@ -283,9 +283,27 @@ export function clampClassLevel(level) {
   return Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, Math.floor(n)));
 }
 
-export function getClassLevelLabel(level) {
+export const STAT_STAR = '★';
+export const STAT_HP = '♥';
+export const STAT_ATK = '⚔';
+
+export function formatLevelStars(level) {
   const lv = clampClassLevel(level);
-  return lv >= CLASS_LEVEL_MAX ? 'MAX' : `Lv${lv}`;
+  return `${STAT_STAR}${lv}`;
+}
+
+export function formatHpDrops(hp) {
+  const n = Math.max(0, Math.floor(Number(hp) || 0));
+  return `${STAT_HP}${n}`;
+}
+
+export function formatAtkSwords(atk) {
+  const n = Math.max(0, Math.floor(Number(atk) || 0));
+  return `${STAT_ATK}${n}`;
+}
+
+export function getClassLevelLabel(level) {
+  return formatLevelStars(level);
 }
 
 export function getNextClassLevel(level) {

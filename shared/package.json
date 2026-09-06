@@ -6,6 +6,8 @@
     "./units.js": "./units.js",
     "./rules.js": "./rules.js",
     "./mapPropUtils.js": "./mapPropUtils.js",
-    "./protocol.js": "./protocol.js"
+    "./protocol.js": "./protocol.js",
+    "./dailyQuests.js": "./dailyQuests.js",
+    "./save.js": "./save.js"
   }
 }

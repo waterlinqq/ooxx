@@ -3,72 +3,27 @@ import {
   CLASS_IDS,
   CLASSES,
   CLASS_LEVEL_MIN,
-  CLASS_LEVEL_MAX,
   FRAGMENTS_PER_COPY,
-  clampClassLevel,
   getUpgradeCopyCost,
 } from './units.js';
-import { STARTER_CLASSES, getClassDiamondPrice, isUnlockable, isStarterClass } from './unlocks.js';
+import { getClassDiamondPrice, isUnlockable, isStarterClass } from './unlocks.js';
 import { getAuthToken, ensureGuestToken } from './guestAuth.js';
 import { apiUrl } from './config.js';
 import {
-  DAILY_QUEST_MODES,
   DAILY_QUEST_REWARD,
-  getTodayKey,
   isDailyQuestMode,
 } from './dailyQuests.js';
+import {
+  createDefaultClassProgress,
+  mergeClassProgress,
+  mergeDailyQuests,
+  normalizeDailyQuests,
+  normalizeSave,
+} from '@ooxx/shared/save.js';
 
-const SAVE_KEY = 'ooxx-save-v1';
+const SAVE_KEY = 'ooxx-save-v2';
 
-/** @typedef {{ dateKey: string, ready: string[], claimed: string[] }} DailyQuestsData */
-/** @typedef {{ level: number, copies: number, fragments: number }} ClassProgress */
-/** @typedef {{ coins: number, diamonds: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], classProgress: Record<string, ClassProgress>, rostersByMode?: Record<string, string[]>, equippedItem: string | null, dailyQuests: DailyQuestsData }} SaveData */
-
-function createDefaultInventory() {
-  return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
-}
-
-function createDefaultClassProgress() {
-  return { level: CLASS_LEVEL_MIN, copies: 0, fragments: 0 };
-}
-
-function normalizeClassProgressEntry(raw) {
-  const copies = typeof raw?.copies === 'number' && raw.copies > 0 ? Math.floor(raw.copies) : 0;
-  const fragments = typeof raw?.fragments === 'number' && raw.fragments > 0 ? Math.floor(raw.fragments) : 0;
-  const level = clampClassLevel(raw?.level ?? CLASS_LEVEL_MIN);
-  return {
-    level: Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, level)),
-    copies,
-    fragments,
-  };
-}
-
-function normalizeClassProgress(raw) {
-  /** @type {Record<string, ClassProgress>} */
-  const progress = {};
-  const source = raw && typeof raw === 'object' ? raw : {};
-  for (const classId of CLASS_IDS) {
-    progress[classId] = source[classId]
-      ? normalizeClassProgressEntry(source[classId])
-      : createDefaultClassProgress();
-  }
-  return progress;
-}
-
-function mergeClassProgress(local, cloud) {
-  /** @type {Record<string, ClassProgress>} */
-  const merged = {};
-  for (const classId of CLASS_IDS) {
-    const a = local[classId] ?? createDefaultClassProgress();
-    const b = cloud[classId] ?? createDefaultClassProgress();
-    merged[classId] = {
-      level: Math.max(a.level, b.level),
-      copies: Math.max(a.copies, b.copies),
-      fragments: Math.max(a.fragments, b.fragments),
-    };
-  }
-  return merged;
-}
+/** @typedef {import('@ooxx/shared/save.js').SaveData} SaveData */
 
 function ensureClassProgress(save, classId) {
   if (!save.classProgress[classId]) {
@@ -77,122 +32,14 @@ function ensureClassProgress(save, classId) {
   return save.classProgress[classId];
 }
 
-function createDefaultOwnedClasses() {
-  return [...STARTER_CLASSES];
-}
-
-function normalizeOwnedClasses(raw) {
-  const owned = new Set(STARTER_CLASSES);
-
-  if (Array.isArray(raw?.ownedClasses)) {
-    for (const classId of raw.ownedClasses) {
-      if (CLASSES[classId]) owned.add(classId);
-    }
-  }
-
-  return CLASS_IDS.filter((id) => owned.has(id));
-}
-
-function normalizeEquippedItem(raw) {
-  if (raw === null) return null;
-  if (typeof raw === 'string' && ITEM_IDS.includes(raw)) return raw;
-  return null;
-}
-
-function normalizeRostersByMode(raw) {
-  /** @type {Record<string, string[]>} */
-  const rosters = {};
-  if (!raw || typeof raw !== 'object') return rosters;
-
-  for (const [modeId, roster] of Object.entries(raw)) {
-    if (!Array.isArray(roster)) continue;
-    rosters[modeId] = roster.filter((classId) => CLASSES[classId]);
-  }
-  return rosters;
-}
-
-function createDefaultDailyQuests() {
-  return { dateKey: getTodayKey(), ready: [], claimed: [] };
-}
-
-function normalizeDailyQuests(raw) {
-  const todayKey = getTodayKey();
-  const dateKey = typeof raw?.dateKey === 'string' ? raw.dateKey : '';
-
-  if (dateKey !== todayKey) {
-    return createDefaultDailyQuests();
-  }
-
-  const legacyCompleted = Array.isArray(raw?.completed) ? raw.completed : [];
-  const claimedSource = Array.isArray(raw?.claimed) ? raw.claimed : legacyCompleted;
-  const readySource = Array.isArray(raw?.ready) ? raw.ready : [];
-
-  const claimedSet = new Set(
-    claimedSource.filter((id) => DAILY_QUEST_MODES.includes(id)),
-  );
-  const ready = DAILY_QUEST_MODES.filter(
-    (id) => readySource.includes(id) && !claimedSet.has(id),
-  );
-
-  return {
-    dateKey: todayKey,
-    ready,
-    claimed: DAILY_QUEST_MODES.filter((id) => claimedSet.has(id)),
-  };
-}
-
-function mergeDailyQuests(local, cloud) {
-  const localNorm = normalizeDailyQuests(local);
-  const cloudNorm = normalizeDailyQuests(cloud);
-  const claimed = new Set([...localNorm.claimed, ...cloudNorm.claimed]);
-  const ready = new Set([
-    ...localNorm.ready.filter((id) => !claimed.has(id)),
-    ...cloudNorm.ready.filter((id) => !claimed.has(id)),
-  ]);
-
-  return {
-    dateKey: getTodayKey(),
-    ready: DAILY_QUEST_MODES.filter((id) => ready.has(id)),
-    claimed: DAILY_QUEST_MODES.filter((id) => claimed.has(id)),
-  };
-}
-
-const DEFAULT_SAVE = {
+const DEFAULT_SAVE = normalizeSave({
   coins: STARTING_COINS,
   diamonds: STARTING_DIAMONDS,
-  inventory: createDefaultInventory(),
-  tutorialDone: false,
-  ownedClasses: createDefaultOwnedClasses(),
-  classProgress: normalizeClassProgress({}),
-  rostersByMode: {},
-  equippedItem: null,
-  dailyQuests: createDefaultDailyQuests(),
-};
+});
 
 /** @type {SaveData | null} */
 let cache = null;
 let cloudPushTimer = null;
-
-function normalizeSave(raw) {
-  const save = {
-    coins: typeof raw?.coins === 'number' ? Math.max(0, raw.coins) : DEFAULT_SAVE.coins,
-    diamonds: typeof raw?.diamonds === 'number' ? Math.max(0, raw.diamonds) : DEFAULT_SAVE.diamonds,
-    inventory: createDefaultInventory(),
-    tutorialDone: raw?.tutorialDone === true,
-    ownedClasses: normalizeOwnedClasses(raw),
-    classProgress: normalizeClassProgress(raw?.classProgress ?? raw?.class_progress),
-    rostersByMode: normalizeRostersByMode(raw?.rostersByMode),
-    equippedItem: normalizeEquippedItem(raw?.equippedItem ?? null),
-    dailyQuests: normalizeDailyQuests(raw?.dailyQuests ?? raw?.daily_quests),
-  };
-
-  for (const id of ITEM_IDS) {
-    const count = raw?.inventory?.[id];
-    save.inventory[id] = typeof count === 'number' && count > 0 ? Math.floor(count) : 0;
-  }
-
-  return save;
-}
 
 function mergeCloudLocal(cloud, local) {
   const merged = normalizeSave(local);
@@ -216,7 +63,7 @@ function mergeCloudLocal(cloud, local) {
   };
 
   merged.equippedItem = merged.equippedItem ?? cloudNorm.equippedItem ?? null;
-  merged.dailyQuests = mergeDailyQuests(local?.dailyQuests ?? local?.daily_quests, cloud?.dailyQuests ?? cloud?.daily_quests);
+  merged.dailyQuests = mergeDailyQuests(local?.dailyQuests, cloud?.dailyQuests);
 
   return merged;
 }
