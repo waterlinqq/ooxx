@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "thumbnails": "node scripts/generateThumbnails.mjs",
     "dev": "vite",
+    "prebuild": "npm run thumbnails",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -12,6 +14,7 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "vite": "^6.0.0"
   }
 }

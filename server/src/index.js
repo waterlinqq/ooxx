@@ -3,6 +3,13 @@ import { WebSocketServer } from 'ws';
 import { runMigrations, pool } from './db.js';
 import { createGuest, findGuestByToken } from './services/guest.js';
 import { getSave, putSave } from './services/save.js';
+import {
+  listMail,
+  markMailRead,
+  claimMail,
+  claimAllMail,
+  sendMail,
+} from './services/mail.js';
 import { cleanupExpiredMatches, initMatchService } from './services/match.js';
 import { MSG } from '../../shared/protocol.js';
 import * as room from './ws/messages.js';
@@ -34,7 +41,7 @@ async function authFromHeader(req) {
 async function handleHttp(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Mail-Secret');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -87,6 +94,69 @@ async function handleHttp(req, res) {
       }
       const save = await putSave(guest.id, body);
       json(res, 200, save);
+      return;
+    }
+  }
+
+  if (url.pathname.startsWith('/api/mail')) {
+    const guest = await authFromHeader(req);
+    if (!guest) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/mail') {
+      const mail = await listMail(guest.id);
+      json(res, 200, mail);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/mail/claim-all') {
+      const result = await claimAllMail(guest.id);
+      json(res, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/mail/send') {
+      const secret = process.env.MAIL_DEV_SECRET;
+      const headerSecret = req.headers['x-mail-secret'];
+      if (!secret || headerSecret !== secret) {
+        json(res, 403, { error: 'Forbidden' });
+        return;
+      }
+      let body = {};
+      try {
+        const raw = await readBody(req);
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        json(res, 400, { error: 'Invalid JSON' });
+        return;
+      }
+      if (!body.guestId || !body.title) {
+        json(res, 400, { error: '缺少 guestId 或 title' });
+        return;
+      }
+      const result = await sendMail({
+        guestId: body.guestId,
+        title: body.title,
+        body: body.body ?? '',
+        attachments: body.attachments ?? [],
+      });
+      json(res, result.ok ? 201 : 400, result);
+      return;
+    }
+
+    const mailActionMatch = url.pathname.match(/^\/api\/mail\/([^/]+)\/(read|claim)$/);
+    if (req.method === 'POST' && mailActionMatch) {
+      const mailId = mailActionMatch[1];
+      const action = mailActionMatch[2];
+      if (action === 'read') {
+        const result = await markMailRead(guest.id, mailId);
+        json(res, result.ok ? 200 : 400, result);
+        return;
+      }
+      const result = await claimMail(guest.id, mailId);
+      json(res, result.ok ? 200 : 400, result);
       return;
     }
   }

@@ -1,12 +1,15 @@
 import { Game, CLASSES, BOARD_MODES, GAME_END_MODAL_MS, GAME_END_FADE_MS } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
-import { generateUnitThumbnails, fillUnitIcon, fillCopyCardIcon, fillFragmentCardIcon } from './board3d/UnitThumbnails.js';
-import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
-import { generateSideThumbnails, applySideIcons } from './board3d/SideIconThumbnails.js';
+import { fillUnitIcon, fillCopyCardIcon, fillFragmentCardIcon } from './board3d/UnitThumbnails.js';
+import { applyNavIcons } from './board3d/NavThumbnails.js';
+import { NAV_ICON_IDS } from './board3d/NavIconModels.js';
+import { applySideIcons } from './board3d/SideIconThumbnails.js';
+import { SIDE_ICON_IDS } from './board3d/SideIconModels.js';
 import { NavIconAnimator } from './board3d/NavIconAnimator.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS, FRAGMENT_PRICE } from './items.js';
-import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
+import { fillItemIcon, fillMapPropIcon } from './board3d/ItemThumbnails.js';
+import { createThumbnailMap } from './board3d/thumbnailPaths.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, FRAGMENTS_PER_COPY, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX } from './units.js';
 import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
 import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml } from './uiIcons.js';
@@ -46,8 +49,10 @@ import {
   fillReactionIcon,
 } from './reactions.js';
 import { getDailyQuestDefinitions } from './dailyQuests.js';
+import { initMail, openMailModal, refreshMailBadge } from './mail.js';
 
 loadSave();
+initMail();
 
 // Block browser pinch / trackpad zoom so gestures stay on the board.
 document.addEventListener('wheel', (e) => {
@@ -725,12 +730,12 @@ const board3d = new BoardScene(boardCanvasHost, fxLayerEl, {
 
 const unitPreview = new CharacterPreviewScene(codexPreviewHostEl);
 
-const unitThumbnails = generateUnitThumbnails(Object.keys(CLASSES));
-const itemThumbnails = generateItemThumbnails(ITEM_IDS);
-const mapPropThumbnails = generateMapPropThumbnails(MAP_PROP_KINDS);
-const navThumbnails = generateNavThumbnails();
+const unitThumbnails = createThumbnailMap(Object.keys(CLASSES), 'units');
+const itemThumbnails = createThumbnailMap(ITEM_IDS, 'items');
+const mapPropThumbnails = createThumbnailMap(MAP_PROP_KINDS, 'map-props');
+const navThumbnails = createThumbnailMap(NAV_ICON_IDS, 'nav');
 applyNavIcons(bottomNavEl, navThumbnails);
-const sideThumbnails = generateSideThumbnails();
+const sideThumbnails = createThumbnailMap(SIDE_ICON_IDS, 'side');
 applySideIcons(lobbyContentEl, sideThumbnails);
 mountUiIcons();
 const navIconAnimator = new NavIconAnimator(bottomNavEl);
@@ -2271,6 +2276,13 @@ lobbyContentEl.addEventListener('click', async (e) => {
   const btn = e.target.closest('.lobby-side-btn[data-side-action]');
   if (!btn) return;
   const action = btn.dataset.sideAction;
+  if (action === 'mail') {
+    await openMailModal({
+      showToast: (message, options) => showPurchaseToast(message, options),
+      onClaim: () => render(getAppState()),
+    });
+    return;
+  }
   const label = SIDE_ACTION_LABELS[action] ?? action;
   await showAlert(`${label}功能即將推出`);
 });
@@ -2343,6 +2355,7 @@ initCloudSave()
     game.blueRoster = game.sanitizeRosterForMode([...(game.rostersByMode[game.boardMode] ?? [])]);
     return onlineClient.tryReconnectOnLoad();
   })
+  .then(() => refreshMailBadge())
   .then(() => {
     appReady = true;
     render(getAppState());

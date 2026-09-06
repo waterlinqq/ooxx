@@ -1,10 +1,15 @@
-import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildUnitModel } from './UnitModels.js';
+import {
+  PREVIEW_ROTATION_Y,
+  setupBakeScene,
+  setupBakeCamera,
+  fitBakeCamera,
+  createBakeRenderer,
+  disposeBakeResources,
+} from './ThumbnailBake.js';
 
-const THUMB_SIZE = 256;
+export const UNIT_THUMB_SIZE = 256;
 const UNIT_BASE_Y = 0.072;
-const PREVIEW_ROTATION_Y = 0.35;
 const FRAME_PADDING = 1.06;
 
 function disposeModel(model) {
@@ -18,93 +23,40 @@ function disposeModel(model) {
   }
 }
 
-function setupScene(renderer) {
-  const scene = new THREE.Scene();
-  scene.background = null;
+export function bakeUnitThumbnail(renderer, scene, camera, classId) {
+  const model = buildUnitModel(classId, 'blue');
+  if (model.ring) model.ring.visible = false;
+  if (model.shadow) model.shadow.visible = false;
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envMap;
-  scene.environmentIntensity = 0.55;
-
-  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
-  scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
-
-  const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
-  keyLight.position.set(4, 8, 4);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(512, 512);
-  keyLight.shadow.camera.left = -3;
-  keyLight.shadow.camera.right = 3;
-  keyLight.shadow.camera.top = 3;
-  keyLight.shadow.camera.bottom = -3;
-  scene.add(keyLight);
-
-  const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
-  fillLight.position.set(-3, 5, -4);
-  scene.add(fillLight);
-
-  const rimLight = new THREE.DirectionalLight(0xe0e7ff, 0.65);
-  rimLight.position.set(-4, 3, 5);
-  scene.add(rimLight);
-
-  return { scene, envMap, pmrem };
+  model.root.position.set(0, UNIT_BASE_Y, 0);
+  model.body.rotation.y = PREVIEW_ROTATION_Y;
+  scene.add(model.root);
+  fitBakeCamera(camera, model.root, FRAME_PADDING);
+  renderer.render(scene, camera);
+  scene.remove(model.root);
+  disposeModel(model);
+  return true;
 }
 
-function setupCamera() {
-  const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 100);
-  camera.position.set(0, 5.5, 5.2);
-  camera.lookAt(0, 0.45, 0);
-  return camera;
-}
-
-function fitCameraToModel(camera, object) {
-  const box = new THREE.Box3().setFromObject(object);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const viewHeight = Math.max(size.y, size.x * 0.72, size.z * 0.72) * FRAME_PADDING;
-
-  camera.left = -viewHeight / 2;
-  camera.right = viewHeight / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
-  camera.updateProjectionMatrix();
-  camera.lookAt(center.x, center.y - size.y * 0.04, center.z);
-}
-
-export function generateUnitThumbnails(classIds) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(1);
-  renderer.setSize(THUMB_SIZE, THUMB_SIZE);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
-
-  const { scene, envMap, pmrem } = setupScene(renderer);
-  const camera = setupCamera();
-  const thumbnails = new Map();
-
-  for (const classId of classIds) {
-    const model = buildUnitModel(classId, 'blue');
-    if (model.ring) model.ring.visible = false;
-    if (model.shadow) model.shadow.visible = false;
-
-    model.root.position.set(0, UNIT_BASE_Y, 0);
-    model.body.rotation.y = PREVIEW_ROTATION_Y;
-    scene.add(model.root);
-    fitCameraToModel(camera, model.root);
-
-    renderer.render(scene, camera);
-    thumbnails.set(classId, renderer.domElement.toDataURL('image/png'));
-
-    scene.remove(model.root);
-    disposeModel(model);
+export function generateUnitThumbnails(classIds, { renderer, scene, camera } = {}) {
+  const ownsRenderer = !renderer;
+  let envMap;
+  let pmrem;
+  if (ownsRenderer) {
+    renderer = createBakeRenderer(UNIT_THUMB_SIZE, UNIT_THUMB_SIZE);
+    ({ scene, envMap, pmrem } = setupBakeScene(renderer));
+    camera = setupBakeCamera(0.45);
   }
 
-  envMap.dispose();
-  pmrem.dispose();
-  renderer.dispose();
+  const thumbnails = new Map();
+  for (const classId of classIds) {
+    bakeUnitThumbnail(renderer, scene, camera, classId);
+    thumbnails.set(classId, renderer.domElement.toDataURL('image/png'));
+  }
+
+  if (ownsRenderer) {
+    disposeBakeResources({ envMap, pmrem, renderer });
+  }
 
   return thumbnails;
 }

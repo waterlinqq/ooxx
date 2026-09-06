@@ -8,6 +8,7 @@
     "./mapPropUtils.js": "./mapPropUtils.js",
     "./protocol.js": "./protocol.js",
     "./dailyQuests.js": "./dailyQuests.js",
-    "./save.js": "./save.js"
+    "./save.js": "./save.js",
+    "./mail.js": "./mail.js"
   }
 }

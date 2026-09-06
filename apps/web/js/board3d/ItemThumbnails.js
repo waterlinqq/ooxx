@@ -1,12 +1,17 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildMapPropModel } from './MapPropModels.js';
 import { buildItemBombModel, buildItemLandmineModel } from './UnitModels.js';
+import {
+  PREVIEW_ROTATION_Y,
+  setupBakeScene,
+  setupBakeCamera,
+  fitBakeCamera,
+  createBakeRenderer,
+  disposeBakeResources,
+} from './ThumbnailBake.js';
 
-const THUMB_SIZE = 256;
-const PREVIEW_ROTATION_Y = 0.35;
+export const ITEM_THUMB_SIZE = 256;
 const FRAME_PADDING = 1.06;
-/** Normalized framing height so potion / bomb / landmine fill the icon similarly. */
 const TARGET_VIEW_HEIGHT = 0.3;
 
 const ITEM_THUMB_TUNING = {
@@ -34,46 +39,6 @@ function disposeObject(root) {
       material.dispose();
     }
   });
-}
-
-function setupScene(renderer) {
-  const scene = new THREE.Scene();
-  scene.background = null;
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envMap;
-  scene.environmentIntensity = 0.55;
-
-  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
-  scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
-
-  const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
-  keyLight.position.set(4, 8, 4);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(512, 512);
-  keyLight.shadow.camera.left = -3;
-  keyLight.shadow.camera.right = 3;
-  keyLight.shadow.camera.top = 3;
-  keyLight.shadow.camera.bottom = -3;
-  scene.add(keyLight);
-
-  const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
-  fillLight.position.set(-3, 5, -4);
-  scene.add(fillLight);
-
-  const rimLight = new THREE.DirectionalLight(0xe0e7ff, 0.65);
-  rimLight.position.set(-4, 3, 5);
-  scene.add(rimLight);
-
-  return { scene, envMap, pmrem };
-}
-
-function setupCamera() {
-  const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 100);
-  camera.position.set(0, 5.5, 5.2);
-  camera.lookAt(0, 0.45, 0);
-  return camera;
 }
 
 function getViewHeight(size, tuningKey, tuningTable) {
@@ -190,38 +155,76 @@ function buildMapPropThumbnailModel(kind) {
   return model.root;
 }
 
-export function generateMapPropThumbnails(kinds) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(1);
-  renderer.setSize(THUMB_SIZE, THUMB_SIZE);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
+export function bakeMapPropThumbnail(renderer, scene, camera, kind) {
+  const root = buildMapPropThumbnailModel(kind);
+  if (!root) return false;
 
-  const { scene, envMap, pmrem } = setupScene(renderer);
-  const camera = setupCamera();
-  const thumbnails = new Map();
+  if (kind === 'potion') prepareItemForThumbnail(root, 'potion');
+  normalizeMapPropForThumbnail(root, kind);
+  scene.add(root);
+  fitCameraToMapProp(camera, root, kind);
+  renderer.render(scene, camera);
+  scene.remove(root);
+  disposeObject(root);
+  return true;
+}
 
-  for (const kind of kinds) {
-    const root = buildMapPropThumbnailModel(kind);
-    if (!root) continue;
+export function bakeItemThumbnail(renderer, scene, camera, itemId) {
+  const root = buildItemModel(itemId);
+  if (!root) return false;
 
-    if (kind === 'potion') prepareItemForThumbnail(root, 'potion');
-    normalizeMapPropForThumbnail(root, kind);
-    scene.add(root);
-    fitCameraToMapProp(camera, root, kind);
+  prepareItemForThumbnail(root, itemId);
+  normalizeItemForThumbnail(root, itemId);
+  scene.add(root);
+  fitCameraToModel(camera, root, itemId);
+  renderer.render(scene, camera);
+  scene.remove(root);
+  disposeObject(root);
+  return true;
+}
 
-    renderer.render(scene, camera);
-    thumbnails.set(kind, renderer.domElement.toDataURL('image/png'));
-
-    scene.remove(root);
-    disposeObject(root);
+export function generateMapPropThumbnails(kinds, { renderer, scene, camera } = {}) {
+  const ownsRenderer = !renderer;
+  let envMap;
+  let pmrem;
+  if (ownsRenderer) {
+    renderer = createBakeRenderer(ITEM_THUMB_SIZE, ITEM_THUMB_SIZE);
+    ({ scene, envMap, pmrem } = setupBakeScene(renderer));
+    camera = setupBakeCamera(0.45);
   }
 
-  envMap.dispose();
-  pmrem.dispose();
-  renderer.dispose();
+  const thumbnails = new Map();
+  for (const kind of kinds) {
+    if (!bakeMapPropThumbnail(renderer, scene, camera, kind)) continue;
+    thumbnails.set(kind, renderer.domElement.toDataURL('image/png'));
+  }
+
+  if (ownsRenderer) {
+    disposeBakeResources({ envMap, pmrem, renderer });
+  }
+
+  return thumbnails;
+}
+
+export function generateItemThumbnails(itemIds, { renderer, scene, camera } = {}) {
+  const ownsRenderer = !renderer;
+  let envMap;
+  let pmrem;
+  if (ownsRenderer) {
+    renderer = createBakeRenderer(ITEM_THUMB_SIZE, ITEM_THUMB_SIZE);
+    ({ scene, envMap, pmrem } = setupBakeScene(renderer));
+    camera = setupBakeCamera(0.45);
+  }
+
+  const thumbnails = new Map();
+  for (const itemId of itemIds) {
+    if (!bakeItemThumbnail(renderer, scene, camera, itemId)) continue;
+    thumbnails.set(itemId, renderer.domElement.toDataURL('image/png'));
+  }
+
+  if (ownsRenderer) {
+    disposeBakeResources({ envMap, pmrem, renderer });
+  }
 
   return thumbnails;
 }
@@ -239,42 +242,6 @@ export function fillMapPropIcon(container, kind, thumbnails, fallbackIcon = '?',
     return;
   }
   container.textContent = fallbackIcon;
-}
-
-export function generateItemThumbnails(itemIds) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(1);
-  renderer.setSize(THUMB_SIZE, THUMB_SIZE);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
-
-  const { scene, envMap, pmrem } = setupScene(renderer);
-  const camera = setupCamera();
-  const thumbnails = new Map();
-
-  for (const itemId of itemIds) {
-    const root = buildItemModel(itemId);
-    if (!root) continue;
-
-    prepareItemForThumbnail(root, itemId);
-    normalizeItemForThumbnail(root, itemId);
-    scene.add(root);
-    fitCameraToModel(camera, root, itemId);
-
-    renderer.render(scene, camera);
-    thumbnails.set(itemId, renderer.domElement.toDataURL('image/png'));
-
-    scene.remove(root);
-    disposeObject(root);
-  }
-
-  envMap.dispose();
-  pmrem.dispose();
-  renderer.dispose();
-
-  return thumbnails;
 }
 
 export function fillItemIcon(container, itemId, thumbnails, fallbackIcon = '?', alt = '') {

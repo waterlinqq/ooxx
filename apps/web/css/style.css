@@ -3503,3 +3503,88 @@ body {
     transform: translateY(-4px);
   }
 }
+
+.ui-card--mail {
+  width: min(92vw, 380px);
+  max-height: min(72vh, 520px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+
+.mail-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mail-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.mail-modal-close {
+  min-width: 32px;
+  padding: 4px 8px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.mail-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: min(52vh, 400px);
+  padding-right: 2px;
+}
+
+.mail-row {
+  cursor: default;
+}
+
+.mail-row-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.mail-row-reward {
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.mail-empty {
+  margin: 8px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.lobby-side-btn {
+  position: relative;
+}
+
+.lobby-side-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}

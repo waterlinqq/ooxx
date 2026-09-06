@@ -290,6 +290,19 @@
         </div>
       </div>
     </div>
+    <div id="mailOverlay" class="ui-overlay ui-overlay--modal hidden" role="dialog" aria-modal="true" aria-labelledby="mailTitle">
+      <div class="ui-card ui-card--accent ui-card--mail">
+        <div class="mail-modal-header">
+          <h2 class="mail-modal-title" id="mailTitle">信箱</h2>
+          <button class="btn mail-modal-close" id="mailCloseBtn" type="button" aria-label="關閉">✕</button>
+        </div>
+        <div class="mail-modal-actions hidden" id="mailClaimAllWrap">
+          <button class="btn primary btn-sm" id="mailClaimAllBtn" type="button">一鍵領取全部</button>
+        </div>
+        <div class="mail-list" id="mailList"></div>
+        <p class="mail-empty hidden" id="mailEmpty">目前沒有郵件</p>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

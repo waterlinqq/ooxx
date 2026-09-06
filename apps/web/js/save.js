@@ -239,6 +239,12 @@ export function markTutorialDone() {
   persistSave();
 }
 
+export function applySaveFromServer(serverSave) {
+  if (!serverSave) return;
+  cache = normalizeSave(serverSave);
+  localStorage.setItem(SAVE_KEY, JSON.stringify(cache));
+}
+
 export function persistSave() {
   if (!cache) return;
   localStorage.setItem(SAVE_KEY, JSON.stringify(cache));
