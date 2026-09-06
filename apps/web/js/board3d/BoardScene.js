@@ -25,11 +25,19 @@ import {
   Scene3dDebugHud,
   buildScene3dDebugSnapshot,
 } from './Scene3dDebug.js';
+import {
+  webglRendererOptions,
+  webglPixelRatio,
+  webglShadowMapSize,
+  applyShadowRendererSettings,
+  attachWebGLRecovery,
+  attachPageVisibility,
+} from './WebGLSceneRuntime.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
 const FRAME_PADDING = 0.02;
-// Small margin for idle camera sway only (was 1.2 for manual orbit/zoom).
+// Small margin above the framed board (was 1.2 for manual orbit/zoom).
 const BOARD_FRAMING_HEADROOM = 1.04;
 const TILE_HALF_HEIGHT = 0.07;
 const CONTENT_BOX = new THREE.Box3();
@@ -64,20 +72,17 @@ export class BoardScene {
     this.camera.position.set(0, 8.5, 8);
     this.camera.lookAt(0, 0, 0);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer(webglRendererOptions());
+    this.renderer.setPixelRatio(webglPixelRatio());
     this.renderer.setSize(width, height);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    applyShadowRendererSettings(this.renderer);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.3;
     containerEl.appendChild(this.renderer.domElement);
 
-    // Metals (armour, blades, gold trim) render black without something to reflect.
-    this.pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.envMap = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environment = this.envMap;
-    this.scene.environmentIntensity = 0.55;
+    this.pmrem = null;
+    this.envMap = null;
+    this.rebuildEnvironmentMap();
 
     this.labelRenderer = new CSS2DRenderer();
     this.labelRenderer.setSize(width, height);
@@ -94,7 +99,8 @@ export class BoardScene {
     this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
     this.keyLight.position.set(5, 9, 5);
     this.keyLight.castShadow = true;
-    this.keyLight.shadow.mapSize.set(2048, 2048);
+    const shadowSize = webglShadowMapSize();
+    this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
     this.keyLight.shadow.radius = 3;
     this.keyLight.shadow.bias = -0.0008;
     this.keyLight.shadow.normalBias = 0.02;
@@ -161,7 +167,7 @@ export class BoardScene {
       zoomViaScale: !isTouchDevice(),
       onChange: () => this.applyOrbitZoom(),
     });
-    // Game board uses automatic idle sway instead of player-controlled orbit.
+    // Game board uses a fixed camera; player orbit is disabled.
     this.orbitControls.enabled = false;
 
     this.layoutFrustum = null;
@@ -173,7 +179,21 @@ export class BoardScene {
     this.clock = new THREE.Clock();
     this.boardSize = 0;
     this.visible = true;
+    this.pageHidden = document.hidden;
+    this.animating = false;
     this.devStats = import.meta.env.DEV ? attachDevRendererStats(this.renderer) : null;
+
+    this.contextRecovery = attachWebGLRecovery(this.renderer, {
+      onRestore: () => this.restoreGpuResources(),
+    });
+    this.detachPageVisibility = attachPageVisibility((hidden) => {
+      this.pageHidden = hidden;
+      if (!hidden && this.shouldRender()) {
+        this.clock.getDelta();
+        this.scheduleResize();
+      }
+      this.updateAnimationLoop();
+    });
 
     this.onResize = this.onResize.bind(this);
     window.addEventListener('resize', this.onResize);
@@ -183,7 +203,44 @@ export class BoardScene {
     this.resizeObserver.observe(containerEl);
 
     this.onResize();
+    this.updateAnimationLoop();
+  }
+
+  rebuildEnvironmentMap() {
+    this.envMap?.dispose();
+    this.pmrem?.dispose();
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envMap;
+    this.scene.environmentIntensity = 0.55;
+  }
+
+  restoreGpuResources() {
+    this.rebuildEnvironmentMap();
+    this.renderer.setPixelRatio(webglPixelRatio());
+    this.scheduleResize();
+    this.updateAnimationLoop();
+  }
+
+  shouldRender() {
+    return this.visible
+      && !this.pageHidden
+      && !this.contextRecovery.isContextLost();
+  }
+
+  updateAnimationLoop() {
+    if (this.shouldRender()) this.startAnimationLoop();
+    else this.stopAnimationLoop();
+  }
+
+  startAnimationLoop() {
+    if (this.animating) return;
+    this.animating = true;
     this.animate();
+  }
+
+  stopAnimationLoop() {
+    this.animating = false;
   }
 
   scheduleResize() {
@@ -419,6 +476,7 @@ export class BoardScene {
     if (show) {
       this.scheduleResize();
     }
+    this.updateAnimationLoop();
   }
 
   clear() {
@@ -432,36 +490,41 @@ export class BoardScene {
   }
 
   animate() {
+    if (!this.animating) return;
     requestAnimationFrame(() => this.animate());
+    if (!this.shouldRender()) {
+      this.stopAnimationLoop();
+      return;
+    }
+
     const delta = this.clock.getDelta();
     const elapsed = this.clock.elapsedTime;
-    if (this.visible) {
-      this.orbitControls.updateIdleSway(elapsed);
-      this.unitManager.tick(delta, elapsed);
-      this.mapPropManager.tick();
-      this.landmineMarkers.tick(elapsed);
-      this.devStats?.begin();
-      this.renderer.render(this.scene, this.camera);
-      this.devStats?.end();
-      this.labelRenderer.render(this.scene, this.camera);
-      if (this.debugHud) {
-        this.debugHud.update(buildScene3dDebugSnapshot({
-          renderer: this.renderer,
-          camera: this.camera,
-          pivot: this.boardPivot,
-          orbitControls: this.orbitControls,
-          layoutFrustum: this.layoutFrustum,
-          container: this.container,
-          boardSize: this.boardSize,
-        }));
-      }
+    this.unitManager.tick(delta, elapsed);
+    this.mapPropManager.tick();
+    this.landmineMarkers.tick(elapsed);
+    this.devStats?.begin();
+    this.renderer.render(this.scene, this.camera);
+    this.devStats?.end();
+    this.labelRenderer.render(this.scene, this.camera);
+    if (this.debugHud) {
+      this.debugHud.update(buildScene3dDebugSnapshot({
+        renderer: this.renderer,
+        camera: this.camera,
+        pivot: this.boardPivot,
+        orbitControls: this.orbitControls,
+        layoutFrustum: this.layoutFrustum,
+        container: this.container,
+        boardSize: this.boardSize,
+      }));
     }
   }
 
   dispose() {
+    this.stopAnimationLoop();
+    this.detachPageVisibility?.();
     window.removeEventListener('resize', this.onResize);
-    this.envMap.dispose();
-    this.pmrem.dispose();
+    this.envMap?.dispose();
+    this.pmrem?.dispose();
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.orbitControls?.dispose();

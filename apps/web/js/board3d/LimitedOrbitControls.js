@@ -317,7 +317,7 @@ export class LimitedOrbitControls {
     this.pivot.scale.setScalar(this.zoomViaScale ? this.zoom : 1);
   }
 
-  /** Run layout work with orbit angles at rest so sway does not shrink the frame. */
+  /** Run layout work with orbit angles at rest. */
   withNeutralOrbit(fn) {
     const savedAz = this.azimuth;
     const savedPol = this.polar;
@@ -341,19 +341,6 @@ export class LimitedOrbitControls {
     this.polar = 0;
     this.zoom = 1;
     this.emitChange();
-  }
-
-  /** Gentle automatic sway for idle board cameras (no user input). */
-  updateIdleSway(elapsed) {
-    const az =
-      Math.sin(elapsed * 0.15) * 0.038 +
-      Math.sin(elapsed * 0.23 + 1.2) * 0.018;
-    const pol =
-      Math.sin(elapsed * 0.11 + 0.8) * 0.02 +
-      Math.sin(elapsed * 0.19 + 2.1) * 0.012;
-    this.azimuth = clamp(az, this.minAzimuth, this.maxAzimuth);
-    this.polar = clamp(pol, this.minPolar, this.maxPolar);
-    this.applyTransform();
   }
 
   isGesturing() {

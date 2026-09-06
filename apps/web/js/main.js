@@ -3,6 +3,7 @@ import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { generateUnitThumbnails, fillUnitIcon, fillCopyCardIcon, fillFragmentCardIcon } from './board3d/UnitThumbnails.js';
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
+import { generateSideThumbnails, applySideIcons } from './board3d/SideIconThumbnails.js';
 import { NavIconAnimator } from './board3d/NavIconAnimator.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS, FRAGMENT_PRICE } from './items.js';
 import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
@@ -729,6 +730,8 @@ const itemThumbnails = generateItemThumbnails(ITEM_IDS);
 const mapPropThumbnails = generateMapPropThumbnails(MAP_PROP_KINDS);
 const navThumbnails = generateNavThumbnails();
 applyNavIcons(bottomNavEl, navThumbnails);
+const sideThumbnails = generateSideThumbnails();
+applySideIcons(lobbyContentEl, sideThumbnails);
 mountUiIcons();
 const navIconAnimator = new NavIconAnimator(bottomNavEl);
 navIconAnimator.onNavChange(activeNav);
@@ -2255,6 +2258,20 @@ joinRoomBtn.addEventListener('click', async () => {
   } finally {
     joinRoomBtn.disabled = false;
   }
+});
+
+const SIDE_ACTION_LABELS = {
+  friends: '好友',
+  mail: '信箱',
+  settings: '設定',
+};
+
+lobbyContentEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.lobby-side-btn[data-side-action]');
+  if (!btn) return;
+  const action = btn.dataset.sideAction;
+  const label = SIDE_ACTION_LABELS[action] ?? action;
+  await showAlert(`${label}功能即將推出`);
 });
 
 cancelRoomBtn.addEventListener('click', () => {

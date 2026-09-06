@@ -32,34 +32,54 @@
     <main class="game-main" id="gameMain">
       <!-- 戰鬥 -->
       <section class="game-screen active" id="screenBattle" data-screen="battle">
-        <div class="screen-scroll" id="lobbyContent">
-          <div class="online-section">
-            <div class="mode-buttons" id="onlineModeButtons"></div>
-            <div class="online-actions" id="onlineLobbyActions">
-              <button class="btn primary btn-lg" id="findMatchBtn" type="button">開始匹配</button>
-              <button class="btn btn-lg" id="createRoomBtn" type="button">建立房間</button>
-              <div class="online-join-row">
-                <input class="online-room-input" id="roomCodeInput" type="text" maxlength="6" placeholder="房間碼" autocomplete="off" />
-                <button class="btn primary" id="joinRoomBtn" type="button">加入</button>
+        <div class="screen-scroll lobby-layout" id="lobbyContent">
+          <aside class="lobby-side lobby-side--left" aria-label="左側功能">
+            <button class="lobby-side-btn" type="button" data-side-action="friends" aria-label="好友">
+              <span class="lobby-side-icon" aria-hidden="true"></span>
+              <span class="lobby-side-label">好友</span>
+            </button>
+            <button class="lobby-side-btn" type="button" data-side-action="mail" aria-label="信箱">
+              <span class="lobby-side-icon" aria-hidden="true"></span>
+              <span class="lobby-side-label">信箱</span>
+            </button>
+          </aside>
+
+          <div class="lobby-main">
+            <div class="online-section">
+              <div class="mode-buttons" id="onlineModeButtons"></div>
+              <div class="online-actions" id="onlineLobbyActions">
+                <button class="btn primary btn-lg" id="findMatchBtn" type="button">開始匹配</button>
+                <button class="btn btn-lg" id="createRoomBtn" type="button">建立房間</button>
+                <div class="online-join-row">
+                  <input class="online-room-input" id="roomCodeInput" type="text" maxlength="6" placeholder="房間碼" autocomplete="off" />
+                  <button class="btn primary" id="joinRoomBtn" type="button">加入</button>
+                </div>
+              </div>
+              <div class="survival-lobby-actions hidden" id="survivalLobbyActions">
+                <button class="btn primary btn-lg" id="startSurvivalLobbyBtn" type="button">開始生存戰</button>
+              </div>
+              <div class="online-waiting hidden" id="onlineWaiting">
+                <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
+                  <p class="online-match-label"><span id="onlineMatchLabelText">匹配中</span><span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+                </div>
+                <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
+                <button class="btn" id="cancelRoomBtn" type="button">取消</button>
               </div>
             </div>
-            <div class="survival-lobby-actions hidden" id="survivalLobbyActions">
-              <button class="btn primary btn-lg" id="startSurvivalLobbyBtn" type="button">開始生存戰</button>
-            </div>
-            <div class="online-waiting hidden" id="onlineWaiting">
-              <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
-                <p class="online-match-label"><span id="onlineMatchLabelText">匹配中</span><span class="online-match-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
-              </div>
-              <p class="online-room-code hidden" id="waitingRoomCodeLine"><strong id="waitingRoomCode"></strong></p>
-              <button class="btn" id="cancelRoomBtn" type="button">取消</button>
-            </div>
+            <button class="btn tutorial-cta hidden" id="startTutorial" type="button">
+              <span class="tutorial-cta-icon">🎓</span>
+              <span class="tutorial-cta-body">
+                <span class="tutorial-cta-title">新手教學</span>
+              </span>
+            </button>
           </div>
-          <button class="btn tutorial-cta hidden" id="startTutorial" type="button">
-            <span class="tutorial-cta-icon">🎓</span>
-            <span class="tutorial-cta-body">
-              <span class="tutorial-cta-title">新手教學</span>
-            </span>
-          </button>
+
+          <aside class="lobby-side lobby-side--right" aria-label="右側功能">
+            <button class="lobby-side-btn" type="button" data-side-action="settings" aria-label="設定">
+              <span class="lobby-side-icon" aria-hidden="true"></span>
+              <span class="lobby-side-label">設定</span>
+            </button>
+          </aside>
         </div>
 
         <div class="screen-scroll battle-layout hidden" id="battleContent">

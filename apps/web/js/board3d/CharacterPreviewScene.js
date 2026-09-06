@@ -16,6 +16,14 @@ import {
   Scene3dDebugHud,
   buildScene3dDebugSnapshot,
 } from './Scene3dDebug.js';
+import {
+  webglRendererOptions,
+  webglPixelRatio,
+  webglShadowMapSize,
+  applyShadowRendererSettings,
+  attachWebGLRecovery,
+  attachPageVisibility,
+} from './WebGLSceneRuntime.js';
 
 const UNIT_BASE_Y = 0.072;
 const PREVIEW_BOARD_SIZE = 7;
@@ -119,11 +127,10 @@ export class CharacterPreviewScene {
     this.camera.position.set(0, 5.5, 5.2);
     this.camera.lookAt(0, 0.45, 0);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer(webglRendererOptions());
+    this.renderer.setPixelRatio(webglPixelRatio());
     this.renderer.setSize(width, height);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    applyShadowRendererSettings(this.renderer);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.3;
     containerEl.appendChild(this.renderer.domElement);
@@ -145,23 +152,23 @@ export class CharacterPreviewScene {
     this.lastValidWidth = width;
     this.lastValidHeight = height;
 
-    this.pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.envMap = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environment = this.envMap;
-    this.scene.environmentIntensity = 0.55;
+    this.pmrem = null;
+    this.envMap = null;
+    this.rebuildEnvironmentMap();
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.42));
     this.scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
 
-    const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
-    keyLight.position.set(4, 8, 4);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
-    keyLight.shadow.camera.left = -3;
-    keyLight.shadow.camera.right = 3;
-    keyLight.shadow.camera.top = 3;
-    keyLight.shadow.camera.bottom = -3;
-    this.scene.add(keyLight);
+    this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
+    this.keyLight.position.set(4, 8, 4);
+    this.keyLight.castShadow = true;
+    const previewShadowSize = webglShadowMapSize();
+    this.keyLight.shadow.mapSize.set(previewShadowSize, previewShadowSize);
+    this.keyLight.shadow.camera.left = -3;
+    this.keyLight.shadow.camera.right = 3;
+    this.keyLight.shadow.camera.top = 3;
+    this.keyLight.shadow.camera.bottom = -3;
+    this.scene.add(this.keyLight);
 
     const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
     fillLight.position.set(-3, 5, -4);
@@ -183,6 +190,20 @@ export class CharacterPreviewScene {
     this.preview = null;
     this.classId = null;
     this.visible = false;
+    this.pageHidden = document.hidden;
+    this.animating = false;
+
+    this.contextRecovery = attachWebGLRecovery(this.renderer, {
+      onRestore: () => this.restoreGpuResources(),
+    });
+    this.detachPageVisibility = attachPageVisibility((hidden) => {
+      this.pageHidden = hidden;
+      if (!hidden && this.shouldRender()) {
+        this.clock.getDelta();
+        this.onResize();
+      }
+      this.updateAnimationLoop();
+    });
 
     this.onResize = this.onResize.bind(this);
     this.resizeObserver = new ResizeObserver(() => {
@@ -190,7 +211,45 @@ export class CharacterPreviewScene {
     });
     this.resizeObserver.observe(containerEl);
 
+    this.updateAnimationLoop();
+  }
+
+  rebuildEnvironmentMap() {
+    this.envMap?.dispose();
+    this.pmrem?.dispose();
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envMap;
+    this.scene.environmentIntensity = 0.55;
+  }
+
+  restoreGpuResources() {
+    this.rebuildEnvironmentMap();
+    this.renderer.setPixelRatio(webglPixelRatio());
+    this.onResize();
+    this.updateAnimationLoop();
+  }
+
+  shouldRender() {
+    return this.visible
+      && Boolean(this.preview)
+      && !this.pageHidden
+      && !this.contextRecovery.isContextLost();
+  }
+
+  updateAnimationLoop() {
+    if (this.shouldRender()) this.startAnimationLoop();
+    else this.stopAnimationLoop();
+  }
+
+  startAnimationLoop() {
+    if (this.animating) return;
+    this.animating = true;
     this.animate();
+  }
+
+  stopAnimationLoop() {
+    this.animating = false;
   }
 
   previewContentBounds() {
@@ -391,6 +450,7 @@ export class CharacterPreviewScene {
     };
 
     if (this.visible) this.onResize();
+    this.updateAnimationLoop();
   }
 
   posePreview(entry, time) {
@@ -508,11 +568,16 @@ export class CharacterPreviewScene {
     if (show) {
       this.onResize();
     }
+    this.updateAnimationLoop();
   }
 
   animate() {
+    if (!this.animating) return;
     requestAnimationFrame(() => this.animate());
-    if (!this.visible || !this.preview) return;
+    if (!this.shouldRender()) {
+      this.stopAnimationLoop();
+      return;
+    }
 
     const time = this.clock.getElapsedTime();
     this.preview.body.rotation.y = Math.sin(time * 0.22) * 0.35;
@@ -543,6 +608,8 @@ export class CharacterPreviewScene {
   }
 
   dispose() {
+    this.stopAnimationLoop();
+    this.detachPageVisibility?.();
     this.resizeObserver?.disconnect();
     this.orbitControls?.dispose();
     this.debugHud?.dispose();
@@ -556,8 +623,8 @@ export class CharacterPreviewScene {
         obj.material?.dispose();
       }
     });
-    this.envMap.dispose();
-    this.pmrem.dispose();
+    this.envMap?.dispose();
+    this.pmrem?.dispose();
     this.renderer.dispose();
     this.container.removeChild(this.renderer.domElement);
   }
