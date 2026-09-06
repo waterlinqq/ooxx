@@ -77,6 +77,7 @@ const SIDE_LABELS = {
   friends: '好友',
   mail: '信箱',
   settings: '設定',
+  account: '帳號',
 };
 
 export function generateSideThumbnails(iconIds = SIDE_ICON_IDS) {

@@ -2264,6 +2264,7 @@ const SIDE_ACTION_LABELS = {
   friends: '好友',
   mail: '信箱',
   settings: '設定',
+  account: '帳號',
 };
 
 lobbyContentEl.addEventListener('click', async (e) => {

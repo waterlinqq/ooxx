@@ -220,13 +220,38 @@ function buildSettingsIcon(mats) {
   return root;
 }
 
+/** 帳號：單人剪影（頭 + 肩），與好友 icon 同系列 */
+function buildAccountIcon(mats) {
+  const root = new THREE.Group();
+  addContactShadow(root, 0.22, 0.45);
+
+  const icon = new THREE.Group();
+  icon.position.y = 0.1;
+
+  part(icon, cached('side-account-head', () => new THREE.SphereGeometry(0.044, 10, 10)), mats.body, {
+    pos: [0, 0.048, 0.01],
+    shadow: true,
+  });
+
+  part(icon, cached('side-account-body', () => new THREE.CylinderGeometry(1, 1.15, 1, 12)), mats.bodyAlt, {
+    pos: [0, -0.006, 0.01],
+    scale: [0.072, 0.068, 0.042],
+    shadow: true,
+  });
+
+  root.add(icon);
+  root.rotation.y = 0.35;
+  return root;
+}
+
 const BUILDERS = {
   friends: buildFriendsIcon,
   mail: buildMailIcon,
   settings: buildSettingsIcon,
+  account: buildAccountIcon,
 };
 
-export const SIDE_ICON_IDS = ['friends', 'mail', 'settings'];
+export const SIDE_ICON_IDS = ['friends', 'mail', 'settings', 'account'];
 
 export function buildSideIconModel(iconId) {
   const builder = BUILDERS[iconId];

@@ -43,11 +43,11 @@ function roomStatePayload(match, guests) {
   const players = [];
   if (match.blue_guest_id) {
     const g = guests.find((x) => x.id === match.blue_guest_id);
-    players.push({ guestId: match.blue_guest_id, nickname: g?.nickname ?? '玩家 1', slot: 'host' });
+    players.push({ guestId: match.blue_guest_id, nickname: g?.nickname ?? 'Player 1', slot: 'host' });
   }
   if (match.red_guest_id) {
     const g = guests.find((x) => x.id === match.red_guest_id);
-    players.push({ guestId: match.red_guest_id, nickname: g?.nickname ?? '玩家 2', slot: 'guest' });
+    players.push({ guestId: match.red_guest_id, nickname: g?.nickname ?? 'Player 2', slot: 'guest' });
   }
   return {
     roomCode: match.room_code,

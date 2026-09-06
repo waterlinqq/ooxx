@@ -1,4 +1,5 @@
 import { apiUrl } from './config.js';
+import { getPlayerNickname } from './playerName.js';
 
 const TOKEN_KEY = 'ooxx-guest-token';
 
@@ -18,7 +19,7 @@ async function createGuestToken() {
   const res = await fetch(apiUrl('/api/guest'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ nickname: getPlayerNickname() }),
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error('無法建立訪客身份');

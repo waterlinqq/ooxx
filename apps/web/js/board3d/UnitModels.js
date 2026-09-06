@@ -163,14 +163,14 @@ function roundedRectShape(w, h, r) {
   return shape;
 }
 
-function extrude(shape, depth, bevel = 0.006) {
+function extrude(shape, depth, bevel = 0.006, curveSegments = 6) {
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth,
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 2,
-    curveSegments: 8,
+    bevelSegments: 1,
+    curveSegments,
   });
   geometry.translate(0, 0, -depth / 2);
   geometry.computeVertexNormals();
@@ -204,6 +204,30 @@ function featherGeometry(length, width, thickness = 0.011) {
     shape.quadraticCurveTo(length, -halfW * 0.32, length * 0.84, -halfW * 0.6);
     shape.quadraticCurveTo(length * 0.34, -halfW, 0, 0);
     return extrude(shape, thickness, thickness * 0.35);
+  });
+}
+
+// Lower-segment feathers for the eagle — keeps silhouette while cutting triangles.
+function eagleFeatherGeometry(length, width, thickness = 0.012) {
+  return cached(`eagle-feather-${length}-${width}-${thickness}`, () => {
+    const shape = new THREE.Shape();
+    const halfW = width / 2;
+    shape.moveTo(0, 0);
+    shape.quadraticCurveTo(length * 0.34, halfW, length * 0.84, halfW * 0.6);
+    shape.quadraticCurveTo(length, halfW * 0.32, length, 0);
+    shape.quadraticCurveTo(length, -halfW * 0.32, length * 0.84, -halfW * 0.6);
+    shape.quadraticCurveTo(length * 0.34, -halfW, 0, 0);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: true,
+      bevelThickness: thickness * 0.25,
+      bevelSize: thickness * 0.25,
+      bevelSegments: 1,
+      curveSegments: 4,
+    });
+    geometry.translate(0, 0, -thickness / 2);
+    geometry.computeVertexNormals();
+    return geometry;
   });
 }
 
@@ -342,13 +366,13 @@ function addPauldrons(
   { y = 0.575, x = 0.168, radius = 0.082, material = mats.armor, rimMaterial = mats.trim } = {}
 ) {
   const capGeo = cached(`pauldron-cap-${radius}`, () =>
-    new THREE.SphereGeometry(radius, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)
+    new THREE.SphereGeometry(radius, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55)
   );
   const lameGeo = cached(`pauldron-lame-${radius}`, () =>
-    new THREE.SphereGeometry(radius * 0.99, 16, 10, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.24)
+    new THREE.SphereGeometry(radius * 0.99, 12, 8, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.24)
   );
   const rimGeo = cached(`pauldron-rim-${radius}`, () =>
-    new THREE.TorusGeometry(radius * 0.86, radius * 0.1, 6, 20)
+    new THREE.TorusGeometry(radius * 0.86, radius * 0.1, 5, 14)
   );
 
   for (const side of [-1, 1]) {
@@ -394,23 +418,22 @@ function addHood(parent, mats, { y = 0.7, radius = 0.134, open = 0.95, trimMater
   // Wraps everything but a wedge at the front; a closed shell just swallowed
   // the face and left a featureless blue egg.
   part(hood, cached(`hood-shell-${radius}-${open}`, () =>
-    new THREE.SphereGeometry(radius, 22, 14, Math.PI / 2 + open, Math.PI * 2 - open * 2, 0, Math.PI * 0.66)
+    new THREE.SphereGeometry(radius, 14, 10, Math.PI / 2 + open, Math.PI * 2 - open * 2, 0, Math.PI * 0.66)
   ), mats.cloth, {
     pos: [0, 0.014, -0.02],
     scale: [1, 0.98, 1.12],
   });
-  part(hood, cached('hood-drape', () => new THREE.SphereGeometry(0.118, 16, 12, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.46)), mats.cloth, {
+  part(hood, cached('hood-drape', () => new THREE.SphereGeometry(0.118, 12, 8, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.46)), mats.cloth, {
     pos: [0, -0.012, -0.072],
     rot: [0.38, 0, 0],
     scale: [1.06, 1.7, 0.86],
   });
-  // Brow arc frames the face opening so the eyes still read from the front.
-  part(hood, cached('hood-brow', () => new THREE.TorusGeometry(0.107, 0.026, 8, 22, Math.PI * 1.26)), trimMaterial ?? mats.cloth, {
+  part(hood, cached('hood-brow', () => new THREE.TorusGeometry(0.107, 0.026, 6, 14, Math.PI * 1.26)), trimMaterial ?? mats.cloth, {
     pos: [0, 0.004, 0.03],
     rot: [-0.3, 0, Math.PI * -0.13],
     scale: [1, 1, 0.8],
   });
-  part(hood, cached('hood-collar', () => new THREE.TorusGeometry(0.102, 0.03, 8, 20)), mats.cloth, {
+  part(hood, cached('hood-collar', () => new THREE.TorusGeometry(0.102, 0.03, 6, 14)), mats.cloth, {
     pos: [0, -0.088, -0.014],
     rot: [-Math.PI / 2 + 0.16, 0, 0],
     scale: [1, 1.08, 1],
@@ -445,18 +468,12 @@ function buildSword(mats, { length = 0.34 } = {}) {
 // edge-on, as it was, the bow vanished into a single vertical line.
 function buildBow(mats) {
   const bow = new THREE.Group();
-  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.185, 0.015, 6, 24, Math.PI * 1.12)), mats.wood, {
+  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.185, 0.015, 5, 14, Math.PI * 1.12)), mats.wood, {
     rot: [0, 0, Math.PI * 0.44],
   });
-  part(bow, cached('bow-grip', () => new THREE.CylinderGeometry(0.022, 0.022, 0.075, 8)), mats.leather, {
+  part(bow, cached('bow-grip', () => new THREE.CylinderGeometry(0.022, 0.022, 0.075, 6)), mats.leather, {
     pos: [-0.183, 0, 0],
   });
-  for (const side of [-1, 1]) {
-    part(bow, cached('bow-tip', () => new THREE.SphereGeometry(0.019, 8, 8)), mats.gold, {
-      pos: [0.035, side * 0.182, 0],
-      shadow: false,
-    });
-  }
   const string = part(bow, cached('bow-string', () => new THREE.CylinderGeometry(0.004, 0.004, 0.362, 4)), mats.trim, {
     pos: [0.035, 0, 0],
     shadow: false,
@@ -476,8 +493,8 @@ function buildBow(mats) {
 
 function buildQuiver(mats) {
   const quiver = new THREE.Group();
-  part(quiver, cached('quiver-body', () => new THREE.CylinderGeometry(0.048, 0.042, 0.22, 12)), mats.leather);
-  part(quiver, cached('quiver-band', () => new THREE.TorusGeometry(0.05, 0.008, 6, 14)), mats.gold, {
+  part(quiver, cached('quiver-body', () => new THREE.CylinderGeometry(0.048, 0.042, 0.22, 8)), mats.leather);
+  part(quiver, cached('quiver-band', () => new THREE.TorusGeometry(0.05, 0.008, 5, 12)), mats.gold, {
     pos: [0, 0.06, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
@@ -486,7 +503,6 @@ function buildQuiver(mats) {
   const spots = [
     [0, 0.19, 0],
     [0.026, 0.175, 0.018],
-    [-0.024, 0.18, -0.016],
   ];
   spots.forEach(([x, y, z], i) => {
     part(quiver, shaft, mats.wood, { pos: [x, y, z], rot: [0, 0, i * 0.06 - 0.06] });
@@ -507,11 +523,11 @@ function buildStaff(mats) {
     pos: [0, 0.44, 0],
     rot: [0, 0, Math.PI * 0.25],
   });
-  const orb = part(staff, cached('staff-orb', () => new THREE.SphereGeometry(0.048, 16, 14)), mats.arcane, {
+  const orb = part(staff, cached('staff-orb', () => new THREE.SphereGeometry(0.048, 12, 10)), mats.arcane, {
     pos: [0, 0.445, 0],
     shadow: false,
   });
-  const runeRing = part(staff, cached('rune-ring', () => new THREE.TorusGeometry(0.082, 0.006, 6, 28)), mats.arcane, {
+  const runeRing = part(staff, cached('rune-ring', () => new THREE.TorusGeometry(0.082, 0.006, 5, 14)), mats.arcane, {
     pos: [0, 0.445, 0],
     rot: [Math.PI / 2.4, 0, 0],
     shadow: false,
@@ -699,23 +715,30 @@ function buildSwordsman(mats) {
   part(torso, cached('chest-plate', () => new THREE.BoxGeometry(0.16, 0.13, 0.03)), mats.trim, {
     pos: [0, 0.03, 0.098],
   });
+  part(torso, cached('swordsman-belt', () => new THREE.BoxGeometry(0.2, 0.05, 0.05)), mats.leather, {
+    pos: [0, -0.08, 0.09],
+  });
+  part(torso, cached('swordsman-buckle', () => new THREE.BoxGeometry(0.05, 0.06, 0.02)), mats.gold, {
+    pos: [0, -0.08, 0.115],
+    shadow: false,
+  });
   addPauldrons(group, mats);
   addGorget(group, mats);
   addCape(group, mats);
   const armL = addArm(group, mats, -1, {});
   const armR = addArm(group, mats, 1, {});
   const head = addHead(group, mats);
-  const eyes = addEyes(head, mats);
-  part(head, cached('helm-shell', () => new THREE.SphereGeometry(0.128, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.56)), mats.armor, {
+  const eyes = addEyes(head, mats, { socket: false });
+  part(head, cached('helm-shell', () => new THREE.SphereGeometry(0.128, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.56)), mats.armor, {
     pos: [0, 0.014, 0],
     scale: [1, 1.02, 1],
   });
-  part(head, cached('helm-brim', () => new THREE.TorusGeometry(0.116, 0.013, 8, 20)), mats.trim, {
+  part(head, cached('helm-brim', () => new THREE.TorusGeometry(0.116, 0.013, 6, 14)), mats.trim, {
     pos: [0, 0.036, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
-  part(head, cached('helm-crest', () => new THREE.BoxGeometry(0.02, 0.062, 0.17)), mats.trim, {
-    pos: [0, 0.115, -0.012],
+  part(head, cached('helm-crest', () => new THREE.BoxGeometry(0.024, 0.07, 0.19)), mats.trim, {
+    pos: [0, 0.12, -0.01],
   });
 
   const sword = buildSword(mats);
@@ -740,7 +763,7 @@ function buildArcher(mats) {
   const armL = addArm(group, mats, -1, { shoulderX: 0.155, sleeveMat: mats.cloth });
   const armR = addArm(group, mats, 1, { shoulderX: 0.155, sleeveMat: mats.cloth });
   const head = addHead(group, mats, { y: 0.715 });
-  const eyes = addEyes(head, mats, { y: 0.004 });
+  const eyes = addEyes(head, mats, { y: 0.004, socket: false });
   const hood = addHood(group, mats, { y: 0.735 });
 
   const quiver = buildQuiver(mats);
@@ -780,14 +803,14 @@ function buildShield(mats) {
   const armL = addArm(group, mats, -1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
   const armR = addArm(group, mats, 1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
   const head = addHead(group, mats, { y: 0.7, radius: 0.105 });
-  const eyes = addEyes(head, mats, { z: 0.102, y: 0.008, size: 0.014 });
+  const eyes = addEyes(head, mats, { z: 0.102, y: 0.008, size: 0.014, socket: false });
   // Flat-topped great helm: a sphere just read as a shiny bald head under the
   // shoulder plates.
-  part(head, cached('great-helm', () => new THREE.CylinderGeometry(0.114, 0.126, 0.19, 14)), mats.steel, {
+  part(head, cached('great-helm', () => new THREE.CylinderGeometry(0.114, 0.126, 0.19, 10)), mats.steel, {
     pos: [0, 0.026, 0],
     scale: [1, 1, 0.94],
   });
-  part(head, cached('great-helm-crown', () => new THREE.SphereGeometry(0.114, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mats.steel, {
+  part(head, cached('great-helm-crown', () => new THREE.SphereGeometry(0.114, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mats.steel, {
     pos: [0, 0.12, 0],
     scale: [1, 0.5, 0.94],
   });
@@ -797,7 +820,7 @@ function buildShield(mats) {
   part(head, cached('great-helm-nasal', () => new THREE.BoxGeometry(0.028, 0.12, 0.03)), mats.charcoal, {
     pos: [0, -0.028, 0.104],
   });
-  part(head, cached('great-helm-band', () => new THREE.TorusGeometry(0.118, 0.014, 8, 22)), mats.gold, {
+  part(head, cached('great-helm-band', () => new THREE.TorusGeometry(0.118, 0.014, 6, 14)), mats.gold, {
     pos: [0, 0.084, 0],
     rot: [-Math.PI / 2, 0, 0],
     scale: [1, 0.94, 1],
@@ -812,7 +835,7 @@ function buildShield(mats) {
 
   const shield = new THREE.Group();
   part(shield, shieldGeometry(), mats.armor);
-  part(shield, cached('shield-boss', () => new THREE.SphereGeometry(0.052, 14, 10)), mats.gold, {
+  part(shield, cached('shield-boss', () => new THREE.SphereGeometry(0.052, 10, 8)), mats.gold, {
     pos: [0, 0, 0.032],
     scale: [1, 1, 0.6],
   });
@@ -842,8 +865,8 @@ function buildShield(mats) {
   });
   // Flanges instead of a single lump: the profile has to survive being 40px tall.
   const flangeGeo = cached('mace-flange', () => new THREE.BoxGeometry(0.026, 0.098, 0.06));
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2;
+  for (let i = 0; i < 2; i++) {
+    const angle = i * Math.PI;
     part(mace, flangeGeo, mats.steel, {
       pos: [Math.sin(angle) * 0.05, 0.155, Math.cos(angle) * 0.05],
       rot: [0, angle, 0],
@@ -870,15 +893,15 @@ function addRobeFeet(parent, mats, { y = 0.032, x = 0.072, z = 0.185 } = {}) {
 
 function buildMage(mats) {
   const group = new THREE.Group();
-  const robe = part(group, cached('robe', () => new THREE.CylinderGeometry(0.14, 0.28, 0.38, 16, 2, true)), mats.cloth, {
+  const robe = part(group, cached('robe', () => new THREE.CylinderGeometry(0.14, 0.28, 0.38, 12, 2, true)), mats.cloth, {
     pos: [0, 0.19, 0],
   });
   addRobeFeet(group, mats, { z: 0.2 });
-  part(group, cached('robe-hem', () => new THREE.TorusGeometry(0.275, 0.016, 8, 26)), mats.trim, {
+  part(group, cached('robe-hem', () => new THREE.TorusGeometry(0.275, 0.016, 6, 14)), mats.trim, {
     pos: [0, 0.014, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
-  part(group, cached('robe-hem-trim', () => new THREE.TorusGeometry(0.243, 0.012, 8, 26)), mats.gold, {
+  part(group, cached('robe-hem-trim', () => new THREE.TorusGeometry(0.243, 0.012, 6, 14)), mats.gold, {
     pos: [0, 0.075, 0],
     rot: [-Math.PI / 2, 0, 0],
     shadow: false,
@@ -888,29 +911,40 @@ function buildMage(mats) {
     pos: [0.01, 0.0, 0.095],
     rot: [0, 0, 0.36],
   });
-  part(torso, cached('mage-brooch', () => new THREE.SphereGeometry(0.026, 12, 10)), mats.arcane, {
+  part(torso, cached('mage-brooch', () => new THREE.SphereGeometry(0.026, 10, 8)), mats.arcane, {
     pos: [0, 0.09, 0.1],
     shadow: false,
   });
+  part(torso, cached('mage-collar', () => new THREE.TorusGeometry(0.09, 0.018, 5, 14)), mats.trim, {
+    pos: [0, 0.11, 0.02],
+    rot: [-Math.PI / 2 + 0.2, 0, 0],
+    scale: [1, 1, 0.82],
+  });
+  for (const side of [-1, 1]) {
+    part(group, cached('mage-mantle', () => new THREE.BoxGeometry(0.11, 0.05, 0.14)), mats.cloth, {
+      pos: [side * 0.16, 0.56, -0.02],
+      rot: [0.12, 0, side * -0.28],
+    });
+  }
   const armL = addArm(group, mats, -1, { shoulderX: 0.15, shoulderY: 0.56, sleeveMat: mats.cloth });
   const armR = addArm(group, mats, 1, { shoulderX: 0.15, shoulderY: 0.56, sleeveMat: mats.cloth });
   const head = addHead(group, mats, { y: 0.72, radius: 0.107 });
-  const eyes = addEyes(head, mats, { y: -0.005, z: 0.096, size: 0.015 });
-  part(head, cached('beard', () => new THREE.ConeGeometry(0.06, 0.14, 10)), mats.trim, {
+  const eyes = addEyes(head, mats, { y: -0.005, z: 0.096, size: 0.015, socket: false });
+  part(head, cached('beard', () => new THREE.ConeGeometry(0.06, 0.14, 8)), mats.trim, {
     pos: [0, -0.09, 0.055],
     rot: [0.24, 0, 0],
   });
   const hat = new THREE.Group();
   hat.position.set(0, 0.075, 0);
-  part(hat, cached('hat-brim', () => new THREE.TorusGeometry(0.13, 0.024, 8, 22)), mats.cloth, {
+  part(hat, cached('hat-brim', () => new THREE.TorusGeometry(0.13, 0.024, 6, 14)), mats.cloth, {
     rot: [-Math.PI / 2, 0, 0],
     scale: [1, 1, 0.7],
   });
-  part(hat, cached('hat-cone', () => new THREE.ConeGeometry(0.125, 0.24, 14, 2)), mats.cloth, {
+  part(hat, cached('hat-cone', () => new THREE.ConeGeometry(0.125, 0.24, 10, 2)), mats.cloth, {
     pos: [0, 0.13, -0.012],
     rot: [-0.14, 0, 0.05],
   });
-  part(hat, cached('hat-band', () => new THREE.TorusGeometry(0.104, 0.016, 8, 20)), mats.trim, {
+  part(hat, cached('hat-band', () => new THREE.TorusGeometry(0.104, 0.016, 6, 14)), mats.trim, {
     pos: [0, 0.038, -0.004],
     rot: [-Math.PI / 2, 0, 0],
   });
@@ -1207,10 +1241,10 @@ function buildBomber(mats) {
   const legs = addLegs(group, mats, { spread: 0.086, legLength: 0.11, bootMat: mats.charcoal });
   const torso = new THREE.Group();
   torso.position.set(0, 0.42, 0);
-  part(torso, cached('bomber-belly', () => new THREE.SphereGeometry(0.17, 16, 14)), mats.armor, {
+  part(torso, cached('bomber-belly', () => new THREE.SphereGeometry(0.17, 12, 10)), mats.armor, {
     scale: [1, 0.92, 0.88],
   });
-  part(torso, cached('bomber-belt', () => new THREE.TorusGeometry(0.15, 0.022, 8, 22)), mats.leather, {
+  part(torso, cached('bomber-belt', () => new THREE.TorusGeometry(0.15, 0.022, 6, 14)), mats.leather, {
     pos: [0, -0.06, 0],
     rot: [-Math.PI / 2, 0, 0],
     scale: [1, 1, 0.9],
@@ -1222,13 +1256,13 @@ function buildBomber(mats) {
   // Bandolier of spare charges: the belly alone gave no hint of the class.
   const bandolier = new THREE.Group();
   bandolier.rotation.z = 0.6;
-  part(bandolier, cached('bomber-strap', () => new THREE.TorusGeometry(0.158, 0.019, 8, 24)), mats.leather, {
+  part(bandolier, cached('bomber-strap', () => new THREE.TorusGeometry(0.158, 0.019, 6, 14)), mats.leather, {
     rot: [-Math.PI / 2, 0, 0],
     scale: [1, 1, 0.86],
   });
-  const chargeGeo = cached('bomber-charge', () => new THREE.SphereGeometry(0.032, 12, 10));
-  const capGeo = cached('bomber-charge-cap', () => new THREE.CylinderGeometry(0.012, 0.014, 0.018, 8));
-  for (const angle of [0.75, 1.3, 1.85]) {
+  const chargeGeo = cached('bomber-charge', () => new THREE.SphereGeometry(0.032, 8, 6));
+  const capGeo = cached('bomber-charge-cap', () => new THREE.CylinderGeometry(0.012, 0.014, 0.018, 6));
+  for (const angle of [1.1, 1.75]) {
     const x = Math.cos(angle) * 0.158;
     const z = Math.sin(angle) * 0.158 * 0.86;
     part(bandolier, chargeGeo, mats.charcoal, { pos: [x, 0, z] });
@@ -1240,15 +1274,13 @@ function buildBomber(mats) {
   const armL = addArm(group, mats, -1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
   const armR = addArm(group, mats, 1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
   const head = addHead(group, mats, { y: 0.66, radius: 0.108 });
-  const eyes = addEyes(head, mats, { y: -0.046, z: 0.094, spread: 0.042, size: 0.013 });
+  const eyes = addEyes(head, mats, { y: -0.046, z: 0.094, spread: 0.042, size: 0.013, socket: false });
 
-  // Flight cap with ear flaps. The shell stops above the brow line so the
-  // goggles below it are not buried inside the leather.
-  part(head, cached('bomber-cap', () => new THREE.SphereGeometry(0.118, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.44)), mats.leather, {
+  part(head, cached('bomber-cap', () => new THREE.SphereGeometry(0.118, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.44)), mats.leather, {
     pos: [0, 0.03, -0.004],
     scale: [1, 1.05, 1],
   });
-  const flapGeo = cached('bomber-earflap', () => new THREE.SphereGeometry(0.052, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62));
+  const flapGeo = cached('bomber-earflap', () => new THREE.SphereGeometry(0.052, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.62));
   for (const side of [-1, 1]) {
     part(head, flapGeo, mats.leather, {
       pos: [side * 0.098, 0.006, -0.008],
@@ -1256,22 +1288,20 @@ function buildBomber(mats) {
       scale: [1, 1.35, 1],
     });
   }
-  part(head, cached('bomber-cap-seam', () => new THREE.TorusGeometry(0.113, 0.011, 6, 22)), mats.charcoal, {
+  part(head, cached('bomber-cap-seam', () => new THREE.TorusGeometry(0.113, 0.011, 5, 14)), mats.charcoal, {
     pos: [0, 0.058, 0],
     rot: [-Math.PI / 2, 0, 0],
     scale: [0.86, 0.86, 1],
     shadow: false,
   });
 
-  const goggleLens = cached('goggle-lens', () => new THREE.CylinderGeometry(0.034, 0.034, 0.024, 14));
-  const goggleRim = cached('goggle-rim', () => new THREE.TorusGeometry(0.037, 0.011, 6, 18));
+  const goggleLens = cached('goggle-lens', () => new THREE.CylinderGeometry(0.034, 0.034, 0.024, 8));
   for (const side of [-1, 1]) {
     part(head, goggleLens, mats.ember, {
       pos: [side * 0.043, 0.03, 0.094],
       rot: [Math.PI / 2 - 0.14, 0, 0],
       shadow: false,
     });
-    part(head, goggleRim, mats.steel, { pos: [side * 0.043, 0.03, 0.098], rot: [0.14, 0, 0] });
   }
   part(head, cached('goggle-bridge', () => new THREE.BoxGeometry(0.03, 0.014, 0.02)), mats.steel, {
     pos: [0, 0.03, 0.101],
@@ -1279,12 +1309,12 @@ function buildBomber(mats) {
   });
   // Open at the front so the strap runs behind the head instead of across the
   // lenses it is supposed to be holding on.
-  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.112, 0.013, 6, 22, Math.PI * 1.2)), mats.charcoal, {
+  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.112, 0.013, 5, 14, Math.PI * 1.2)), mats.charcoal, {
     pos: [0, 0.03, -0.004],
     rot: [Math.PI / 2 - 0.14, 0, Math.PI * 0.7],
     scale: [1, 1, 0.92],
   });
-  part(head, cached('bomber-scarf', () => new THREE.TorusGeometry(0.085, 0.028, 8, 18)), mats.cloth, {
+  part(head, cached('bomber-scarf', () => new THREE.TorusGeometry(0.085, 0.028, 6, 14)), mats.cloth, {
     pos: [0, -0.086, -0.006],
     rot: [-Math.PI / 2 + 0.12, 0, 0],
     scale: [1, 1.1, 1],
@@ -1325,45 +1355,44 @@ function addWingFeather(wing, geometry, material, { yaw, droop = 0, x, y = 0, z 
 function buildEagleWing(mats) {
   const wing = new THREE.Group();
 
-  part(wing, cached('eagle-shoulder', () => new THREE.SphereGeometry(0.075, 14, 10)), mats.armor, {
+  part(wing, cached('eagle-shoulder-lite', () => new THREE.SphereGeometry(0.075, 10, 8)), mats.armor, {
     pos: [0.055, 0, -0.01],
     scale: [1.7, 0.62, 1.3],
   });
-  part(wing, cached('eagle-radius', () => new THREE.CapsuleGeometry(0.026, 0.16, 5, 10)), mats.armorDeep, {
+  part(wing, cached('eagle-radius-lite', () => new THREE.CapsuleGeometry(0.026, 0.16, 4, 6)), mats.armorDeep, {
     pos: [0.16, -0.004, 0.012],
     rot: [0, 0, Math.PI / 2],
   });
 
-  const primaries = 6;
+  const primaries = 4;
   for (let i = 0; i < primaries; i++) {
     const p = i / (primaries - 1);
-    addWingFeather(wing, featherGeometry(0.26 - p * 0.055, 0.086, 0.016), i % 2 ? mats.armorDeep : mats.armor, {
-      yaw: 0.2 + p * 0.66,
-      droop: -0.06 - p * 0.16,
-      x: 0.16,
+    addWingFeather(wing, eagleFeatherGeometry(0.28 - p * 0.05, 0.09, 0.014), i % 2 ? mats.armorDeep : mats.armor, {
+      yaw: 0.2 + p * 0.68,
+      droop: -0.06 - p * 0.15,
+      x: 0.15,
       y: -0.006 - p * 0.005,
     });
   }
 
-  const secondaries = 5;
+  const secondaries = 3;
   for (let i = 0; i < secondaries; i++) {
     const p = i / (secondaries - 1);
-    addWingFeather(wing, featherGeometry(0.17 - p * 0.04, 0.08, 0.016), i % 2 ? mats.armor : mats.armorDeep, {
-      yaw: 0.92 + p * 0.36,
+    addWingFeather(wing, eagleFeatherGeometry(0.16 - p * 0.035, 0.075, 0.013), i % 2 ? mats.armor : mats.armorDeep, {
+      yaw: 0.88 + p * 0.38,
       droop: -0.03,
-      x: 0.05 + p * 0.065,
+      x: 0.055 + p * 0.06,
       y: -0.004,
     });
   }
 
-  const coverts = 5;
-  for (let i = 0; i < coverts; i++) {
-    const p = i / (coverts - 1);
-    addWingFeather(wing, featherGeometry(0.1 - p * 0.018, 0.062, 0.014), mats.trim, {
-      yaw: 0.36 + p * 0.52,
-      droop: 0.06,
-      x: 0.048 + p * 0.05,
-      y: 0.028,
+  for (let i = 0; i < 2; i++) {
+    const p = i;
+    addWingFeather(wing, eagleFeatherGeometry(0.09 - p * 0.015, 0.055, 0.012), mats.trim, {
+      yaw: 0.4 + p * 0.45,
+      droop: 0.05,
+      x: 0.05 + p * 0.045,
+      y: 0.026,
     });
   }
 
@@ -1375,21 +1404,21 @@ function buildEagle(mats) {
 
   const torso = part(
     group,
-    cached('eagle-body', () => new THREE.SphereGeometry(0.19, 18, 14)),
+    cached('eagle-body-lite', () => new THREE.SphereGeometry(0.19, 12, 10)),
     mats.armorDeep,
     { pos: [0, 0.38, -0.01], scale: [0.74, 0.98, 1.5], rot: [0.2, 0, 0] }
   );
 
   const chest = part(
     group,
-    cached('eagle-chest', () => new THREE.SphereGeometry(0.14, 16, 12)),
+    cached('eagle-chest-lite', () => new THREE.SphereGeometry(0.14, 12, 10)),
     mats.armor,
     { pos: [0, 0.4, 0.15], scale: [0.84, 1.18, 0.68] }
   );
-  // Ruff where the white head meets the dark body, the way a bald eagle reads.
-  const ruffGeo = cached('eagle-ruff', () => featherGeometry(0.075, 0.05, 0.009));
-  for (let i = 0; i < 7; i++) {
-    const angle = -0.95 + (i / 6) * 1.9;
+
+  const ruffGeo = cached('eagle-ruff-lite', () => eagleFeatherGeometry(0.07, 0.048, 0.009));
+  for (let i = 0; i < 4; i++) {
+    const angle = -0.7 + (i / 3) * 1.4;
     part(group, ruffGeo, mats.trim, {
       pos: [Math.sin(angle) * 0.115, 0.5, 0.11 + Math.cos(angle) * 0.055],
       rot: [-Math.PI / 2 + 1.15, angle, 0],
@@ -1399,36 +1428,29 @@ function buildEagle(mats) {
 
   const head = new THREE.Group();
   head.position.set(0, 0.57, 0.22);
-  part(head, cached('eagle-head', () => new THREE.SphereGeometry(0.108, 18, 14)), mats.trim, {
+  part(head, cached('eagle-head-lite', () => new THREE.SphereGeometry(0.108, 12, 10)), mats.trim, {
     scale: [0.94, 1, 1.1],
   });
-  // Heavy brow shading the eyes is what makes a raptor look like a raptor.
-  part(head, cached('eagle-brow', () => new THREE.BoxGeometry(0.165, 0.03, 0.06)), mats.steel, {
+  part(head, cached('eagle-brow-lite', () => new THREE.BoxGeometry(0.165, 0.03, 0.06)), mats.steel, {
     pos: [0, 0.042, 0.072],
     rot: [0.34, 0, 0],
   });
-  part(head, cached('eagle-cere', () => new THREE.SphereGeometry(0.05, 12, 10)), mats.gold, {
+  part(head, cached('eagle-cere-lite', () => new THREE.SphereGeometry(0.05, 8, 8)), mats.gold, {
     pos: [0, 0.006, 0.086],
     scale: [1, 0.85, 0.7],
   });
-  part(head, cached('eagle-beak', () => new THREE.ConeGeometry(0.045, 0.15, 10)), mats.gold, {
-    pos: [0, -0.012, 0.145],
+  part(head, cached('eagle-beak-lite', () => new THREE.ConeGeometry(0.045, 0.17, 8)), mats.gold, {
+    pos: [0, -0.014, 0.15],
     rot: [Math.PI / 2 - 0.22, 0, 0],
-    scale: [1, 1, 0.72],
+    scale: [1, 1, 0.75],
   });
-  part(head, cached('eagle-beak-hook', () => new THREE.ConeGeometry(0.022, 0.055, 8)), mats.gold, {
-    pos: [0, -0.014, 0.202],
-    rot: [-1.05, 0, 0],
-    shadow: false,
-  });
-  const eyes = addEyes(head, mats, { z: 0.088, y: 0.014, spread: 0.055, size: 0.016 });
+  const eyes = addEyes(head, mats, { z: 0.088, y: 0.014, spread: 0.055, size: 0.016, socket: false });
   group.add(head);
 
   const wings = {};
   for (const side of [-1, 1]) {
     const wing = buildEagleWing(mats);
     wing.position.set(side * 0.1, 0.45, 0);
-    // Dihedral: flat wings read as an aeroplane from the front.
     wing.rotation.z = side * 0.3;
     wing.scale.x = side;
     group.add(wing);
@@ -1438,12 +1460,11 @@ function buildEagle(mats) {
   const tail = new THREE.Group();
   tail.position.set(0, 0.27, -0.28);
   tail.rotation.x = 0.16;
-  for (let i = 0; i < 5; i++) {
-    const spread = (i / 4 - 0.5) * 0.85;
+  for (let i = 0; i < 3; i++) {
+    const spread = (i / 2 - 0.5) * 0.75;
     const pivot = new THREE.Group();
-    // Ry of +PI/2 aims the feather down -Z; spread fans it out from there.
     pivot.rotation.set(0, Math.PI / 2 + spread, -0.16);
-    part(pivot, featherGeometry(0.24 - Math.abs(spread) * 0.07, 0.08, 0.014), i % 2 ? mats.trim : mats.steel, {
+    part(pivot, eagleFeatherGeometry(0.22 - Math.abs(spread) * 0.06, 0.078, 0.014), i % 2 ? mats.trim : mats.steel, {
       pos: [0.02, 0, 0],
       rot: [-Math.PI / 2, 0, 0],
       shadow: false,
@@ -1452,11 +1473,11 @@ function buildEagle(mats) {
   }
   group.add(tail);
 
-  const toeGeo = cached('eagle-toe', () => new THREE.ConeGeometry(0.015, 0.075, 6));
+  const toeGeo = cached('eagle-toe-lite', () => new THREE.ConeGeometry(0.015, 0.075, 5));
   for (const side of [-1, 1]) {
     const foot = new THREE.Group();
     foot.position.set(side * 0.07, 0.21, 0.05);
-    part(foot, cached('eagle-shank', () => new THREE.CylinderGeometry(0.022, 0.026, 0.075, 8)), mats.gold, {
+    part(foot, cached('eagle-shank-lite', () => new THREE.CylinderGeometry(0.022, 0.026, 0.075, 6)), mats.gold, {
       pos: [0, 0.03, 0],
     });
     for (const [tx, tz, tilt] of [[0.03, 0.05, 0.7], [-0.03, 0.05, 0.7], [0, -0.045, -0.8]]) {
@@ -1482,35 +1503,28 @@ function buildEagle(mats) {
 function buildBombard(mats) {
   const cannon = new THREE.Group();
 
-  part(cannon, cached('bombard-tube', () => new THREE.CylinderGeometry(0.058, 0.048, 0.34, 14)), mats.steel, {
+  part(cannon, cached('bombard-tube', () => new THREE.CylinderGeometry(0.058, 0.048, 0.34, 8)), mats.steel, {
     pos: [0, 0.07, 0],
   });
-  part(cannon, cached('bombard-mouth', () => new THREE.CylinderGeometry(0.076, 0.06, 0.06, 14)), mats.gold, {
+  part(cannon, cached('bombard-mouth', () => new THREE.CylinderGeometry(0.076, 0.06, 0.06, 8)), mats.gold, {
     pos: [0, 0.265, 0],
   });
-  part(cannon, cached('bombard-bore', () => new THREE.CylinderGeometry(0.05, 0.05, 0.03, 12)), mats.charcoal, {
+  part(cannon, cached('bombard-bore', () => new THREE.CylinderGeometry(0.05, 0.05, 0.03, 6)), mats.charcoal, {
     pos: [0, 0.285, 0],
     shadow: false,
   });
-  const bandGeo = cached('bombard-band', () => new THREE.TorusGeometry(0.06, 0.013, 8, 18));
+  const bandGeo = cached('bombard-band', () => new THREE.TorusGeometry(0.06, 0.013, 5, 12));
   part(cannon, bandGeo, mats.gold, { pos: [0, 0.16, 0], rot: [-Math.PI / 2, 0, 0] });
-  part(cannon, bandGeo, mats.gold, { pos: [0, 0.02, 0], rot: [-Math.PI / 2, 0, 0] });
-  part(cannon, cached('bombard-breech', () => new THREE.SphereGeometry(0.062, 14, 12)), mats.charcoal, {
+  part(cannon, cached('bombard-breech', () => new THREE.SphereGeometry(0.062, 10, 8)), mats.charcoal, {
     pos: [0, -0.11, 0],
     scale: [1, 1.15, 1],
   });
-  part(cannon, cached('bombard-touchhole', () => new THREE.CylinderGeometry(0.014, 0.014, 0.05, 8)), mats.gold, {
-    pos: [0, -0.075, -0.055],
-    rot: [-0.5, 0, 0],
-    shadow: false,
-  });
 
-  // Timber stock and fore-grip: gives the hands somewhere believable to sit.
   part(cannon, cached('bombard-stock', () => new THREE.BoxGeometry(0.07, 0.22, 0.06)), mats.wood, {
     pos: [0, -0.15, -0.008],
     rot: [0.22, 0, 0],
   });
-  part(cannon, cached('bombard-grip', () => new THREE.CylinderGeometry(0.019, 0.019, 0.11, 8)), mats.wood, {
+  part(cannon, cached('bombard-grip', () => new THREE.CylinderGeometry(0.019, 0.019, 0.11, 6)), mats.wood, {
     pos: [0, 0.03, 0.075],
     rot: [0, 0, Math.PI / 2],
   });
@@ -1520,16 +1534,15 @@ function buildBombard(mats) {
 
 function buildShellPouch(mats) {
   const pouch = new THREE.Group();
-  part(pouch, cached('shell-pouch', () => new THREE.CylinderGeometry(0.06, 0.052, 0.11, 12)), mats.leather);
-  part(pouch, cached('shell-pouch-lip', () => new THREE.TorusGeometry(0.06, 0.01, 6, 16)), mats.gold, {
+  part(pouch, cached('shell-pouch', () => new THREE.CylinderGeometry(0.06, 0.052, 0.11, 8)), mats.leather);
+  part(pouch, cached('shell-pouch-lip', () => new THREE.TorusGeometry(0.06, 0.01, 5, 12)), mats.gold, {
     pos: [0, 0.052, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
-  const shellGeo = cached('shell-ball', () => new THREE.SphereGeometry(0.03, 12, 10));
+  const shellGeo = cached('shell-ball', () => new THREE.SphereGeometry(0.03, 8, 6));
   const spots = [
     [0.025, 0.072, 0.014],
     [-0.024, 0.068, -0.012],
-    [0.004, 0.078, -0.03],
   ];
   for (const [x, y, z] of spots) {
     part(pouch, shellGeo, mats.charcoal, { pos: [x, y, z] });
@@ -1549,11 +1562,11 @@ function buildArtillery(mats) {
   const armL = addArm(group, mats, -1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
   const armR = addArm(group, mats, 1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
   const head = addHead(group, mats, { y: 0.71, radius: 0.108 });
-  const eyes = addEyes(head, mats, { y: 0.002, z: 0.095, size: 0.014 });
-  part(head, cached('artillery-helm', () => new THREE.SphereGeometry(0.12, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55)), mats.armor, {
+  const eyes = addEyes(head, mats, { y: 0.002, z: 0.095, size: 0.014, socket: false });
+  part(head, cached('artillery-helm', () => new THREE.SphereGeometry(0.12, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)), mats.armor, {
     pos: [0, 0.012, 0],
   });
-  part(head, cached('artillery-helm-rim', () => new THREE.TorusGeometry(0.108, 0.012, 8, 18)), mats.trim, {
+  part(head, cached('artillery-helm-rim', () => new THREE.TorusGeometry(0.108, 0.012, 5, 12)), mats.trim, {
     pos: [0, 0.03, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
@@ -1585,39 +1598,31 @@ function buildArtillery(mats) {
   };
 }
 
-// One bolt thrower, aimed down +Z; four of these on the deck replace the old
-// bolts that speared straight through the middle of the tower.
+// Compact bolt thrower for the arrow tower deck.
 function buildBallista(mats) {
   const ballista = new THREE.Group();
 
-  part(ballista, cached('ballista-mount', () => new THREE.BoxGeometry(0.1, 0.045, 0.1)), mats.armorDeep, {
+  part(ballista, cached('ballista-mount-lite', () => new THREE.BoxGeometry(0.1, 0.045, 0.1)), mats.armorDeep, {
     pos: [0, 0.022, 0],
   });
-  part(ballista, cached('ballista-stock', () => new THREE.BoxGeometry(0.05, 0.042, 0.2)), mats.wood, {
+  part(ballista, cached('ballista-stock-lite', () => new THREE.BoxGeometry(0.05, 0.042, 0.2)), mats.wood, {
     pos: [0, 0.066, 0.045],
     rot: [-0.16, 0, 0],
   });
-  const limbGeo = cached('ballista-limb', () => new THREE.BoxGeometry(0.13, 0.024, 0.024));
-  for (const side of [-1, 1]) {
-    part(ballista, limbGeo, mats.wood, {
-      pos: [side * 0.068, 0.08, 0.085],
-      rot: [0, side * -0.3, side * -0.18],
-    });
-    part(ballista, cached('ballista-nut', () => new THREE.SphereGeometry(0.016, 8, 8)), mats.gold, {
-      pos: [side * 0.128, 0.086, 0.06],
-      shadow: false,
-    });
-  }
-  part(ballista, cached('ballista-string', () => new THREE.BoxGeometry(0.25, 0.008, 0.008)), mats.trim, {
+  part(ballista, cached('ballista-limb-lite', () => new THREE.BoxGeometry(0.24, 0.024, 0.024)), mats.wood, {
+    pos: [0, 0.08, 0.085],
+    rot: [0, 0, 0],
+  });
+  part(ballista, cached('ballista-string-lite', () => new THREE.BoxGeometry(0.22, 0.008, 0.008)), mats.trim, {
     pos: [0, 0.086, 0.058],
     shadow: false,
   });
-  part(ballista, cached('ballista-bolt', () => new THREE.CylinderGeometry(0.011, 0.011, 0.17, 7)), mats.wood, {
-    pos: [0, 0.088, 0.115],
+  part(ballista, cached('ballista-bolt-lite', () => new THREE.CylinderGeometry(0.011, 0.011, 0.2, 6)), mats.wood, {
+    pos: [0, 0.088, 0.13],
     rot: [Math.PI / 2 - 0.14, 0, 0],
   });
-  part(ballista, cached('ballista-tip', () => new THREE.ConeGeometry(0.026, 0.065, 7)), mats.steel, {
-    pos: [0, 0.104, 0.228],
+  part(ballista, cached('ballista-tip-lite', () => new THREE.ConeGeometry(0.024, 0.06, 6)), mats.steel, {
+    pos: [0, 0.102, 0.235],
     rot: [Math.PI / 2 - 0.14, 0, 0],
   });
 
@@ -1637,7 +1642,6 @@ function buildTower(mats) {
     pos: [0, 0.37, 0],
   });
 
-  // Corner pilasters and a mid band break up what used to be one flat block.
   const pilasterGeo = cached('arrow-tower-pilaster', () => new THREE.BoxGeometry(0.09, 0.42, 0.09));
   for (const x of [-0.2, 0.2]) {
     for (const z of [-0.2, 0.2]) {
@@ -1649,17 +1653,11 @@ function buildTower(mats) {
   });
 
   const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.06, 0.17, 0.02));
-  const archGeo = cached('arrow-tower-slit-arch', () => new THREE.CylinderGeometry(0.03, 0.03, 0.02, 10, 1, false, 0, Math.PI));
   for (let i = 0; i < 4; i++) {
     const yaw = (i / 4) * Math.PI * 2;
     const nx = Math.sin(yaw);
     const nz = Math.cos(yaw);
     part(group, slitGeo, mats.charcoal, { pos: [nx * 0.209, 0.45, nz * 0.209], rot: [0, yaw, 0] });
-    part(group, archGeo, mats.charcoal, {
-      pos: [nx * 0.209, 0.535, nz * 0.209],
-      rot: [Math.PI / 2, 0, yaw],
-      shadow: false,
-    });
   }
 
   part(group, cached('arrow-tower-corbel', () => new THREE.BoxGeometry(0.54, 0.055, 0.54)), mats.armorDeep, {
@@ -1678,8 +1676,8 @@ function buildTower(mats) {
 
   const turret = new THREE.Group();
   turret.position.y = 0.682;
-  for (let i = 0; i < 4; i++) {
-    const yaw = (i / 4) * Math.PI * 2;
+  for (let i = 0; i < 2; i++) {
+    const yaw = i * Math.PI;
     const ballista = buildBallista(mats);
     ballista.position.set(Math.sin(yaw) * 0.19, 0, Math.cos(yaw) * 0.19);
     ballista.rotation.y = yaw;
@@ -1687,8 +1685,6 @@ function buildTower(mats) {
   }
   group.add(turret);
 
-  // Mast and pennant: the only large flat surface that can carry the team
-  // colour, which a grey keep otherwise has nowhere to show.
   part(group, cached('arrow-tower-mast', () => new THREE.CylinderGeometry(0.014, 0.016, 0.36, 8)), mats.wood, {
     pos: [0, 0.86, 0],
   });
@@ -1707,7 +1703,6 @@ function buildTower(mats) {
 function buildCastle(mats) {
   const group = new THREE.Group();
 
-  // Wide foundation
   part(group, cached('castle-foot', () => new THREE.BoxGeometry(0.78, 0.1, 0.78)), mats.armorDeep, {
     pos: [0, 0.05, 0],
   });
@@ -1715,11 +1710,13 @@ function buildCastle(mats) {
     pos: [0, 0.14, 0],
   });
 
-  // Outer curtain wall ring
   const wallH = 0.28;
   const wallY = 0.18 + wallH / 2;
   const wallThick = 0.1;
   const wallSpan = 0.66;
+  const wallCapY = 0.18 + wallH + 0.02;
+  const wallCapGeo = cached('castle-wall-cap', () => new THREE.BoxGeometry(wallSpan, 0.04, wallThick + 0.02));
+
   part(group, cached('castle-wall-n', () => new THREE.BoxGeometry(wallSpan, wallH, wallThick)), mats.armor, {
     pos: [0, wallY, -0.28],
   });
@@ -1732,18 +1729,53 @@ function buildCastle(mats) {
   part(group, cached('castle-wall-e', () => new THREE.BoxGeometry(wallThick, wallH, wallSpan - wallThick * 2)), mats.armor, {
     pos: [0.28, wallY, 0],
   });
+  part(group, wallCapGeo, mats.trim, { pos: [0, wallCapY, -0.28] });
+  part(group, wallCapGeo, mats.trim, { pos: [0, wallCapY, 0.28] });
+  part(group, cached('castle-wall-cap-side', () => new THREE.BoxGeometry(wallThick + 0.02, 0.04, wallSpan - wallThick * 2)), mats.trim, {
+    pos: [-0.28, wallCapY, 0],
+  });
+  part(group, cached('castle-wall-cap-side', () => new THREE.BoxGeometry(wallThick + 0.02, 0.04, wallSpan - wallThick * 2)), mats.trim, {
+    pos: [0.28, wallCapY, 0],
+  });
 
-  // Gate opening on south face
-  part(group, cached('castle-gate-lintel', () => new THREE.BoxGeometry(0.2, 0.06, 0.08)), mats.trim, {
+  const wallMerlonGeo = cached('castle-wall-merlon', () => new THREE.BoxGeometry(0.08, 0.07, 0.07));
+  for (const x of [-0.18, 0.18]) {
+    part(group, wallMerlonGeo, mats.armorDeep, { pos: [x, wallCapY + 0.05, 0.28] });
+  }
+
+  const slitGeo = cached('castle-slit', () => new THREE.BoxGeometry(0.035, 0.09, 0.025));
+  part(group, slitGeo, mats.charcoal, { pos: [0.14, wallY + 0.02, -0.28] });
+
+  part(group, cached('castle-gate-lintel', () => new THREE.BoxGeometry(0.22, 0.06, 0.08)), mats.trim, {
     pos: [0, 0.24, 0.28],
   });
-  part(group, cached('castle-gate-arch', () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 12, 1, false, 0, Math.PI)), mats.charcoal, {
+  part(group, cached('castle-gate-arch', () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 10, 1, false, 0, Math.PI)), mats.charcoal, {
     pos: [0, 0.24, 0.28],
     rot: [Math.PI / 2, 0, 0],
     shadow: false,
   });
+  const gatePillarGeo = cached('castle-gate-pillar', () => new THREE.BoxGeometry(0.055, 0.24, 0.055));
+  part(group, gatePillarGeo, mats.armorDeep, { pos: [-0.105, 0.21, 0.285] });
+  part(group, gatePillarGeo, mats.armorDeep, { pos: [0.105, 0.21, 0.285] });
 
-  // Corner towers
+  part(group, cached('castle-portcullis', () => new THREE.BoxGeometry(0.12, 0.15, 0.012)), mats.steel, {
+    pos: [0, 0.175, 0.272],
+    shadow: false,
+  });
+  part(group, cached('castle-drawbridge', () => new THREE.BoxGeometry(0.19, 0.018, 0.11)), mats.wood, {
+    pos: [0, 0.075, 0.355],
+    rot: [0.14, 0, 0],
+  });
+
+  const torchGeo = cached('castle-torch', () => new THREE.CylinderGeometry(0.012, 0.016, 0.08, 6));
+  for (const x of [-0.16, 0.16]) {
+    part(group, torchGeo, mats.wood, { pos: [x, 0.28, 0.3] });
+    part(group, cached('castle-torch-flame', () => new THREE.SphereGeometry(0.022, 8, 6)), mats.ember, {
+      pos: [x, 0.335, 0.3],
+      shadow: false,
+    });
+  }
+
   const cornerGeo = cached('castle-corner', () => new THREE.CylinderGeometry(0.1, 0.11, 0.38, 10));
   const cornerCapGeo = cached('castle-corner-cap', () => new THREE.ConeGeometry(0.12, 0.12, 10));
   for (const [x, z] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) {
@@ -1751,7 +1783,6 @@ function buildCastle(mats) {
     part(group, cornerCapGeo, mats.trim, { pos: [x, 0.65, z], shadow: false });
   }
 
-  // Central keep
   part(group, cached('castle-keep-base', () => new THREE.BoxGeometry(0.36, 0.12, 0.36)), mats.armorDeep, {
     pos: [0, 0.24, 0],
   });
@@ -1761,16 +1792,23 @@ function buildCastle(mats) {
   part(group, cached('castle-keep-band', () => new THREE.BoxGeometry(0.34, 0.05, 0.34)), mats.trim, {
     pos: [0, 0.4, 0],
   });
+  part(group, cached('castle-keep-roof', () => new THREE.ConeGeometry(0.23, 0.13, 8)), mats.armorDeep, {
+    pos: [0, 0.84, 0],
+  });
+
+  const keepWindowGeo = cached('castle-keep-window', () => new THREE.BoxGeometry(0.055, 0.1, 0.02));
+  part(group, keepWindowGeo, mats.ember, { pos: [0, 0.55, 0.165], shadow: false });
 
   const merlonGeo = cached('castle-merlon', () => new THREE.BoxGeometry(0.08, 0.1, 0.08));
-  for (const x of [-0.14, 0, 0.14]) {
-    for (const z of [-0.14, 0.14]) {
-      if (x === 0 && z === 0) continue;
-      part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.77, z] });
-    }
+  for (const [x, z] of [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]]) {
+    part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.77, z] });
   }
 
-  // Flag mast — primary team colour read
+  part(group, cached('castle-crest', () => new THREE.BoxGeometry(0.11, 0.13, 0.018)), mats.ring, {
+    pos: [0, 0.62, 0.168],
+    shadow: false,
+  });
+
   part(group, cached('castle-mast', () => new THREE.CylinderGeometry(0.016, 0.018, 0.42, 8)), mats.wood, {
     pos: [0, 0.93, 0],
   });
@@ -1931,92 +1969,61 @@ function crabCarapaceGeometry() {
 
 function crabDomeGeometry() {
   return cached('crab-carapace-dome', () => {
-    const geometry = new THREE.SphereGeometry(1, 26, 14, 0, Math.PI * 2, 0, Math.PI * 0.56);
+    const geometry = new THREE.SphereGeometry(1, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.56);
     geometry.computeVertexNormals();
     return geometry;
   });
 }
 
-// Arcs are baked flat at build time; composing them from mesh Euler angles fights
-// the XYZ order and lands the sweep in the wrong plane.
 function crabArcGeometry(key, radius, tube, arc) {
   return cached(key, () => {
-    const geometry = new THREE.TorusGeometry(radius, tube, 8, 26, arc);
+    const geometry = new THREE.TorusGeometry(radius, tube, 6, 16, arc);
     geometry.rotateZ(Math.PI / 2 - arc / 2);
     geometry.rotateX(Math.PI / 2);
     return geometry;
   });
 }
 
-function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat) {
+function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat) {
   const claw = new THREE.Group();
-  // Held out front and slightly raised: the reach is what sells the diagonal
-  // threat, and it keeps the pincers clear of the shell from every angle.
   claw.position.set(side * 0.185, 0.03, 0.1);
   claw.rotation.set(-0.34, side * 0.54, 0);
 
-  part(claw, cached('crab-shoulder', () => new THREE.SphereGeometry(0.05, 14, 12)), jointMat, {
+  part(claw, cached('crab-shoulder-lite', () => new THREE.SphereGeometry(0.05, 10, 8)), jointMat, {
     scale: [1, 0.88, 1],
   });
-  part(claw, cached('crab-arm-upper', () => new THREE.CylinderGeometry(0.036, 0.046, 0.085, 12)), shellMat, {
+  part(claw, cached('crab-arm-upper-lite', () => new THREE.CylinderGeometry(0.036, 0.046, 0.085, 8)), shellMat, {
     pos: [0, 0.004, 0.048],
     rot: [Math.PI / 2, 0, 0],
   });
-  part(claw, cached('crab-elbow', () => new THREE.SphereGeometry(0.04, 12, 10)), jointMat, {
-    pos: [0, 0.006, 0.094],
-  });
 
-  // The palm is a fat oval rather than a box; a slab here read as a pair of pliers.
   const palm = new THREE.Group();
   palm.position.set(0, 0.016, 0.16);
-  // Rolled part-way over so the open pincer reads both head-on and from above.
   palm.rotation.set(0.1, side * -0.24, side * 0.42);
   claw.add(palm);
-  part(palm, cached('crab-palm', () => new THREE.SphereGeometry(0.07, 16, 12)), clawMat, {
+  part(palm, cached('crab-palm-lite', () => new THREE.SphereGeometry(0.07, 10, 8)), clawMat, {
     scale: [0.78, 1, 1.24],
   });
-  part(palm, cached('crab-palm-ridge', () => new THREE.BoxGeometry(0.02, 0.028, 0.11)), clawDeepMat, {
-    pos: [0, 0.056, 0],
-    shadow: false,
-  });
-  part(palm, crabArcGeometry('crab-claw-band', 0.06, 0.01, Math.PI * 2), mats.gold, {
-    pos: [0, 0, -0.05],
-    rot: [Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.88],
-    shadow: false,
-  });
 
-  const pincerGeo = cached('crab-pincer', () => new THREE.CylinderGeometry(0.009, 0.04, 0.105, 10));
-  const toothGeo = cached('crab-pincer-tooth', () => new THREE.ConeGeometry(0.009, 0.022, 6));
-
-  // A visible gap between the two fingers is what makes this read as a pincer, so
-  // they stay parted rather than closed flush.
+  const pincerGeo = cached('crab-pincer-lite', () => new THREE.CylinderGeometry(0.01, 0.038, 0.1, 8));
   const upperPinch = new THREE.Group();
   upperPinch.position.set(0, 0.036, 0.058);
   upperPinch.rotation.set(-0.34, 0, 0);
   palm.add(upperPinch);
   part(upperPinch, pincerGeo, clawMat, {
-    pos: [0, 0, 0.052],
+    pos: [0, 0, 0.05],
     rot: [Math.PI / 2, 0, 0],
   });
-  for (const [z, y] of [[0.03, -0.026], [0.062, -0.016]]) {
-    part(upperPinch, toothGeo, bellyMat, {
-      pos: [0, y, z],
-      rot: [Math.PI, 0, 0],
-      shadow: false,
-    });
-  }
 
   const lowerPinch = new THREE.Group();
   lowerPinch.position.set(0, -0.032, 0.058);
   lowerPinch.rotation.set(0.26, 0, 0);
   palm.add(lowerPinch);
   part(lowerPinch, pincerGeo, clawDeepMat, {
-    pos: [0, 0, 0.045],
+    pos: [0, 0, 0.042],
     rot: [Math.PI / 2, 0, 0],
     scale: [0.88, 0.88, 0.84],
   });
-  part(lowerPinch, toothGeo, bellyMat, { pos: [0, 0.02, 0.03], shadow: false });
 
   return claw;
 }
@@ -2025,18 +2032,10 @@ function addCrabEyeStalk(parent, side, mats, shellMat) {
   const stalk = new THREE.Group();
   stalk.position.set(side * 0.066, 0.028, 0.05);
   stalk.rotation.set(-0.14, 0, side * -0.3);
-  part(stalk, cached('crab-stalk', () => new THREE.CylinderGeometry(0.012, 0.017, 0.086, 10)), shellMat, {
+  part(stalk, cached('crab-stalk-lite', () => new THREE.CylinderGeometry(0.012, 0.017, 0.086, 8)), shellMat, {
     pos: [0, 0.043, 0],
   });
-  part(stalk, crabArcGeometry('crab-stalk-ring', 0.016, 0.005, Math.PI * 2), mats.gold, {
-    pos: [0, 0.072, 0],
-    shadow: false,
-  });
-  part(stalk, cached('crab-eye-socket', () => new THREE.SphereGeometry(0.031, 12, 10)), mats.charcoal, {
-    pos: [0, 0.1, 0],
-    scale: [1, 0.94, 0.92],
-  });
-  const eye = part(stalk, cached('crab-eyeball', () => new THREE.SphereGeometry(0.023, 12, 10)), mats.eye, {
+  const eye = part(stalk, cached('crab-eyeball-lite', () => new THREE.SphereGeometry(0.023, 8, 8)), mats.eye, {
     pos: [0, 0.102, 0.014],
     shadow: false,
   });
@@ -2044,16 +2043,13 @@ function addCrabEyeStalk(parent, side, mats, shellMat) {
   return { stalk, eye };
 }
 
-// Legs hinge twice: the femur splays wide so the tips clear the shell outline
-// from above, then the tibia drops back to vertical so the crab still stands.
-function addCrabLeg(parent, side, z, fan, splay, mats, legMat, jointMat) {
+function addCrabLeg(parent, side, z, fan, splay, mats, legMat) {
   const leg = new THREE.Group();
   leg.position.set(side * 0.2, -0.012, z);
   leg.rotation.set(0, side * fan, side * splay);
   parent.add(leg);
 
-  part(leg, cached('crab-leg-coxa', () => new THREE.SphereGeometry(0.027, 10, 10)), jointMat);
-  part(leg, cached('crab-leg-femur', () => new THREE.CylinderGeometry(0.018, 0.024, 0.11, 9)), legMat, {
+  part(leg, cached('crab-leg-femur-lite', () => new THREE.CylinderGeometry(0.018, 0.024, 0.11, 7)), legMat, {
     pos: [0, -0.055, 0],
   });
 
@@ -2061,11 +2057,10 @@ function addCrabLeg(parent, side, z, fan, splay, mats, legMat, jointMat) {
   knee.position.set(0, -0.11, 0);
   knee.rotation.z = side * -(splay + 0.16);
   leg.add(knee);
-  part(knee, cached('crab-leg-knee', () => new THREE.SphereGeometry(0.02, 9, 9)), jointMat, { shadow: false });
-  part(knee, cached('crab-leg-tibia', () => new THREE.CylinderGeometry(0.012, 0.017, 0.078, 8)), legMat, {
+  part(knee, cached('crab-leg-tibia-lite', () => new THREE.CylinderGeometry(0.012, 0.017, 0.078, 7)), legMat, {
     pos: [0, -0.042, 0],
   });
-  part(knee, cached('crab-leg-tip', () => new THREE.ConeGeometry(0.013, 0.048, 7)), mats.charcoal, {
+  part(knee, cached('crab-leg-tip-lite', () => new THREE.ConeGeometry(0.013, 0.048, 6)), mats.charcoal, {
     pos: [0, -0.104, 0],
     rot: [Math.PI, 0, 0],
     shadow: false,
@@ -2116,31 +2111,21 @@ function buildCrabGeneral(mats) {
   body.position.set(0, 0.2, 0);
   group.add(body);
 
-  // Outline plate for the top-down read, dome on top for volume from the side.
   part(body, crabCarapaceGeometry(), shellDeepMat, { pos: [0, -0.004, 0] });
   part(body, crabDomeGeometry(), shellMat, {
     pos: [0, 0.006, -0.008],
     scale: [0.244, 0.105, 0.152],
   });
 
-  // Two shallow grooves break the dome into shell segments; without them the
-  // ellipsoid reads as a helmet.
-  for (const [z, radius, y] of [[-0.03, 0.15, 0.086], [-0.09, 0.1, 0.056]]) {
-    part(body, crabArcGeometry(`crab-shell-groove-${z}`, radius, 0.007, Math.PI * 1.1), shellDeepMat, {
-      pos: [0, y, z],
-      scale: [1.25, 1, 1],
-      shadow: false,
-    });
-  }
+  part(body, crabArcGeometry('crab-shell-groove', 0.12, 0.007, Math.PI * 1.1), shellDeepMat, {
+    pos: [0, 0.068, -0.06],
+    scale: [1.25, 1, 1],
+    shadow: false,
+  });
 
-  const knobGeo = cached('crab-shell-knob', () => new THREE.SphereGeometry(0.026, 10, 8));
-  for (const [x, y, z, s] of [
-    [-0.11, 0.09, 0.02, 0.95],
-    [0.11, 0.09, 0.02, 0.95],
-    [-0.175, 0.056, -0.055, 0.8],
-    [0.175, 0.056, -0.055, 0.8],
-  ]) {
-    part(body, knobGeo, shellMat, { pos: [x, y, z], scale: [s, s * 0.5, s], shadow: false });
+  const knobGeo = cached('crab-shell-knob-lite', () => new THREE.SphereGeometry(0.026, 8, 6));
+  for (const x of [-0.11, 0.11]) {
+    part(body, knobGeo, shellMat, { pos: [x, 0.09, 0.02], scale: [0.95, 0.5, 0.95], shadow: false });
   }
 
   part(body, crabArcGeometry('crab-shell-brow', 0.175, 0.012, Math.PI * 0.72), mats.gold, {
@@ -2148,22 +2133,12 @@ function buildCrabGeneral(mats) {
     scale: [1.18, 1, 1],
     shadow: false,
   });
-  part(body, crabArcGeometry('crab-shell-rim', 0.23, 0.013, Math.PI * 2), shellDeepMat, {
-    pos: [0, -0.012, -0.01],
-    scale: [1.1, 1, 0.72],
-    shadow: false,
-  });
 
-  const spikeGeo = cached('crab-shell-spike', () => new THREE.ConeGeometry(0.026, 0.085, 7));
+  const spikeGeo = cached('crab-shell-spike-lite', () => new THREE.ConeGeometry(0.026, 0.085, 6));
   for (const side of [-1, 1]) {
     part(body, spikeGeo, shellDeepMat, {
       pos: [side * 0.295, 0.004, 0.018],
       rot: [0, 0.35, side * -1.46],
-      shadow: false,
-    });
-    part(body, cached('crab-shell-tooth', () => new THREE.ConeGeometry(0.018, 0.055, 6)), shellDeepMat, {
-      pos: [side * 0.222, 0.002, -0.095],
-      rot: [0, 0, side * -1.05],
       shadow: false,
     });
   }
@@ -2200,18 +2175,17 @@ function buildCrabGeneral(mats) {
   }
   const eyes = [eyeStalks.left.eye, eyeStalks.right.eye];
 
-  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat);
-  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat, bellyMat);
+  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat);
+  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat);
   body.add(clawL);
   body.add(clawR);
 
   for (const [z, fan, splay] of [
-    [0.062, 0.42, 0.9],
-    [-0.02, 0.04, 1.08],
-    [-0.105, -0.4, 0.94],
+    [0.04, 0.22, 0.98],
+    [-0.09, -0.28, 0.88],
   ]) {
     for (const side of [-1, 1]) {
-      addCrabLeg(body, side, z, fan, splay, mats, legMat, jointMat);
+      addCrabLeg(body, side, z, fan, splay, mats, legMat);
     }
   }
 

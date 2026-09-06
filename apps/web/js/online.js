@@ -1,5 +1,6 @@
 import { MSG, MATCHMAKING_TIMEOUT_MS } from '@ooxx/shared/protocol.js';
 import { ensureGuestToken, refreshGuestToken } from './guestAuth.js';
+import { getPlayerNickname, setPlayerNickname } from './playerName.js';
 import { wsUrl } from './config.js';
 import {
   getValidMoves,
@@ -232,7 +233,12 @@ export class OnlineClient {
       case MSG.AUTH_OK:
         this.authenticated = true;
         this.guestId = payload.guestId;
-        this.nickname = payload.nickname;
+        if (payload.nickname) {
+          setPlayerNickname(payload.nickname);
+          this.nickname = payload.nickname;
+        } else {
+          this.nickname = getPlayerNickname();
+        }
         break;
       case MSG.ROOM_STATE:
         if (payload.left) {
@@ -459,11 +465,20 @@ export class OnlineClient {
     };
   }
 
+  resolveNickname(nickname) {
+    return nickname ?? getPlayerNickname();
+  }
+
   async createRoom(boardMode, nickname, roster, classLevels) {
     this.selectedBoardMode = boardMode;
     await this.connect();
     this.lastError = null;
-    const payload = await this.send(MSG.CREATE_ROOM, { boardMode, nickname, roster, classLevels });
+    const payload = await this.send(MSG.CREATE_ROOM, {
+      boardMode,
+      nickname: this.resolveNickname(nickname),
+      roster,
+      classLevels,
+    });
     this.roomState = payload;
     this.roomCode = payload.roomCode;
     this.notify();
@@ -481,7 +496,12 @@ export class OnlineClient {
     try {
       await this.connect();
       if (gen !== this.matchmakingGen || this.gameState) return;
-      await this.send(MSG.FIND_MATCH, { boardMode, nickname, roster, classLevels });
+      await this.send(MSG.FIND_MATCH, {
+        boardMode,
+        nickname: this.resolveNickname(nickname),
+        roster,
+        classLevels,
+      });
     } catch (e) {
       if (gen !== this.matchmakingGen) return;
       if (String(e?.message ?? '').includes('已在其他房間')) {
@@ -569,7 +589,12 @@ export class OnlineClient {
     await this.connect();
     this.lastError = null;
     this.roomCode = roomCode.toUpperCase();
-    await this.send(MSG.JOIN_ROOM, { roomCode: this.roomCode, nickname, roster, classLevels });
+    await this.send(MSG.JOIN_ROOM, {
+      roomCode: this.roomCode,
+      nickname: this.resolveNickname(nickname),
+      roster,
+      classLevels,
+    });
     this.notify();
   }
 
