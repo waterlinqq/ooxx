@@ -257,6 +257,15 @@
         </div>
       </div>
     </div>
+    <div id="confirmOverlay" class="ui-overlay ui-overlay--modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="confirmMessage">
+      <div class="ui-card ui-card--accent">
+        <p class="ui-card__body ui-card__body--center" id="confirmMessage"></p>
+        <div class="ui-card__actions ui-card__actions--row">
+          <button class="btn btn-lg" id="confirmCancelBtn" type="button">取消</button>
+          <button class="btn primary btn-lg" id="confirmOkBtn" type="button">確認</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

@@ -29,7 +29,8 @@ import {
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
 const FRAME_PADDING = 0.02;
-const ORBIT_FRUSTUM_HEADROOM = 1.2;
+// Small margin for idle camera sway only (was 1.2 for manual orbit/zoom).
+const BOARD_FRAMING_HEADROOM = 1.04;
 const TILE_HALF_HEIGHT = 0.07;
 const CONTENT_BOX = new THREE.Box3();
 const TMP_VIEW = new THREE.Vector3();
@@ -229,8 +230,8 @@ export class BoardScene {
     return {
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
-      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
+      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
+      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
     };
   }
 
@@ -258,8 +259,8 @@ export class BoardScene {
     return {
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
-      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
+      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
+      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
     };
   }
 
@@ -277,7 +278,7 @@ export class BoardScene {
 
     let bounds = CONTENT_BOX.isEmpty()
       ? this.fallbackContentBounds()
-      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, ORBIT_FRUSTUM_HEADROOM);
+      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, BOARD_FRAMING_HEADROOM);
 
     bounds = bounds ?? this.fallbackContentBounds();
     return this.extendBoundsForVisibleGround(bounds);
@@ -288,7 +289,7 @@ export class BoardScene {
     const height = this.container.clientHeight || this.lastValidHeight;
     if (!width || !height) return false;
 
-    const bounds = this.contentBounds();
+    const bounds = this.orbitControls.withNeutralOrbit(() => this.contentBounds());
     if (!isValidLayoutBounds(bounds)) return false;
 
     this.frustumBase = bounds.halfH * 2;

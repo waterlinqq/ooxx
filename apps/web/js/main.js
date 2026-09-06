@@ -35,6 +35,7 @@ import {
   hideTimedOverlay,
   revealOverlay,
   showAlert,
+  showConfirm,
   showTimedOverlay,
 } from './ui.js';
 import {
@@ -398,6 +399,12 @@ function ensureRosterForMatch(modeId) {
   return roster;
 }
 
+async function alertNeedRosterThenOpenFormation() {
+  await showAlert('請先編組至少一名角色');
+  switchNav('formation');
+  render(getAppState());
+}
+
 function getMatchClassLevels() {
   return getOwnedClassLevels();
 }
@@ -681,23 +688,6 @@ function setCopyCardIcon(container, classId) {
 function setFragmentCardIcon(container, classId) {
   const cls = CLASSES[classId];
   fillFragmentCardIcon(container, classId, unitThumbnails, cls?.icon ?? '?', `${cls?.name ?? classId}碎片`);
-}
-
-function createTokenStockItem(classId, kind, count) {
-  const item = document.createElement('span');
-  item.className = 'class-token-stock-item';
-
-  const iconWrap = document.createElement('span');
-  iconWrap.className = `class-token-stock-icon class-token-stock-icon--${kind}`;
-  if (kind === 'copy') setCopyCardIcon(iconWrap, classId);
-  else setFragmentCardIcon(iconWrap, classId);
-
-  const label = document.createElement('span');
-  label.className = 'class-token-stock-count';
-  label.textContent = String(count);
-
-  item.append(iconWrap, label);
-  return item;
 }
 
 function setItemIcon(container, item) {
@@ -1022,21 +1012,16 @@ function createClassUnlockRow(cls, { owned, price, onBuy }) {
   row.appendChild(priceEl);
 
   const canBuy = canAffordClass(cls.id);
-  if (onBuy) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn item-row-btn';
-    btn.textContent = owned ? '購買複本' : '解鎖';
-    btn.disabled = !canBuy;
-    if (!canBuy) btn.title = '鑽石不足';
-    btn.addEventListener('click', () => onBuy(cls.id, btn));
-    row.appendChild(btn);
-  }
+  attachShopRowClick(row, {
+    enabled: canBuy,
+    currency: 'diamond',
+    onActivate: onBuy ? (rowEl) => onBuy(cls.id, rowEl) : null,
+  });
 
   return row;
 }
 
-function createFragmentRow(cls, { count, price, canBuy, canSynth, onBuy, onSynth }) {
+function createFragmentRow(cls, { count, price, canBuy, onBuy }) {
   const row = document.createElement('div');
   row.className = 'item-row';
 
@@ -1060,27 +1045,11 @@ function createFragmentRow(cls, { count, price, canBuy, canSynth, onBuy, onSynth
   setCurrencyMeta(priceEl, 'coin', price);
   row.appendChild(priceEl);
 
-  if (onBuy) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn item-row-btn';
-    btn.textContent = '購買';
-    btn.disabled = !canBuy;
-    if (!canBuy) btn.title = '金幣不足';
-    btn.addEventListener('click', () => onBuy(cls.id, btn));
-    row.appendChild(btn);
-  }
-
-  if (onSynth) {
-    const synthBtn = document.createElement('button');
-    synthBtn.type = 'button';
-    synthBtn.className = 'btn item-row-btn';
-    synthBtn.textContent = '合成';
-    synthBtn.disabled = !canSynth;
-    if (!canSynth) synthBtn.title = `需 ${FRAGMENTS_PER_COPY} 碎片`;
-    synthBtn.addEventListener('click', () => onSynth(cls.id, synthBtn));
-    row.appendChild(synthBtn);
-  }
+  attachShopRowClick(row, {
+    enabled: canBuy,
+    currency: 'coin',
+    onActivate: onBuy ? (rowEl) => onBuy(cls.id, rowEl) : null,
+  });
 
   return row;
 }
@@ -1113,16 +1082,11 @@ function createItemRow(item, { count, price, onBuy }) {
     row.appendChild(meta);
   }
 
-  if (onBuy) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn item-row-btn';
-    btn.textContent = '購買';
-    btn.disabled = !canBuy;
-    if (!canBuy) btn.title = '金幣不足';
-    btn.addEventListener('click', () => onBuy(item.id, btn));
-    row.appendChild(btn);
-  }
+  attachShopRowClick(row, {
+    enabled: canBuy,
+    currency: 'coin',
+    onActivate: onBuy ? (rowEl) => onBuy(item.id, rowEl) : null,
+  });
 
   return row;
 }
@@ -1183,6 +1147,17 @@ function clearPurchaseNotifyTimer() {
     clearTimeout(purchaseNotifyTimer);
     purchaseNotifyTimer = null;
   }
+}
+
+function playCurrencyInsufficientAnimation(currency) {
+  const badgeEl = currency === 'diamond' ? diamondBalanceEl : coinBalanceEl;
+  const insufficientClass = currency === 'diamond' ? 'diamond-insufficient' : 'coin-insufficient';
+  if (!badgeEl) return;
+
+  badgeEl.classList.remove(insufficientClass);
+  void badgeEl.offsetWidth;
+  badgeEl.classList.add(insufficientClass);
+  window.setTimeout(() => badgeEl.classList.remove(insufficientClass), 600);
 }
 
 function playCurrencySpendAnimation(currency, price) {
@@ -1256,12 +1231,37 @@ function handlePurchaseSuccess({ name, price, rowEl, kind = 'item', currency = '
   }, PURCHASE_FEEDBACK_MS);
 }
 
-function handlePurchaseFailure(reason, btn) {
-  btn?.classList.remove('purchase-fail');
-  void btn?.offsetWidth;
-  btn?.classList.add('purchase-fail');
-  window.setTimeout(() => btn?.classList.remove('purchase-fail'), 450);
+function handlePurchaseFailure(reason, rowEl, currency = 'coin') {
+  if (reason === '金幣不足' || reason === '鑽石不足') {
+    playCurrencyInsufficientAnimation(currency);
+    return;
+  }
+  rowEl?.classList.remove('purchase-fail');
+  void rowEl?.offsetWidth;
+  rowEl?.classList.add('purchase-fail');
+  window.setTimeout(() => rowEl?.classList.remove('purchase-fail'), 450);
   showPurchaseToast(reason, { success: false });
+}
+
+function attachShopRowClick(row, { enabled, currency, onActivate }) {
+  if (!onActivate) return;
+
+  row.classList.add('item-row--interactive');
+  if (!enabled) row.classList.add('item-row--disabled');
+
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  const activate = () => {
+    if (enabled) onActivate(row);
+    else playCurrencyInsufficientAnimation(currency);
+  };
+  row.addEventListener('click', activate);
+  row.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activate();
+    }
+  });
 }
 
 function renderFormationItems(state) {
@@ -1295,20 +1295,25 @@ function renderShop(state) {
     shopGridEl.appendChild(createClassUnlockRow(cls, {
       owned,
       price,
-      onBuy: (id, btn) => {
+      onBuy: async (id, rowEl) => {
+        const message = owned
+          ? `確定花費 ${price} 鑽石購買「${cls.name}」複本？`
+          : `確定花費 ${price} 鑽石解鎖「${cls.name}」？`;
+        if (!(await showConfirm(message))) return;
+
         const result = buyClass(id);
         if (result.ok) {
           handlePurchaseSuccess({
             name: cls.name,
             price,
-            rowEl: btn.closest('.item-row'),
+            rowEl,
             kind: 'class',
             currency: 'diamond',
             unlocked: result.unlocked,
           });
           return;
         }
-        handlePurchaseFailure(result.reason, btn);
+        handlePurchaseFailure(result.reason, rowEl, 'diamond');
       },
     }));
   }
@@ -1325,33 +1330,20 @@ function renderShop(state) {
       count: progress.fragments,
       price: FRAGMENT_PRICE,
       canBuy: (state.coins ?? 0) >= FRAGMENT_PRICE,
-      canSynth: progress.fragments >= FRAGMENTS_PER_COPY,
-      onBuy: (id, btn) => {
+      onBuy: async (id, rowEl) => {
+        if (!(await showConfirm(`確定花費 ${FRAGMENT_PRICE} 金幣購買「${cls.name}碎片」？`))) return;
+
         const result = buyFragment(id);
         if (result.ok) {
           handlePurchaseSuccess({
             name: `${cls.name}碎片`,
             price: FRAGMENT_PRICE,
-            rowEl: btn.closest('.item-row'),
+            rowEl,
             kind: 'fragment',
           });
           return;
         }
-        handlePurchaseFailure(result.reason, btn);
-      },
-      onSynth: (id, btn) => {
-        const result = synthesizeCopy(id);
-        if (result.ok) {
-          handlePurchaseSuccess({
-            name: cls.name,
-            price: 0,
-            rowEl: btn.closest('.item-row'),
-            kind: 'synth',
-            unlocked: result.unlocked,
-          });
-          return;
-        }
-        handlePurchaseFailure(result.reason, btn);
+        handlePurchaseFailure(result.reason, rowEl, 'coin');
       },
     }));
   }
@@ -1365,17 +1357,20 @@ function renderShop(state) {
     shopGridEl.appendChild(createItemRow(item, {
       count: state.inventory[item.id] ?? 0,
       price: SHOP_PRICES[item.id],
-      onBuy: (id, btn) => {
+      onBuy: async (id, rowEl) => {
+        const price = SHOP_PRICES[id];
+        if (!(await showConfirm(`確定花費 ${price} 金幣購買「${item.name}」？`))) return;
+
         const result = buyItem(id);
         if (result.ok) {
           handlePurchaseSuccess({
             name: item.name,
-            price: SHOP_PRICES[id],
-            rowEl: btn.closest('.item-row'),
+            price,
+            rowEl,
           });
           return;
         }
-        handlePurchaseFailure(result.reason, btn);
+        handlePurchaseFailure(result.reason, rowEl, 'coin');
       },
     }));
   }
@@ -1473,20 +1468,13 @@ function renderFormation(state) {
       selectBtn.addEventListener('click', () => game.addToFormation(cls.id));
     }
 
-    const count = document.createElement('div');
-    count.className = 'class-token-stock';
-    count.append(
-      createTokenStockItem(cls.id, 'copy', progress.copies),
-      createTokenStockItem(cls.id, 'fragment', progress.fragments),
-    );
-
     const actions = document.createElement('div');
     actions.className = 'class-card-actions';
 
     const synthBtn = document.createElement('button');
     synthBtn.type = 'button';
     synthBtn.className = 'btn class-card-action';
-    synthBtn.textContent = '合成';
+    synthBtn.textContent = `合成 ${progress.fragments}/${FRAGMENTS_PER_COPY}`;
     synthBtn.disabled = !canSynth;
     if (!canSynth) synthBtn.title = `需 ${FRAGMENTS_PER_COPY} 碎片`;
     synthBtn.addEventListener('click', (event) => {
@@ -1503,7 +1491,7 @@ function renderFormation(state) {
     const upgradeBtn = document.createElement('button');
     upgradeBtn.type = 'button';
     upgradeBtn.className = 'btn class-card-action';
-    upgradeBtn.textContent = upgradeCost == null ? 'MAX' : `升級 ${upgradeCost}`;
+    upgradeBtn.textContent = upgradeCost == null ? 'MAX' : `升級 ${progress.copies}/${upgradeCost}`;
     upgradeBtn.disabled = !canUpgrade;
     if (upgradeCost == null) upgradeBtn.title = '已達最大等級';
     else if (!canUpgrade) upgradeBtn.title = `需 ${upgradeCost} 複本`;
@@ -1519,7 +1507,7 @@ function renderFormation(state) {
     });
 
     actions.append(synthBtn, upgradeBtn);
-    card.append(selectBtn, count, actions);
+    card.append(selectBtn, actions);
     formationPoolEl.appendChild(card);
   }
 }
@@ -2157,7 +2145,7 @@ findMatchBtn.addEventListener('click', async () => {
   const boardMode = getOnlineBoardMode();
   const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
-    await showAlert('請先編組至少一名角色');
+    await alertNeedRosterThenOpenFormation();
     return;
   }
   findMatchBtn.disabled = true;
@@ -2175,7 +2163,7 @@ createRoomBtn.addEventListener('click', async () => {
   const boardMode = getOnlineBoardMode();
   const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
-    await showAlert('請先編組至少一名角色');
+    await alertNeedRosterThenOpenFormation();
     return;
   }
   createRoomBtn.disabled = true;
@@ -2198,7 +2186,7 @@ joinRoomBtn.addEventListener('click', async () => {
   const boardMode = getOnlineBoardMode();
   const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
-    await showAlert('請先編組至少一名角色');
+    await alertNeedRosterThenOpenFormation();
     return;
   }
   joinRoomBtn.disabled = true;
@@ -2245,7 +2233,7 @@ document.addEventListener('keydown', (event) => {
 async function beginSurvivalBattle() {
   const modeId = '6x6';
   if (!ensureRosterForMatch(modeId)) {
-    await showAlert('請先編組至少一名角色');
+    await alertNeedRosterThenOpenFormation();
     return;
   }
   hideGameEndOverlay();

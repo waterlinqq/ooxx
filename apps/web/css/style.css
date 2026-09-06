@@ -525,6 +525,16 @@ body {
   width: 100%;
 }
 
+.ui-card__actions--row {
+  display: flex;
+  gap: 10px;
+}
+
+.ui-card__actions--row .btn {
+  flex: 1;
+  width: auto;
+}
+
 @keyframes uiOverlayIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -2249,6 +2259,24 @@ body {
   padding: 7px 9px;
 }
 
+#screenShop .item-row--interactive {
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+#screenShop .item-row--interactive:not(.item-row--disabled):hover {
+  background: rgb(148 163 184 / 10%);
+}
+
+#screenShop .item-row--interactive:not(.item-row--disabled):active {
+  transform: scale(0.992);
+}
+
+#screenShop .item-row--disabled {
+  opacity: 0.62;
+  cursor: pointer;
+}
+
 .codex-level-btn {
   flex: 1;
   min-width: 0;
@@ -2583,6 +2611,7 @@ body {
 
 .class-card-actions {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   width: 100%;
 }
@@ -2590,6 +2619,7 @@ body {
 .class-card-action {
   flex: 1;
   min-width: 0;
+  width: 100%;
   padding: 4px 6px;
   font-size: 0.68rem;
 }
@@ -2812,6 +2842,14 @@ body {
   background: rgba(34, 211, 238, 0.15);
 }
 
+.coin-badge.coin-insufficient {
+  animation: coinInsufficientPulse 0.55s ease;
+}
+
+.diamond-badge.diamond-insufficient {
+  animation: diamondInsufficientPulse 0.55s ease;
+}
+
 .coin-badge.coin-spent {
   animation: coinSpentPulse 0.55s ease;
 }
@@ -2850,8 +2888,23 @@ body {
   animation: purchaseRowFlash 0.45s ease;
 }
 
+.item-row.purchase-fail,
 .item-row-btn.purchase-fail {
   animation: purchaseBtnShake 0.42s ease;
+}
+
+@keyframes coinInsufficientPulse {
+  0%, 100% { transform: scale(1); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+  35% { background: rgba(248, 113, 113, 0.22); color: #fca5a5; }
+}
+
+@keyframes diamondInsufficientPulse {
+  0%, 100% { transform: scale(1); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+  35% { background: rgba(248, 113, 113, 0.2); color: #fda4af; }
 }
 
 @keyframes coinSpentPulse {
@@ -3119,47 +3172,6 @@ body {
   transform: translate(6%, 4%);
 }
 
-.class-token-stock {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-}
-
-.class-token-stock-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.class-token-stock-icon {
-  width: 34px;
-  height: 48px;
-  flex-shrink: 0;
-  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 20%));
-}
-
-.class-token-stock-icon .class-token-card {
-  transform: rotate(-2deg);
-}
-
-.class-token-stock-item + .class-token-stock-item .class-token-card {
-  transform: rotate(2deg);
-}
-
-.class-token-stock-icon .class-token-card-art {
-  inset: 1px;
-}
-
-.class-token-stock-count {
-  font-size: 0.68rem;
-  font-weight: 800;
-  color: #cbd5e1;
-  line-height: 1;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 35%);
-}
 
 .item-row-body {
   flex: 1;

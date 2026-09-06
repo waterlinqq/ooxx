@@ -13,9 +13,18 @@ let alertDismissTimer = null;
 /** @type {(() => void) | null} */
 let alertResolve = null;
 
+/** @type {ReturnType<typeof setTimeout> | null} */
+let confirmDismissTimer = null;
+/** @type {((confirmed: boolean) => void) | null} */
+let confirmResolve = null;
+
 const alertOverlayEl = document.getElementById('alertOverlay');
 const alertMessageEl = document.getElementById('alertMessage');
 const alertOkBtn = document.getElementById('alertOkBtn');
+const confirmOverlayEl = document.getElementById('confirmOverlay');
+const confirmMessageEl = document.getElementById('confirmMessage');
+const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+const confirmOkBtn = document.getElementById('confirmOkBtn');
 
 function hideAlertOverlay() {
   if (alertDismissTimer) {
@@ -37,6 +46,43 @@ function finishAlert() {
 }
 
 alertOkBtn?.addEventListener('click', finishAlert);
+
+function hideConfirmOverlay() {
+  if (confirmDismissTimer) {
+    clearTimeout(confirmDismissTimer);
+    confirmDismissTimer = null;
+  }
+  confirmOverlayEl.classList.add('hidden');
+  confirmOverlayEl.classList.remove('ui-visible', 'ui-dismiss');
+}
+
+function finishConfirm(confirmed) {
+  confirmOverlayEl.classList.remove('ui-visible');
+  confirmOverlayEl.classList.add('ui-dismiss');
+  confirmDismissTimer = window.setTimeout(() => {
+    hideConfirmOverlay();
+    confirmResolve?.(confirmed);
+    confirmResolve = null;
+  }, UI_ANIM_OUT_MS);
+}
+
+confirmCancelBtn?.addEventListener('click', () => finishConfirm(false));
+confirmOkBtn?.addEventListener('click', () => finishConfirm(true));
+
+/** @param {string} message */
+export function showConfirm(message) {
+  return new Promise((resolve) => {
+    if (confirmDismissTimer) {
+      clearTimeout(confirmDismissTimer);
+      confirmDismissTimer = null;
+    }
+    confirmResolve = resolve;
+    confirmMessageEl.textContent = message;
+    confirmOverlayEl.classList.remove('hidden', 'ui-dismiss');
+    void confirmOverlayEl.offsetWidth;
+    confirmOverlayEl.classList.add('ui-visible');
+  });
+}
 
 /** @param {string} message */
 export function showAlert(message) {

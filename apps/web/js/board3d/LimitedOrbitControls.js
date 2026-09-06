@@ -317,6 +317,20 @@ export class LimitedOrbitControls {
     this.pivot.scale.setScalar(this.zoomViaScale ? this.zoom : 1);
   }
 
+  /** Run layout work with orbit angles at rest so sway does not shrink the frame. */
+  withNeutralOrbit(fn) {
+    const savedAz = this.azimuth;
+    const savedPol = this.polar;
+    this.azimuth = 0;
+    this.polar = 0;
+    this.applyTransform();
+    const result = fn();
+    this.azimuth = savedAz;
+    this.polar = savedPol;
+    this.applyTransform();
+    return result;
+  }
+
   emitChange() {
     this.applyTransform();
     this.onChange?.();
