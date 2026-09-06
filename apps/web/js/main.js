@@ -1,18 +1,22 @@
 import { Game, CLASSES, BOARD_MODES, GAME_END_MODAL_MS, GAME_END_FADE_MS } from './game.js';
 import { BoardScene } from './board3d/BoardScene.js';
 import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
-import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.js';
+import { generateUnitThumbnails, fillUnitIcon, fillCopyCardIcon, fillFragmentCardIcon } from './board3d/UnitThumbnails.js';
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
-import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
+import { NavIconAnimator } from './board3d/NavIconAnimator.js';
+import { ITEMS, SHOP_PRICES, ITEM_IDS, FRAGMENT_PRICE } from './items.js';
 import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, FRAGMENTS_PER_COPY, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX } from './units.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
 import { CODEX_TABS } from './codex.js';
-import { isUnlockable, getUnlockPrice } from './unlocks.js';
+import { getClassDiamondPrice } from './unlocks.js';
 import {
   loadSave,
   buyItem,
   buyClass,
+  buyFragment,
+  synthesizeCopy,
+  upgradeClass,
   canAfford,
   canAffordClass,
   isClassOwned,
@@ -21,6 +25,7 @@ import {
   getSaveSnapshot,
   getSavedRostersByMode,
   getSavedEquippedItem,
+  getOwnedClassLevels,
   claimDailyQuest,
 } from './save.js';
 import { onlineClient } from './online.js';
@@ -391,6 +396,10 @@ function ensureRosterForMatch(modeId) {
   return roster;
 }
 
+function getMatchClassLevels() {
+  return getOwnedClassLevels();
+}
+
 function isLocalMatchActive(local = game.getState()) {
   return local.tutorial
     || local.phase === 'battle'
@@ -495,6 +504,8 @@ function withOnlineOrLocal(onlineFn, localFn) {
 
 let activeNav = 'battle';
 let selectedClassId = 'swordsman';
+let codexPreviewLevel = CLASS_LEVEL_MIN;
+let codexPreviewLevelForClass = null;
 let activeCodexTab = 'units';
 let selectedItemId = ITEM_IDS[0];
 let selectedMechanismId = MAP_PROP_KINDS[0];
@@ -651,10 +662,39 @@ const itemThumbnails = generateItemThumbnails(ITEM_IDS);
 const mapPropThumbnails = generateMapPropThumbnails(MAP_PROP_KINDS);
 const navThumbnails = generateNavThumbnails();
 applyNavIcons(bottomNavEl, navThumbnails);
+const navIconAnimator = new NavIconAnimator(bottomNavEl);
+navIconAnimator.onNavChange(activeNav);
 
 function setUnitIcon(container, classId) {
   const cls = CLASSES[classId];
   fillUnitIcon(container, classId, unitThumbnails, cls?.icon ?? '?', cls?.name ?? classId);
+}
+
+function setCopyCardIcon(container, classId) {
+  const cls = CLASSES[classId];
+  fillCopyCardIcon(container, classId, unitThumbnails, cls?.icon ?? '?', `${cls?.name ?? classId}複本`);
+}
+
+function setFragmentCardIcon(container, classId) {
+  const cls = CLASSES[classId];
+  fillFragmentCardIcon(container, classId, unitThumbnails, cls?.icon ?? '?', `${cls?.name ?? classId}碎片`);
+}
+
+function createTokenStockItem(classId, kind, count) {
+  const item = document.createElement('span');
+  item.className = 'class-token-stock-item';
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = `class-token-stock-icon class-token-stock-icon--${kind}`;
+  if (kind === 'copy') setCopyCardIcon(iconWrap, classId);
+  else setFragmentCardIcon(iconWrap, classId);
+
+  const label = document.createElement('span');
+  label.className = 'class-token-stock-count';
+  label.textContent = String(count);
+
+  item.append(iconWrap, label);
+  return item;
 }
 
 function setItemIcon(container, item) {
@@ -801,6 +841,7 @@ function switchNav(navId) {
   if (!NAV_SCREENS[navId]) return;
   const state = getAppState();
   if (isBottomNavLocked(state) && navId !== 'battle') return;
+  const replay = activeNav === navId;
   activeNav = navId;
 
   for (const [id, screen] of Object.entries(NAV_SCREENS)) {
@@ -810,6 +851,8 @@ function switchNav(navId) {
   for (const btn of bottomNavEl.querySelectorAll('.nav-item')) {
     btn.classList.toggle('active', btn.dataset.nav === navId);
   }
+
+  navIconAnimator.onNavChange(navId, { replay });
 
   if (navId === 'formation') {
     game.syncFormationMode(state.boardMode);
@@ -850,22 +893,55 @@ function isClassOwnedInState(state, classId) {
   return state.ownedClasses?.includes(classId) ?? isClassOwned(classId);
 }
 
-function renderClassDetail(classId) {
+function getProgressFromState(state, classId) {
+  return state.classProgress?.[classId] ?? { level: 1, copies: 0, fragments: 0 };
+}
+
+function renderClassDetail(classId, state = getAppState()) {
   const cls = CLASSES[classId];
   if (!cls) return;
 
+  const owned = isClassOwnedInState(state, classId);
+  const progress = getProgressFromState(state, classId);
+  const ownedLevel = owned ? progress.level : CLASS_LEVEL_MIN;
+
+  if (codexPreviewLevelForClass !== classId) {
+    codexPreviewLevel = ownedLevel;
+    codexPreviewLevelForClass = classId;
+  }
+
+  const previewLevel = Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, codexPreviewLevel));
+  const stats = getClassCombatStats(classId, previewLevel);
   const hpLabel = cls.id === 'castle'
-    ? `${cls.hp}（攻城戰 ${getCastleHpForMode('5x5')}）`
-    : cls.hp;
+    ? `${stats.hp}（攻城戰 ${getCastleHpForMode('5x5') + getClassLevelBonuses('castle', previewLevel).hp}）`
+    : stats.hp;
+  const previewingHigher = owned && previewLevel > ownedLevel;
+  const previewingUnowned = !owned;
 
   codexDetailInfoEl.innerHTML = `
     <h2 class="detail-name">${cls.name}</h2>
+    <div class="codex-level-picker" role="group" aria-label="等級預覽"></div>
     <dl class="detail-stats">
+      <div><dt>等級</dt><dd>${getClassLevelLabel(previewLevel)}${previewingHigher || previewingUnowned ? ' <span class="codex-level-hint">預覽</span>' : ''}</dd></div>
       <div><dt>HP</dt><dd>${hpLabel}</dd></div>
-      <div><dt>ATK</dt><dd>${cls.atk}</dd></div>
+      <div><dt>ATK</dt><dd>${stats.atk}</dd></div>
       <div><dt>特性</dt><dd>${formatClassTrait(cls)}</dd></div>
     </dl>
   `;
+
+  const picker = codexDetailInfoEl.querySelector('.codex-level-picker');
+  for (let level = CLASS_LEVEL_MIN; level <= CLASS_LEVEL_MAX; level++) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'codex-level-btn' + (level === previewLevel ? ' active' : '');
+    if (owned && level === ownedLevel) btn.classList.add('owned');
+    btn.textContent = getClassLevelLabel(level);
+    btn.addEventListener('click', () => {
+      codexPreviewLevel = level;
+      renderClassDetail(classId, getAppState());
+    });
+    picker.appendChild(btn);
+  }
 
   if (activeNav === 'codex' && activeCodexTab === 'units') {
     unitPreview.setClass(classId);
@@ -874,6 +950,11 @@ function renderClassDetail(classId) {
 
 function selectClass(classId) {
   selectedClassId = classId;
+  const state = getAppState();
+  const owned = isClassOwnedInState(state, classId);
+  const progress = getProgressFromState(state, classId);
+  codexPreviewLevel = owned ? progress.level : CLASS_LEVEL_MIN;
+  codexPreviewLevelForClass = classId;
   render(getAppState());
 }
 
@@ -902,13 +983,13 @@ function createItemChip(item, { count, equipped, onSelect }) {
   return chip;
 }
 
-function createClassUnlockRow(cls, { onBuy }) {
+function createClassUnlockRow(cls, { owned, price, onBuy }) {
   const row = document.createElement('div');
   row.className = 'item-row';
 
   const iconWrap = document.createElement('span');
-  iconWrap.className = 'item-row-icon item-row-icon-unit';
-  setUnitIcon(iconWrap, cls.id);
+  iconWrap.className = 'item-row-icon item-row-icon-unit item-row-icon-copy';
+  setCopyCardIcon(iconWrap, cls.id);
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
@@ -916,7 +997,50 @@ function createClassUnlockRow(cls, { onBuy }) {
 
   row.append(iconWrap, body);
 
+  const priceEl = document.createElement('span');
+  priceEl.className = 'item-row-meta';
+  priceEl.textContent = `💎 ${price}`;
+  row.appendChild(priceEl);
+
   const canBuy = canAffordClass(cls.id);
+  if (onBuy) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn item-row-btn';
+    btn.textContent = owned ? '購買複本' : '解鎖';
+    btn.disabled = !canBuy;
+    if (!canBuy) btn.title = '鑽石不足';
+    btn.addEventListener('click', () => onBuy(cls.id, btn));
+    row.appendChild(btn);
+  }
+
+  return row;
+}
+
+function createFragmentRow(cls, { count, price, canBuy, canSynth, onBuy, onSynth }) {
+  const row = document.createElement('div');
+  row.className = 'item-row';
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'item-row-icon item-row-icon-unit item-row-icon-fragment';
+  setFragmentCardIcon(iconWrap, cls.id);
+
+  const body = document.createElement('div');
+  body.className = 'item-row-body';
+  body.innerHTML = `<span class="item-row-name">${cls.name}碎片</span>`;
+
+  row.append(iconWrap, body);
+
+  const meta = document.createElement('span');
+  meta.className = 'item-row-meta item-row-meta-owned';
+  meta.textContent = `持有 ×${count}`;
+  row.appendChild(meta);
+
+  const priceEl = document.createElement('span');
+  priceEl.className = 'item-row-meta';
+  priceEl.textContent = `💰 ${price}`;
+  row.appendChild(priceEl);
+
   if (onBuy) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -926,6 +1050,17 @@ function createClassUnlockRow(cls, { onBuy }) {
     if (!canBuy) btn.title = '金幣不足';
     btn.addEventListener('click', () => onBuy(cls.id, btn));
     row.appendChild(btn);
+  }
+
+  if (onSynth) {
+    const synthBtn = document.createElement('button');
+    synthBtn.type = 'button';
+    synthBtn.className = 'btn item-row-btn';
+    synthBtn.textContent = '合成';
+    synthBtn.disabled = !canSynth;
+    if (!canSynth) synthBtn.title = `需 ${FRAGMENTS_PER_COPY} 碎片`;
+    synthBtn.addEventListener('click', () => onSynth(cls.id, synthBtn));
+    row.appendChild(synthBtn);
   }
 
   return row;
@@ -1085,10 +1220,13 @@ function showPurchaseToast(message, { success = true } = {}) {
   });
 }
 
-function handlePurchaseSuccess({ name, price, rowEl, kind = 'item', currency = 'coin' }) {
+function handlePurchaseSuccess({ name, price, rowEl, kind = 'item', currency = 'coin', unlocked = false }) {
   rowEl?.classList.add('purchase-success');
   playCurrencySpendAnimation(currency, price);
-  const prefix = kind === 'class' ? '已解鎖' : '已購買';
+  let prefix = '已購買';
+  if (kind === 'class') prefix = unlocked ? '已解鎖' : '已購買複本';
+  else if (kind === 'fragment') prefix = '已購買';
+  else if (kind === 'synth') prefix = unlocked ? '已合成解鎖' : '已合成複本';
   showPurchaseToast(`${prefix} ${name}`);
   renderCurrencyBalances(getAppState());
   clearPurchaseNotifyTimer();
@@ -1125,35 +1263,77 @@ function renderFormationItems(state) {
 function renderShop(state) {
   shopGridEl.innerHTML = '';
 
-  const unlockable = CLASS_IDS.filter((classId) => {
-    if (!isUnlockable(classId)) return false;
-    return !isClassOwnedInState(state, classId);
-  });
+  const classTitle = document.createElement('div');
+  classTitle.className = 'section-title section-title-compact';
+  classTitle.textContent = '角色';
+  shopGridEl.appendChild(classTitle);
 
-  if (unlockable.length > 0) {
-    const unlockTitle = document.createElement('div');
-    unlockTitle.className = 'section-title section-title-compact';
-    unlockTitle.textContent = '角色解鎖';
-    shopGridEl.appendChild(unlockTitle);
+  for (const classId of CLASS_IDS) {
+    const cls = CLASSES[classId];
+    const owned = isClassOwnedInState(state, classId);
+    const price = getClassDiamondPrice(classId);
+    shopGridEl.appendChild(createClassUnlockRow(cls, {
+      owned,
+      price,
+      onBuy: (id, btn) => {
+        const result = buyClass(id);
+        if (result.ok) {
+          handlePurchaseSuccess({
+            name: cls.name,
+            price,
+            rowEl: btn.closest('.item-row'),
+            kind: 'class',
+            currency: 'diamond',
+            unlocked: result.unlocked,
+          });
+          return;
+        }
+        handlePurchaseFailure(result.reason, btn);
+      },
+    }));
+  }
 
-    for (const classId of unlockable) {
-      const cls = CLASSES[classId];
-      shopGridEl.appendChild(createClassUnlockRow(cls, {
-        onBuy: (id, btn) => {
-          const result = buyClass(id);
-          if (result.ok) {
-            handlePurchaseSuccess({
-              name: cls.name,
-              price: getUnlockPrice(id),
-              rowEl: btn.closest('.item-row'),
-              kind: 'class',
-            });
-            return;
-          }
-          handlePurchaseFailure(result.reason, btn);
-        },
-      }));
-    }
+  const fragTitle = document.createElement('div');
+  fragTitle.className = 'section-title section-title-compact';
+  fragTitle.textContent = '角色碎片';
+  shopGridEl.appendChild(fragTitle);
+
+  for (const classId of CLASS_IDS) {
+    const cls = CLASSES[classId];
+    const progress = getProgressFromState(state, classId);
+    shopGridEl.appendChild(createFragmentRow(cls, {
+      count: progress.fragments,
+      price: FRAGMENT_PRICE,
+      canBuy: (state.coins ?? 0) >= FRAGMENT_PRICE,
+      canSynth: progress.fragments >= FRAGMENTS_PER_COPY,
+      onBuy: (id, btn) => {
+        const result = buyFragment(id);
+        if (result.ok) {
+          handlePurchaseSuccess({
+            name: `${cls.name}碎片`,
+            price: FRAGMENT_PRICE,
+            rowEl: btn.closest('.item-row'),
+            kind: 'fragment',
+          });
+          return;
+        }
+        handlePurchaseFailure(result.reason, btn);
+      },
+      onSynth: (id, btn) => {
+        const result = synthesizeCopy(id);
+        if (result.ok) {
+          handlePurchaseSuccess({
+            name: cls.name,
+            price: 0,
+            rowEl: btn.closest('.item-row'),
+            kind: 'synth',
+            unlocked: result.unlocked,
+          });
+          return;
+        }
+        handlePurchaseFailure(result.reason, btn);
+      },
+    }));
   }
 
   const itemTitle = document.createElement('div');
@@ -1239,26 +1419,87 @@ function renderFormation(state) {
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
-    if (autoCastle && cls.id === 'castle') continue;
-    if (!isClassOwnedInState(state, cls.id)) continue;
+    const isFixedCastle = autoCastle && cls.id === 'castle';
+    if (!isClassOwnedInState(state, cls.id) && !isFixedCastle) continue;
 
     const selected = picked.includes(cls.id);
-    const soldOut = !selected && picked.length >= limit;
+    const soldOut = !isFixedCastle && !selected && picked.length >= limit;
+    const progress = getProgressFromState(state, cls.id);
+    const stats = getClassCombatStats(cls.id, progress.level);
+    const hpDisplay = cls.id === 'castle' && autoCastle
+      ? getCastleHpForMode(state.boardMode) + getClassLevelBonuses('castle', progress.level).hp
+      : stats.hp;
+    const upgradeCost = getUpgradeCopyCost(progress.level);
+    const canSynth = progress.fragments >= FRAGMENTS_PER_COPY;
+    const canUpgrade = upgradeCost != null && progress.copies >= upgradeCost;
 
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'class-card' + (selected ? ' selected' : '');
-    card.disabled = soldOut;
+    const card = document.createElement('div');
+    card.className = 'class-card' + (selected ? ' selected' : '') + (soldOut || isFixedCastle ? ' class-card-locked' : '');
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'class-card-select';
+    selectBtn.disabled = soldOut || isFixedCastle;
+    if (isFixedCastle) selectBtn.title = '攻城戰固定城堡';
     const iconWrap = document.createElement('span');
     iconWrap.className = 'class-icon';
     setUnitIcon(iconWrap, cls.id);
-
-    card.append(iconWrap);
-    card.insertAdjacentHTML('beforeend', `
-      <span class="class-name">${cls.name}</span>
-      <span class="class-meta">HP ${cls.hp} · ATK ${cls.atk}</span>
+    selectBtn.append(iconWrap);
+    selectBtn.insertAdjacentHTML('beforeend', `
+      <span class="class-name">${cls.name} · ${getClassLevelLabel(progress.level)}</span>
+      <span class="class-meta">HP ${hpDisplay} · ATK ${stats.atk}</span>
     `);
-    card.addEventListener('click', () => game.addToFormation(cls.id));
+    if (!isFixedCastle) {
+      selectBtn.addEventListener('click', () => game.addToFormation(cls.id));
+    }
+
+    const count = document.createElement('div');
+    count.className = 'class-token-stock';
+    count.append(
+      createTokenStockItem(cls.id, 'copy', progress.copies),
+      createTokenStockItem(cls.id, 'fragment', progress.fragments),
+    );
+
+    const actions = document.createElement('div');
+    actions.className = 'class-card-actions';
+
+    const synthBtn = document.createElement('button');
+    synthBtn.type = 'button';
+    synthBtn.className = 'btn class-card-action';
+    synthBtn.textContent = '合成';
+    synthBtn.disabled = !canSynth;
+    if (!canSynth) synthBtn.title = `需 ${FRAGMENTS_PER_COPY} 碎片`;
+    synthBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const result = synthesizeCopy(cls.id);
+      if (!result.ok) {
+        handlePurchaseFailure(result.reason, synthBtn);
+        return;
+      }
+      showPurchaseToast(result.unlocked ? `已合成解鎖 ${cls.name}` : `已合成 ${cls.name}複本`);
+      game.notify();
+    });
+
+    const upgradeBtn = document.createElement('button');
+    upgradeBtn.type = 'button';
+    upgradeBtn.className = 'btn class-card-action';
+    upgradeBtn.textContent = upgradeCost == null ? 'MAX' : `升級 ${upgradeCost}`;
+    upgradeBtn.disabled = !canUpgrade;
+    if (upgradeCost == null) upgradeBtn.title = '已達最大等級';
+    else if (!canUpgrade) upgradeBtn.title = `需 ${upgradeCost} 複本`;
+    upgradeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const result = upgradeClass(cls.id);
+      if (!result.ok) {
+        handlePurchaseFailure(result.reason, upgradeBtn);
+        return;
+      }
+      showPurchaseToast(`${cls.name} ${getClassLevelLabel(result.level)}`);
+      game.notify();
+    });
+
+    actions.append(synthBtn, upgradeBtn);
+    card.append(selectBtn, count, actions);
     formationPoolEl.appendChild(card);
   }
 }
@@ -1788,6 +2029,7 @@ function updateBottomNav(state) {
     const isBattle = btn.dataset.nav === 'battle';
     btn.disabled = lockNav && !isBattle;
   }
+  if (lockNav) navIconAnimator.deactivate();
 }
 
 function render(state) {
@@ -1904,7 +2146,7 @@ findMatchBtn.addEventListener('click', async () => {
   }
   findMatchBtn.disabled = true;
   try {
-    await onlineClient.findMatch(boardMode, undefined, roster);
+    await onlineClient.findMatch(boardMode, undefined, roster, getMatchClassLevels());
     render(getAppState());
   } catch (e) {
     await showAlert(e.message ?? '匹配失敗');
@@ -1922,7 +2164,7 @@ createRoomBtn.addEventListener('click', async () => {
   }
   createRoomBtn.disabled = true;
   try {
-    await onlineClient.createRoom(boardMode, undefined, roster);
+    await onlineClient.createRoom(boardMode, undefined, roster, getMatchClassLevels());
     render(getAppState());
   } catch (e) {
     await showAlert(e.message ?? '建立房間失敗');
@@ -1945,7 +2187,7 @@ joinRoomBtn.addEventListener('click', async () => {
   }
   joinRoomBtn.disabled = true;
   try {
-    await onlineClient.joinRoom(code, undefined, roster);
+    await onlineClient.joinRoom(code, undefined, roster, getMatchClassLevels());
   } catch (e) {
     await showAlert(e.message ?? '加入失敗');
   } finally {

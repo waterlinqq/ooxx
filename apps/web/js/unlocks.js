@@ -2,13 +2,13 @@ import { CLASS_IDS, CLASSES } from './units.js';
 
 export const STARTER_CLASSES = ['archer', 'swordsman', 'shield', 'castle'];
 
-const DEFAULT_UNLOCK_PRICE = 100;
+export const CLASS_DIAMOND_PRICE = 100;
 
 /** @type {Record<string, number>} */
 export const UNLOCK_PRICES = Object.fromEntries(
   CLASS_IDS
     .filter((id) => !STARTER_CLASSES.includes(id) && id !== 'castle')
-    .map((id) => [id, DEFAULT_UNLOCK_PRICE]),
+    .map((id) => [id, CLASS_DIAMOND_PRICE]),
 );
 
 export function isStarterClass(classId) {
@@ -20,6 +20,10 @@ export function isUnlockable(classId) {
 }
 
 export function getUnlockPrice(classId) {
-  const price = UNLOCK_PRICES[classId];
-  return typeof price === 'number' ? price : null;
+  return getClassDiamondPrice(classId);
+}
+
+export function getClassDiamondPrice(classId) {
+  if (!CLASSES[classId]) return null;
+  return CLASS_DIAMOND_PRICE;
 }

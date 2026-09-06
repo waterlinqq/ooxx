@@ -45,6 +45,55 @@ export function fitLayoutBoundsToAspect(bounds, aspect) {
   return { centerX, centerY, halfW, halfH };
 }
 
+const TMP_PROJECT = new THREE.Vector3();
+
+/** Project a world-space Box3 into orthographic camera view bounds. */
+export function projectBoxToCameraBounds(box, camera, padding = 0, headroom = 1) {
+  if (box.isEmpty()) return null;
+
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  const { min, max } = box;
+  for (const x of [min.x, max.x]) {
+    for (const y of [min.y, max.y]) {
+      for (const z of [min.z, max.z]) {
+        TMP_PROJECT.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+        minX = Math.min(minX, TMP_PROJECT.x);
+        maxX = Math.max(maxX, TMP_PROJECT.x);
+        minY = Math.min(minY, TMP_PROJECT.y);
+        maxY = Math.max(maxY, TMP_PROJECT.y);
+      }
+    }
+  }
+
+  return {
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    halfW: ((maxX - minX) / 2 + padding) * headroom,
+    halfH: ((maxY - minY) / 2 + padding) * headroom,
+  };
+}
+
+/** Fit bounds to viewport aspect and reserve space for frustum-based pinch zoom. */
+export function prepareOrbitLayoutFrustum(bounds, aspect, orbitControls) {
+  let layout = fitLayoutBoundsToAspect(bounds, aspect);
+  if (orbitControls && !orbitControls.zoomViaScale) {
+    const zoom = sanitizeZoom(orbitControls.zoom, orbitControls.minZoom, orbitControls.maxZoom);
+    layout = {
+      ...layout,
+      halfW: layout.halfW * zoom,
+      halfH: layout.halfH * zoom,
+    };
+  }
+  return layout;
+}
+
 export function applyOrbitFrustumZoom(camera, layoutFrustum, orbitControls, debugHud = null) {
   if (!layoutFrustum || !orbitControls) return;
 

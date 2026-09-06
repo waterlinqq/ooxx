@@ -7,7 +7,8 @@ import {
   LimitedOrbitControls,
   isTouchDevice,
   isValidLayoutBounds,
-  fitLayoutBoundsToAspect,
+  prepareOrbitLayoutFrustum,
+  projectBoxToCameraBounds,
   applyOrbitFrustumZoom,
 } from './LimitedOrbitControls.js';
 import {
@@ -22,10 +23,9 @@ const PREVIEW_TILE_SIZE = 0.25;
 const PREVIEW_TILE_PITCH = 0.29;
 const PREVIEW_FRUSTUM = 2.8;
 const PREVIEW_FRAME_PADDING = 0.08;
-const PREVIEW_ORBIT_HEADROOM = 1.14;
+const PREVIEW_ORBIT_HEADROOM = 1.2;
 const RANGE_Y = 0.047;
 const PREVIEW_BOX = new THREE.Box3();
-const PREVIEW_VIEW = new THREE.Vector3();
 
 const ORTHOGONAL_DIRECTIONS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
@@ -194,19 +194,11 @@ export class CharacterPreviewScene {
   }
 
   previewContentBounds() {
-    const rotX = this.previewPivot.rotation.x;
-    const rotY = this.previewPivot.rotation.y;
-    this.previewPivot.rotation.set(0, 0, 0);
-    this.previewPivot.scale.setScalar(1);
     this.previewPivot.updateMatrixWorld(true);
 
     PREVIEW_BOX.makeEmpty();
     if (this.preview?.root) PREVIEW_BOX.expandByObject(this.preview.root);
     if (this.rangeBoard) PREVIEW_BOX.expandByObject(this.rangeBoard);
-
-    this.previewPivot.rotation.x = rotX;
-    this.previewPivot.rotation.y = rotY;
-    this.previewPivot.updateMatrixWorld(true);
 
     if (PREVIEW_BOX.isEmpty()) {
       return {
@@ -217,36 +209,33 @@ export class CharacterPreviewScene {
       };
     }
 
-    this.camera.updateMatrixWorld();
-    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    const { min, max } = PREVIEW_BOX;
-    for (const x of [min.x, max.x]) {
-      for (const y of [min.y, max.y]) {
-        for (const z of [min.z, max.z]) {
-          PREVIEW_VIEW.set(x, y, z).applyMatrix4(this.camera.matrixWorldInverse);
-          minX = Math.min(minX, PREVIEW_VIEW.x);
-          maxX = Math.max(maxX, PREVIEW_VIEW.x);
-          minY = Math.min(minY, PREVIEW_VIEW.y);
-          maxY = Math.max(maxY, PREVIEW_VIEW.y);
-        }
-      }
-    }
-
-    return {
-      centerX: (minX + maxX) / 2,
-      centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + PREVIEW_FRAME_PADDING) * PREVIEW_ORBIT_HEADROOM,
-      halfH: ((maxY - minY) / 2 + PREVIEW_FRAME_PADDING) * PREVIEW_ORBIT_HEADROOM,
+    return projectBoxToCameraBounds(
+      PREVIEW_BOX,
+      this.camera,
+      PREVIEW_FRAME_PADDING,
+      PREVIEW_ORBIT_HEADROOM
+    ) ?? {
+      centerX: 0,
+      centerY: 0.45,
+      halfW: (PREVIEW_FRUSTUM / 2) * PREVIEW_ORBIT_HEADROOM,
+      halfH: (PREVIEW_FRUSTUM / 2) * PREVIEW_ORBIT_HEADROOM,
     };
   }
 
+  updateLayoutFrustum() {
+    const width = this.container.clientWidth || this.lastValidWidth;
+    const height = this.container.clientHeight || this.lastValidHeight;
+    if (!width || !height) return false;
+
+    const bounds = this.previewContentBounds();
+    if (!isValidLayoutBounds(bounds)) return false;
+
+    this.layoutFrustum = prepareOrbitLayoutFrustum(bounds, width / height, this.orbitControls);
+    return true;
+  }
+
   applyOrbitZoom() {
+    this.updateLayoutFrustum();
     applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
   }
 
@@ -264,12 +253,6 @@ export class CharacterPreviewScene {
     this.lastValidWidth = width;
     this.lastValidHeight = height;
 
-    const aspect = width / height;
-    const bounds = fitLayoutBoundsToAspect(this.previewContentBounds(), aspect);
-    if (!isValidLayoutBounds(bounds)) return;
-
-    this.layoutFrustum = bounds;
-    this.orbitControls?.applyTransform();
     this.applyOrbitZoom();
 
     this.renderer.setSize(width, height);

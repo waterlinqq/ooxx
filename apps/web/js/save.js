@@ -1,6 +1,14 @@
-import { ITEM_IDS, SHOP_PRICES, STARTING_COINS, STARTING_DIAMONDS } from './items.js';
-import { CLASS_IDS, CLASSES } from './units.js';
-import { STARTER_CLASSES, getUnlockPrice, isUnlockable } from './unlocks.js';
+import { ITEM_IDS, SHOP_PRICES, STARTING_COINS, STARTING_DIAMONDS, FRAGMENT_PRICE } from './items.js';
+import {
+  CLASS_IDS,
+  CLASSES,
+  CLASS_LEVEL_MIN,
+  CLASS_LEVEL_MAX,
+  FRAGMENTS_PER_COPY,
+  clampClassLevel,
+  getUpgradeCopyCost,
+} from './units.js';
+import { STARTER_CLASSES, getClassDiamondPrice, isUnlockable, isStarterClass } from './unlocks.js';
 import { getAuthToken, ensureGuestToken } from './guestAuth.js';
 import { apiUrl } from './config.js';
 import {
@@ -13,10 +21,60 @@ import {
 const SAVE_KEY = 'ooxx-save-v1';
 
 /** @typedef {{ dateKey: string, ready: string[], claimed: string[] }} DailyQuestsData */
-/** @typedef {{ coins: number, diamonds: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]>, equippedItem: string | null, dailyQuests: DailyQuestsData }} SaveData */
+/** @typedef {{ level: number, copies: number, fragments: number }} ClassProgress */
+/** @typedef {{ coins: number, diamonds: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], classProgress: Record<string, ClassProgress>, rostersByMode?: Record<string, string[]>, equippedItem: string | null, dailyQuests: DailyQuestsData }} SaveData */
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
+}
+
+function createDefaultClassProgress() {
+  return { level: CLASS_LEVEL_MIN, copies: 0, fragments: 0 };
+}
+
+function normalizeClassProgressEntry(raw) {
+  const copies = typeof raw?.copies === 'number' && raw.copies > 0 ? Math.floor(raw.copies) : 0;
+  const fragments = typeof raw?.fragments === 'number' && raw.fragments > 0 ? Math.floor(raw.fragments) : 0;
+  const level = clampClassLevel(raw?.level ?? CLASS_LEVEL_MIN);
+  return {
+    level: Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, level)),
+    copies,
+    fragments,
+  };
+}
+
+function normalizeClassProgress(raw) {
+  /** @type {Record<string, ClassProgress>} */
+  const progress = {};
+  const source = raw && typeof raw === 'object' ? raw : {};
+  for (const classId of CLASS_IDS) {
+    progress[classId] = source[classId]
+      ? normalizeClassProgressEntry(source[classId])
+      : createDefaultClassProgress();
+  }
+  return progress;
+}
+
+function mergeClassProgress(local, cloud) {
+  /** @type {Record<string, ClassProgress>} */
+  const merged = {};
+  for (const classId of CLASS_IDS) {
+    const a = local[classId] ?? createDefaultClassProgress();
+    const b = cloud[classId] ?? createDefaultClassProgress();
+    merged[classId] = {
+      level: Math.max(a.level, b.level),
+      copies: Math.max(a.copies, b.copies),
+      fragments: Math.max(a.fragments, b.fragments),
+    };
+  }
+  return merged;
+}
+
+function ensureClassProgress(save, classId) {
+  if (!save.classProgress[classId]) {
+    save.classProgress[classId] = createDefaultClassProgress();
+  }
+  return save.classProgress[classId];
 }
 
 function createDefaultOwnedClasses() {
@@ -105,6 +163,7 @@ const DEFAULT_SAVE = {
   inventory: createDefaultInventory(),
   tutorialDone: false,
   ownedClasses: createDefaultOwnedClasses(),
+  classProgress: normalizeClassProgress({}),
   rostersByMode: {},
   equippedItem: null,
   dailyQuests: createDefaultDailyQuests(),
@@ -121,6 +180,7 @@ function normalizeSave(raw) {
     inventory: createDefaultInventory(),
     tutorialDone: raw?.tutorialDone === true,
     ownedClasses: normalizeOwnedClasses(raw),
+    classProgress: normalizeClassProgress(raw?.classProgress ?? raw?.class_progress),
     rostersByMode: normalizeRostersByMode(raw?.rostersByMode),
     equippedItem: normalizeEquippedItem(raw?.equippedItem ?? null),
     dailyQuests: normalizeDailyQuests(raw?.dailyQuests ?? raw?.daily_quests),
@@ -144,6 +204,7 @@ function mergeCloudLocal(cloud, local) {
 
   const owned = new Set([...merged.ownedClasses, ...cloudNorm.ownedClasses]);
   merged.ownedClasses = CLASS_IDS.filter((id) => owned.has(id));
+  merged.classProgress = mergeClassProgress(merged.classProgress, cloudNorm.classProgress);
 
   for (const id of ITEM_IDS) {
     merged.inventory[id] = Math.max(merged.inventory[id] ?? 0, cloudNorm.inventory[id] ?? 0);
@@ -227,6 +288,9 @@ export function getSaveSnapshot() {
     inventory: { ...save.inventory },
     tutorialDone: save.tutorialDone,
     ownedClasses: [...save.ownedClasses],
+    classProgress: Object.fromEntries(
+      CLASS_IDS.map((id) => [id, { ...save.classProgress[id] }]),
+    ),
     rostersByMode: { ...save.rostersByMode },
     equippedItem: save.equippedItem ?? null,
     dailyQuests,
@@ -355,35 +419,145 @@ export function getOwnedClasses() {
   return [...loadSave().ownedClasses];
 }
 
-export function canAffordClass(classId) {
+export function getClassProgress(classId) {
   const save = loadSave();
-  const price = getUnlockPrice(classId);
-  return typeof price === 'number' && save.coins >= price;
+  return { ...(save.classProgress[classId] ?? createDefaultClassProgress()) };
 }
 
-/** @returns {{ ok: true } | { ok: false, reason: string }} */
+export function getClassProgressMap() {
+  const save = loadSave();
+  return Object.fromEntries(
+    CLASS_IDS.map((id) => [id, { ...(save.classProgress[id] ?? createDefaultClassProgress()) }]),
+  );
+}
+
+export function getOwnedClassLevels() {
+  const save = loadSave();
+  /** @type {Record<string, number>} */
+  const levels = {};
+  for (const classId of save.ownedClasses) {
+    levels[classId] = (save.classProgress[classId] ?? createDefaultClassProgress()).level;
+  }
+  return levels;
+}
+
+export function canAffordClass(classId) {
+  const save = loadSave();
+  const price = getClassDiamondPrice(classId);
+  return typeof price === 'number' && save.diamonds >= price;
+}
+
+export function canAffordFragment(classId) {
+  if (!CLASSES[classId]) return false;
+  return loadSave().coins >= FRAGMENT_PRICE;
+}
+
+export function canSynthesizeCopy(classId) {
+  if (!CLASSES[classId]) return false;
+  return getClassProgress(classId).fragments >= FRAGMENTS_PER_COPY;
+}
+
+export function canUpgradeClass(classId) {
+  const save = loadSave();
+  if (!save.ownedClasses.includes(classId)) return false;
+  const progress = save.classProgress[classId] ?? createDefaultClassProgress();
+  const cost = getUpgradeCopyCost(progress.level);
+  return cost != null && progress.copies >= cost;
+}
+
+/** @returns {{ ok: true, unlocked: boolean } | { ok: false, reason: string }} */
 export function buyClass(classId) {
   const save = loadSave();
 
-  if (!isUnlockable(classId)) {
-    return { ok: false, reason: '無法解鎖此職業' };
-  }
-  if (save.ownedClasses.includes(classId)) {
-    return { ok: false, reason: '已解鎖此職業' };
+  if (!CLASSES[classId]) {
+    return { ok: false, reason: '未知職業' };
   }
 
-  const price = getUnlockPrice(classId);
+  const owned = save.ownedClasses.includes(classId);
+  if (!owned && !isUnlockable(classId) && !isStarterClass(classId)) {
+    return { ok: false, reason: '無法解鎖此職業' };
+  }
+
+  const price = getClassDiamondPrice(classId);
   if (typeof price !== 'number') {
     return { ok: false, reason: '未知商品' };
   }
-  if (save.coins < price) {
+  if (save.diamonds < price) {
+    return { ok: false, reason: '鑽石不足' };
+  }
+
+  save.diamonds -= price;
+  const progress = ensureClassProgress(save, classId);
+  if (!owned) {
+    save.ownedClasses = CLASS_IDS.filter((id) => save.ownedClasses.includes(id) || id === classId);
+    progress.level = CLASS_LEVEL_MIN;
+  } else {
+    progress.copies += 1;
+  }
+  persistSave();
+  return { ok: true, unlocked: !owned };
+}
+
+/** @returns {{ ok: true } | { ok: false, reason: string }} */
+export function buyFragment(classId) {
+  const save = loadSave();
+  if (!CLASSES[classId]) {
+    return { ok: false, reason: '未知職業' };
+  }
+  if (save.coins < FRAGMENT_PRICE) {
     return { ok: false, reason: '金幣不足' };
   }
 
-  save.coins -= price;
-  save.ownedClasses = CLASS_IDS.filter((id) => save.ownedClasses.includes(id) || id === classId);
+  save.coins -= FRAGMENT_PRICE;
+  ensureClassProgress(save, classId).fragments += 1;
   persistSave();
   return { ok: true };
+}
+
+/** @returns {{ ok: true, unlocked: boolean } | { ok: false, reason: string }} */
+export function synthesizeCopy(classId) {
+  const save = loadSave();
+  if (!CLASSES[classId]) {
+    return { ok: false, reason: '未知職業' };
+  }
+
+  const progress = ensureClassProgress(save, classId);
+  if (progress.fragments < FRAGMENTS_PER_COPY) {
+    return { ok: false, reason: '碎片不足' };
+  }
+
+  const owned = save.ownedClasses.includes(classId);
+  progress.fragments -= FRAGMENTS_PER_COPY;
+  if (!owned) {
+    save.ownedClasses = CLASS_IDS.filter((id) => save.ownedClasses.includes(id) || id === classId);
+    progress.level = CLASS_LEVEL_MIN;
+  } else {
+    progress.copies += 1;
+  }
+  persistSave();
+  return { ok: true, unlocked: !owned };
+}
+
+/** @returns {{ ok: true, level: number } | { ok: false, reason: string }} */
+export function upgradeClass(classId) {
+  const save = loadSave();
+  if (!save.ownedClasses.includes(classId)) {
+    return { ok: false, reason: '尚未解鎖此職業' };
+  }
+
+  const progress = ensureClassProgress(save, classId);
+  const cost = getUpgradeCopyCost(progress.level);
+  if (cost == null) {
+    return { ok: false, reason: '已達最大等級' };
+  }
+  if (progress.copies < cost) {
+    return { ok: false, reason: '複本不足' };
+  }
+
+  progress.copies -= cost;
+  progress.level += 1;
+  persistSave();
+  return { ok: true, level: progress.level };
 }
 
 export function canAfford(itemId) {

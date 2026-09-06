@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { TileGrid, TILE_PITCH, tileWorldPosition } from './TileGrid.js';
+import { TileGrid, TILE_PITCH, TILE_SIZE, tileWorldPosition } from './TileGrid.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
@@ -16,7 +16,8 @@ import {
   LimitedOrbitControls,
   isTouchDevice,
   isValidLayoutBounds,
-  fitLayoutBoundsToAspect,
+  prepareOrbitLayoutFrustum,
+  projectBoxToCameraBounds,
   applyOrbitFrustumZoom,
 } from './LimitedOrbitControls.js';
 import {
@@ -28,8 +29,12 @@ import {
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
 const FRAME_PADDING = 0.02;
-const ORBIT_FRUSTUM_HEADROOM = 1.14;
+const ORBIT_FRUSTUM_HEADROOM = 1.2;
+const TILE_HALF_HEIGHT = 0.07;
+const CONTENT_BOX = new THREE.Box3();
 const TMP_VIEW = new THREE.Vector3();
+const TMP_GROUND = new THREE.Vector3();
+const GROUND_Y = -0.08;
 
 export class BoardScene {
   constructor(containerEl, fxLayerEl, callbacks) {
@@ -187,18 +192,18 @@ export class BoardScene {
 
   contentGroundPoints() {
     const size = this.boardSize || 3;
-    const half = (size * TILE_PITCH) / 2;
-    const points = [
-      new THREE.Vector3(-half, 0, -half),
-      new THREE.Vector3(-half, 0, half),
-      new THREE.Vector3(half, 0, -half),
-      new THREE.Vector3(half, 0, half),
+    const halfGrid = (size * TILE_PITCH) / 2;
+    const extent = halfGrid - TILE_PITCH / 2 + TILE_SIZE / 2;
+    return [
+      new THREE.Vector3(-extent, -TILE_HALF_HEIGHT, -extent),
+      new THREE.Vector3(-extent, -TILE_HALF_HEIGHT, extent),
+      new THREE.Vector3(extent, -TILE_HALF_HEIGHT, -extent),
+      new THREE.Vector3(extent, -TILE_HALF_HEIGHT, extent),
     ];
-    return points;
   }
 
-  // Fit the default board layout. Orbit/zoom only move boardPivot inside this box.
-  contentBounds() {
+  fallbackContentBounds() {
+    this.boardPivot.updateMatrixWorld(true);
     this.camera.updateMatrixWorld();
     this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
 
@@ -208,8 +213,10 @@ export class BoardScene {
     let maxY = -Infinity;
 
     for (const point of this.contentGroundPoints()) {
-      for (const y of [0, CONTENT_HEIGHT]) {
-        TMP_VIEW.set(point.x, y, point.z).applyMatrix4(this.camera.matrixWorldInverse);
+      for (const y of [-TILE_HALF_HEIGHT, CONTENT_HEIGHT]) {
+        TMP_VIEW.set(point.x, y, point.z)
+          .applyMatrix4(this.boardPivot.matrixWorld)
+          .applyMatrix4(this.camera.matrixWorldInverse);
         minX = Math.min(minX, TMP_VIEW.x);
         maxX = Math.max(maxX, TMP_VIEW.x);
         minY = Math.min(minY, TMP_VIEW.y);
@@ -225,7 +232,70 @@ export class BoardScene {
     };
   }
 
+  extendBoundsForVisibleGround(bounds) {
+    if (!bounds) return bounds;
+
+    this.boardPivot.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld();
+    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
+
+    let minX = bounds.centerX - bounds.halfW;
+    let maxX = bounds.centerX + bounds.halfW;
+    let minY = bounds.centerY - bounds.halfH;
+    let maxY = bounds.centerY + bounds.halfH;
+
+    for (const point of this.contentGroundPoints()) {
+      TMP_VIEW.set(point.x, 0, point.z).applyMatrix4(this.boardPivot.matrixWorld);
+      TMP_GROUND.set(TMP_VIEW.x, GROUND_Y, TMP_VIEW.z).applyMatrix4(this.camera.matrixWorldInverse);
+      minX = Math.min(minX, TMP_GROUND.x);
+      maxX = Math.max(maxX, TMP_GROUND.x);
+      minY = Math.min(minY, TMP_GROUND.y);
+      maxY = Math.max(maxY, TMP_GROUND.y);
+    }
+
+    return {
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
+      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
+      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
+    };
+  }
+
+  // Fit the board in camera view; includes current pivot orbit rotation/scale.
+  contentBounds() {
+    this.boardPivot.updateMatrixWorld(true);
+
+    CONTENT_BOX.makeEmpty();
+    if (this.tileGrid.group.children.length) {
+      CONTENT_BOX.expandByObject(this.tileGrid.group);
+    }
+    if (this.unitManager.group.children.length) {
+      CONTENT_BOX.expandByObject(this.unitManager.group);
+    }
+
+    let bounds = CONTENT_BOX.isEmpty()
+      ? this.fallbackContentBounds()
+      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, ORBIT_FRUSTUM_HEADROOM);
+
+    bounds = bounds ?? this.fallbackContentBounds();
+    return this.extendBoundsForVisibleGround(bounds);
+  }
+
+  updateLayoutFrustum() {
+    const width = this.container.clientWidth || this.lastValidWidth;
+    const height = this.container.clientHeight || this.lastValidHeight;
+    if (!width || !height) return false;
+
+    const bounds = this.contentBounds();
+    if (!isValidLayoutBounds(bounds)) return false;
+
+    this.frustumBase = bounds.halfH * 2;
+    this.layoutFrustum = prepareOrbitLayoutFrustum(bounds, width / height, this.orbitControls);
+    return true;
+  }
+
   applyOrbitZoom() {
+    this.updateLayoutFrustum();
     applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
   }
 
@@ -243,13 +313,6 @@ export class BoardScene {
     this.lastValidWidth = width;
     this.lastValidHeight = height;
 
-    const aspect = width / height;
-    const bounds = fitLayoutBoundsToAspect(this.contentBounds(), aspect);
-    if (!isValidLayoutBounds(bounds)) return;
-
-    this.frustumBase = bounds.halfH * 2;
-    this.layoutFrustum = bounds;
-    this.orbitControls?.applyTransform();
     this.applyOrbitZoom();
 
     this.renderer.setSize(width, height);

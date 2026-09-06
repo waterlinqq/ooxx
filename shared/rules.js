@@ -1,4 +1,4 @@
-import { CLASSES, createEmptyBoard, cloneBoard, isCastleUnit, getBoardMode } from './units.js';
+import { CLASSES, createEmptyBoard, cloneBoard, isCastleUnit, getBoardMode, getClassCombatStats, CLASS_LEVEL_MIN } from './units.js';
 
 /** @typedef {{ row: number, col: number, team: string, expiresOnTeamTurnStart: string }} ShadowClone */
 
@@ -585,6 +585,7 @@ export function applyPossession(attacker, victim) {
   const cls = CLASSES[victim.classId];
   const prev = {
     classId: attacker.classId,
+    level: attacker.level,
     hp: attacker.hp,
     maxHp: attacker.maxHp,
     atk: attacker.atk,
@@ -606,10 +607,12 @@ export function applyPossession(attacker, victim) {
   };
 
   attacker.classId = victim.classId;
+  attacker.level = victim.level ?? CLASS_LEVEL_MIN;
   attacker.hp = prev.hp;
   attacker.maxHp = prev.hp;
-  attacker.atk = cls.atk;
-  attacker.baseAtk = cls.atk;
+  const possessed = getClassCombatStats(victim.classId, attacker.level);
+  attacker.atk = possessed.atk;
+  attacker.baseAtk = possessed.atk;
   attacker.range = cls.range;
   attacker.minRange = cls.minRange ?? null;
   attacker.moveRange = cls.moveRange ?? 1;

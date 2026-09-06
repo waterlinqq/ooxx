@@ -78,6 +78,12 @@ function createMats() {
       metalness: 0.04,
       side: THREE.DoubleSide,
     }),
+    clothAlt: new THREE.MeshStandardMaterial({
+      color: 0x5b4a72,
+      roughness: 0.92,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+    }),
     trim: new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
       roughness: 0.32,
@@ -151,44 +157,114 @@ function buildBattleIcon(mats) {
     shadow: true,
   });
 
-  addSword(root, mats, { rotY: 0.55, tilt: 0.22, side: -1 });
-  addSword(root, mats, { rotY: -0.55, tilt: 0.22, side: 1 });
+  const swordL = addSword(root, mats, { rotY: 0.55, tilt: 0.22, side: -1 });
+  const swordR = addSword(root, mats, { rotY: -0.55, tilt: 0.22, side: 1 });
+  swordL.userData.baseRotation = swordL.rotation.clone();
+  swordR.userData.baseRotation = swordR.rotation.clone();
+  swordL.userData.basePosition = swordL.position.clone();
+  swordR.userData.basePosition = swordR.position.clone();
+  root.userData.swords = [swordL, swordR];
+  root.userData.baseRotation = root.rotation.clone();
 
   root.rotation.y = 0.35;
   return root;
 }
 
+function addRosterMember(parent, mats, {
+  pos = [0, 0, 0],
+  scale = 1,
+  bodyMat = mats.cloth,
+  hood = false,
+} = {}) {
+  const member = new THREE.Group();
+  const legH = 0.042;
+  const bodyH = 0.068;
+  const headR = 0.024;
+
+  for (const side of [-1, 1]) {
+    part(member, cached('nav-roster-leg', () => new THREE.BoxGeometry(0.022, legH, 0.026)), mats.leather, {
+      pos: [side * 0.015, legH / 2, 0],
+      shadow: true,
+    });
+  }
+
+  part(member, cached('nav-roster-torso', () => new THREE.BoxGeometry(0.052, bodyH, 0.03)), bodyMat, {
+    pos: [0, legH + bodyH / 2, 0],
+    shadow: true,
+  });
+
+  for (const side of [-1, 1]) {
+    part(member, cached('nav-roster-arm', () => new THREE.BoxGeometry(0.016, 0.05, 0.018)), bodyMat, {
+      pos: [side * 0.036, legH + bodyH * 0.42, 0],
+      shadow: true,
+    });
+  }
+
+  if (hood) {
+    part(member, cached('nav-roster-hood', () => new THREE.SphereGeometry(headR * 1.15, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.62)), bodyMat, {
+      pos: [0, legH + bodyH + headR * 0.7, -0.004],
+      shadow: true,
+    });
+  } else {
+    part(member, cached('nav-roster-head', () => new THREE.SphereGeometry(headR, 8, 8)), mats.trim, {
+      pos: [0, legH + bodyH + headR + 0.006, 0],
+      shadow: true,
+    });
+  }
+
+  member.position.set(pos[0], pos[1], pos[2]);
+  member.scale.setScalar(scale);
+  parent.add(member);
+  return member;
+}
+
 function buildFormationIcon(mats) {
   const root = new THREE.Group();
-  addContactShadow(root, 0.26, 0.58);
+  addContactShadow(root, 0.3, 0.52);
 
-  const shield = new THREE.Group();
-  part(shield, cached('nav-shield-face', () => new THREE.BoxGeometry(0.22, 0.28, 0.03)), mats.cloth, {
-    pos: [0, 0.16, 0],
+  const deckY = 0.018;
+  part(root, cached('nav-roster-deck', () => new THREE.BoxGeometry(0.34, 0.036, 0.14)), mats.wood, {
+    pos: [0, deckY, 0],
     shadow: true,
   });
-  part(shield, cached('nav-shield-rim', () => new THREE.BoxGeometry(0.24, 0.3, 0.018)), mats.trim, {
-    pos: [0, 0.16, -0.012],
+  part(root, cached('nav-roster-back', () => new THREE.BoxGeometry(0.34, 0.16, 0.02)), mats.cloth, {
+    pos: [0, deckY + 0.1, -0.07],
     shadow: true,
   });
-  part(shield, cached('nav-shield-boss', () => new THREE.CylinderGeometry(0.05, 0.05, 0.02, 10)), mats.gold, {
-    pos: [0, 0.16, 0.02],
-    rot: [Math.PI / 2, 0, 0],
-    shadow: true,
-  });
-  part(shield, cached('nav-shield-grip', () => new THREE.BoxGeometry(0.04, 0.08, 0.03)), mats.leather, {
-    pos: [0, 0.12, -0.04],
-    shadow: true,
-  });
-  part(shield, cached('nav-shield-stand', () => new THREE.BoxGeometry(0.06, 0.04, 0.08)), mats.wood, {
-    pos: [0, 0.02, 0.02],
-    rot: [0.18, 0, 0],
+  part(root, cached('nav-roster-back-trim', () => new THREE.BoxGeometry(0.36, 0.014, 0.024)), mats.trim, {
+    pos: [0, deckY + 0.182, -0.07],
     shadow: true,
   });
 
-  shield.rotation.x = -0.12;
-  shield.rotation.y = 0.35;
-  root.add(shield);
+  const slotColors = [mats.clothAlt, mats.cloth, mats.leather];
+  const memberGroups = [];
+  const members = [
+    { x: -0.1, scale: 0.94, bodyMat: mats.clothAlt, hood: true },
+    { x: 0, scale: 1.06, bodyMat: mats.cloth, hood: false },
+    { x: 0.1, scale: 0.94, bodyMat: mats.leather, hood: false },
+  ];
+
+  for (let i = 0; i < members.length; i++) {
+    const { x, scale, bodyMat, hood } = members[i];
+    part(root, cached(`nav-roster-slot-${i}`, () => new THREE.CylinderGeometry(0.038, 0.038, 0.006, 12)), slotColors[i], {
+      pos: [x, deckY + 0.02, 0.01],
+      shadow: true,
+    });
+    const member = addRosterMember(root, mats, {
+      pos: [x, deckY + 0.022, 0.01],
+      scale,
+      bodyMat,
+      hood,
+    });
+    member.userData.navMemberIndex = i;
+    member.userData.basePosition = member.position.clone();
+    member.userData.baseScale = scale;
+    memberGroups.push(member);
+  }
+
+  root.userData.members = memberGroups;
+
+  root.rotation.y = 0.35;
   return root;
 }
 
@@ -196,46 +272,76 @@ function buildCharactersIcon(mats) {
   const root = new THREE.Group();
   addContactShadow(root, 0.28, 0.58);
 
-  const book = new THREE.Group();
-  part(book, cached('nav-book-spine', () => new THREE.BoxGeometry(0.04, 0.18, 0.14)), mats.leather, {
-    pos: [-0.06, 0.1, 0],
+  const codex = new THREE.Group();
+
+  part(codex, cached('nav-codex-stand', () => new THREE.BoxGeometry(0.22, 0.06, 0.14)), mats.wood, {
+    pos: [0, 0.03, 0],
     shadow: true,
   });
-  part(book, cached('nav-book-cover-l', () => new THREE.BoxGeometry(0.1, 0.18, 0.02)), mats.leather, {
-    pos: [-0.01, 0.1, 0.07],
-    rot: [0, -0.55, 0],
+  part(codex, cached('nav-codex-stand-top', () => new THREE.BoxGeometry(0.24, 0.012, 0.16)), mats.trim, {
+    pos: [0, 0.066, 0],
     shadow: true,
-  });
-  part(book, cached('nav-book-cover-r', () => new THREE.BoxGeometry(0.1, 0.18, 0.02)), mats.leather, {
-    pos: [0.01, 0.1, -0.07],
-    rot: [0, 0.55, 0],
-    shadow: true,
-  });
-  part(book, cached('nav-book-page-l', () => new THREE.BoxGeometry(0.08, 0.16, 0.01)), mats.page, {
-    pos: [-0.01, 0.1, 0.04],
-    rot: [0, -0.35, 0],
-    shadow: true,
-  });
-  part(book, cached('nav-book-page-r', () => new THREE.BoxGeometry(0.08, 0.16, 0.01)), mats.page, {
-    pos: [0.01, 0.1, -0.04],
-    rot: [0, 0.35, 0],
-    shadow: true,
-  });
-  part(book, cached('nav-book-gem', () => new THREE.OctahedronGeometry(0.028, 0)), mats.arcane, {
-    pos: [0, 0.14, 0],
-    shadow: false,
-  });
-  part(book, cached('nav-book-spark-a', () => new THREE.SphereGeometry(0.012, 6, 6)), mats.arcane, {
-    pos: [0.06, 0.18, 0.04],
-    shadow: false,
-  });
-  part(book, cached('nav-book-spark-b', () => new THREE.SphereGeometry(0.009, 6, 6)), mats.arcane, {
-    pos: [-0.05, 0.2, -0.03],
-    shadow: false,
   });
 
-  book.rotation.y = 0.35;
-  root.add(book);
+  const book = new THREE.Group();
+  book.position.set(0, 0.072, 0.01);
+  book.rotation.set(-0.22, 0, 0);
+
+  part(book, cached('nav-codex-pages', () => new THREE.BoxGeometry(0.17, 0.2, 0.022)), mats.page, {
+    pos: [0, 0.1, -0.01],
+    shadow: true,
+  });
+  part(book, cached('nav-codex-cover-front', () => new THREE.BoxGeometry(0.18, 0.21, 0.018)), mats.leather, {
+    pos: [0, 0.1, 0.014],
+    shadow: true,
+  });
+  part(book, cached('nav-codex-spine', () => new THREE.BoxGeometry(0.034, 0.21, 0.042)), mats.leather, {
+    pos: [-0.1, 0.1, 0],
+    shadow: true,
+  });
+  part(book, cached('nav-codex-spine-gold', () => new THREE.BoxGeometry(0.012, 0.18, 0.044)), mats.gold, {
+    pos: [-0.1, 0.1, 0],
+    shadow: true,
+  });
+
+  for (const [x, y] of [[-0.07, 0.19], [0.07, 0.19], [-0.07, 0.01], [0.07, 0.01]]) {
+    part(book, cached(`nav-codex-corner-${x}-${y}`, () => new THREE.BoxGeometry(0.024, 0.024, 0.006)), mats.gold, {
+      pos: [x, y, 0.024],
+      shadow: true,
+    });
+  }
+
+  part(book, cached('nav-codex-medallion', () => new THREE.CylinderGeometry(0.042, 0.042, 0.007, 14)), mats.gold, {
+    pos: [0.01, 0.11, 0.026],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: true,
+  });
+  part(book, cached('nav-codex-emblem-head', () => new THREE.SphereGeometry(0.018, 8, 8)), mats.trim, {
+    pos: [0.01, 0.128, 0.032],
+    shadow: true,
+  });
+  part(book, cached('nav-codex-emblem-body', () => new THREE.BoxGeometry(0.034, 0.038, 0.01)), mats.cloth, {
+    pos: [0.01, 0.098, 0.03],
+    shadow: true,
+  });
+
+  part(book, cached('nav-codex-ribbon', () => new THREE.BoxGeometry(0.012, 0.055, 0.004)), mats.clothAlt, {
+    pos: [0.065, 0.045, 0.012],
+    shadow: true,
+  });
+  const clasp = part(book, cached('nav-codex-clasp', () => new THREE.OctahedronGeometry(0.016, 0)), mats.arcane, {
+    pos: [-0.04, 0.17, 0.028],
+    shadow: false,
+  });
+  clasp.userData.basePosition = clasp.position.clone();
+
+  book.userData.baseRotation = book.rotation.clone();
+  root.userData.book = book;
+  root.userData.clasp = clasp;
+
+  codex.add(book);
+  codex.rotation.y = 0.35;
+  root.add(codex);
   return root;
 }
 
@@ -243,29 +349,68 @@ function buildQuestsIcon(mats) {
   const root = new THREE.Group();
   addContactShadow(root, 0.28, 0.58);
 
-  part(root, cached('nav-quest-scroll', () => new THREE.BoxGeometry(0.16, 0.22, 0.02)), mats.page, {
-    pos: [0, 0.11, 0],
-    rot: [0.08, 0.35, 0],
+  const board = new THREE.Group();
+
+  part(board, cached('nav-quest-base', () => new THREE.BoxGeometry(0.22, 0.05, 0.12)), mats.wood, {
+    pos: [0, 0.025, 0],
     shadow: true,
   });
-  part(root, cached('nav-quest-clip', () => new THREE.BoxGeometry(0.08, 0.03, 0.03)), mats.gold, {
-    pos: [0, 0.22, 0.02],
-    rot: [0.08, 0.35, 0],
+  part(board, cached('nav-quest-back', () => new THREE.BoxGeometry(0.2, 0.24, 0.018)), mats.leather, {
+    pos: [0, 0.15, -0.02],
     shadow: true,
   });
-  for (let i = 0; i < 3; i++) {
-    part(root, cached(`nav-quest-line-${i}`, () => new THREE.BoxGeometry(0.1, 0.012, 0.006)), mats.trim, {
-      pos: [-0.01, 0.16 - i * 0.05, 0.02],
-      rot: [0.08, 0.35, 0],
-    });
-  }
-  part(root, cached('nav-quest-gem', () => new THREE.OctahedronGeometry(0.045, 0)), mats.arcane, {
-    pos: [0.08, 0.06, 0.05],
-    rot: [0.2, 0.35, 0.4],
+  part(board, cached('nav-quest-back-rim', () => new THREE.BoxGeometry(0.21, 0.25, 0.008)), mats.gold, {
+    pos: [0, 0.15, -0.03],
     shadow: true,
   });
 
-  root.rotation.y = 0.35;
+  const paper = part(board, cached('nav-quest-paper', () => new THREE.BoxGeometry(0.15, 0.19, 0.006)), mats.page, {
+    pos: [0, 0.148, 0.01],
+    shadow: true,
+  });
+  paper.userData.basePosition = paper.position.clone();
+  paper.userData.baseRotation = paper.rotation.clone();
+
+  part(board, cached('nav-quest-pin', () => new THREE.SphereGeometry(0.013, 8, 8)), mats.gold, {
+    pos: [0, 0.235, 0.016],
+    shadow: true,
+  });
+
+  const checks = [];
+  for (let i = 0; i < 3; i++) {
+    const y = 0.2 - i * 0.048;
+    const check = part(board, cached(`nav-quest-check-${i}`, () => new THREE.BoxGeometry(0.013, 0.013, 0.004)), i === 0 ? mats.gold : mats.trim, {
+      pos: [-0.052, y, 0.016],
+      shadow: true,
+    });
+    check.userData.baseScale = 1;
+    checks.push(check);
+    part(board, cached(`nav-quest-line-${i}`, () => new THREE.BoxGeometry(0.085, 0.007, 0.003)), mats.trim, {
+      pos: [0.018, y, 0.016],
+    });
+  }
+
+  const reward = part(board, cached('nav-quest-reward', () => new THREE.OctahedronGeometry(0.02, 0)), mats.arcane, {
+    pos: [0.045, 0.078, 0.018],
+    shadow: true,
+  });
+  reward.userData.basePosition = reward.position.clone();
+  reward.userData.baseScale = 1;
+
+  part(board, cached('nav-quest-reward-tag', () => new THREE.BoxGeometry(0.04, 0.012, 0.004)), mats.gold, {
+    pos: [0.045, 0.058, 0.016],
+    shadow: true,
+  });
+
+  board.userData.baseRotation = board.rotation.clone();
+  root.userData.board = board;
+
+  root.userData.paper = paper;
+  root.userData.checks = checks;
+  root.userData.reward = reward;
+
+  board.rotation.y = 0.35;
+  root.add(board);
   return root;
 }
 
@@ -273,39 +418,90 @@ function buildShopIcon(mats) {
   const root = new THREE.Group();
   addContactShadow(root, 0.28, 0.58);
 
-  part(root, cached('nav-shop-post-l', () => new THREE.CylinderGeometry(0.012, 0.012, 0.22, 6)), mats.wood, {
-    pos: [-0.1, 0.11, 0],
+  const stall = new THREE.Group();
+
+  part(stall, cached('nav-shop-base', () => new THREE.BoxGeometry(0.28, 0.1, 0.15)), mats.wood, {
+    pos: [0, 0.05, 0],
     shadow: true,
   });
-  part(root, cached('nav-shop-post-r', () => new THREE.CylinderGeometry(0.012, 0.012, 0.22, 6)), mats.wood, {
-    pos: [0.1, 0.11, 0],
+  part(stall, cached('nav-shop-counter', () => new THREE.BoxGeometry(0.3, 0.016, 0.17)), mats.trim, {
+    pos: [0, 0.108, 0.01],
     shadow: true,
   });
-  part(root, cached('nav-shop-awning', () => new THREE.BoxGeometry(0.24, 0.04, 0.12)), mats.awning, {
-    pos: [0, 0.22, 0.02],
-    rot: [0.12, 0.35, 0],
-    shadow: true,
-  });
-  part(root, cached('nav-shop-trim', () => new THREE.BoxGeometry(0.26, 0.012, 0.02)), mats.gold, {
-    pos: [0, 0.19, 0.08],
-    rot: [0.12, 0.35, 0],
+  part(stall, cached('nav-shop-shelf', () => new THREE.BoxGeometry(0.26, 0.06, 0.02)), mats.leather, {
+    pos: [0, 0.14, -0.065],
     shadow: true,
   });
 
-  const coinOffsets = [
-    [0, 0.04, 0],
-    [-0.04, 0.06, 0.02],
-    [0.04, 0.07, -0.02],
-  ];
-  for (const [x, y, z] of coinOffsets) {
-    part(root, cached(`nav-coin-${x}-${y}`, () => new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12)), mats.gold, {
-      pos: [x, y, z],
-      rot: [0, 0.35, 0],
-      shadow: true,
-    });
-  }
+  part(stall, cached('nav-shop-post-l', () => new THREE.BoxGeometry(0.02, 0.12, 0.02)), mats.wood, {
+    pos: [-0.13, 0.16, -0.05],
+    shadow: true,
+  });
+  part(stall, cached('nav-shop-post-r', () => new THREE.BoxGeometry(0.02, 0.12, 0.02)), mats.wood, {
+    pos: [0.13, 0.16, -0.05],
+    shadow: true,
+  });
+  const awning = part(stall, cached('nav-shop-awning', () => new THREE.BoxGeometry(0.32, 0.026, 0.13)), mats.awning, {
+    pos: [0, 0.215, 0.03],
+    rot: [0.38, 0, 0],
+    shadow: true,
+  });
+  awning.userData.baseRotation = awning.rotation.clone();
+  part(stall, cached('nav-shop-awning-trim', () => new THREE.BoxGeometry(0.34, 0.01, 0.016)), mats.gold, {
+    pos: [0, 0.178, 0.1],
+    rot: [0.38, 0, 0],
+    shadow: true,
+  });
 
-  root.rotation.y = 0.35;
+  const coins = [];
+  const coinA = part(stall, cached('nav-shop-coin-a', () => new THREE.CylinderGeometry(0.034, 0.036, 0.008, 10)), mats.gold, {
+    pos: [-0.07, 0.124, 0.04],
+    rot: [0, 0.2, 0],
+    shadow: true,
+  });
+  coinA.userData.basePosition = coinA.position.clone();
+  coinA.userData.baseRotation = coinA.rotation.clone();
+  coins.push(coinA);
+  const coinB = part(stall, cached('nav-shop-coin-b', () => new THREE.CylinderGeometry(0.034, 0.036, 0.008, 10)), mats.gold, {
+    pos: [-0.07, 0.134, 0.04],
+    rot: [0, 0.55, 0],
+    shadow: true,
+  });
+  coinB.userData.basePosition = coinB.position.clone();
+  coinB.userData.baseRotation = coinB.rotation.clone();
+  coins.push(coinB);
+  const coinC = part(stall, cached('nav-shop-coin-c', () => new THREE.CylinderGeometry(0.03, 0.03, 0.008, 10)), mats.gold, {
+    pos: [-0.068, 0.144, 0.042],
+    rot: [0, 0.9, 0],
+    shadow: true,
+  });
+  coinC.userData.basePosition = coinC.position.clone();
+  coinC.userData.baseRotation = coinC.rotation.clone();
+  coins.push(coinC);
+
+  part(stall, cached('nav-shop-bottle', () => new THREE.CylinderGeometry(0.018, 0.022, 0.05, 8)), mats.trim, {
+    pos: [0.05, 0.142, 0.03],
+    shadow: true,
+  });
+  part(stall, cached('nav-shop-bottle-neck', () => new THREE.CylinderGeometry(0.01, 0.012, 0.018, 6)), mats.trim, {
+    pos: [0.05, 0.176, 0.03],
+    shadow: true,
+  });
+  const gem = part(stall, cached('nav-shop-bottle-gem', () => new THREE.SphereGeometry(0.016, 6, 6)), mats.arcane, {
+    pos: [0.05, 0.158, 0.038],
+    shadow: false,
+  });
+  gem.userData.basePosition = gem.position.clone();
+  gem.userData.baseEmissive = gem.material.emissiveIntensity;
+  gem.userData.baseScale = 1;
+
+  root.userData.stall = stall;
+  root.userData.awning = awning;
+  root.userData.coins = coins;
+  root.userData.gem = gem;
+
+  stall.rotation.y = 0.35;
+  root.add(stall);
   return root;
 }
 

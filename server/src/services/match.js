@@ -11,6 +11,7 @@ import {
   resolveRoster,
   hasPlayableRoster,
   placeModeCastles,
+  normalizeClassLevels,
 } from '../../../shared/units.js';
 import {
   getValidMoves,
@@ -80,8 +81,13 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
   const mode = getBoardMode(boardMode);
   const blueRoster = resolveRoster(rosters.blueRoster, boardMode);
   const redRoster = resolveRoster(rosters.redRoster, boardMode);
+  const blueClassLevels = normalizeClassLevels(rosters.blueClassLevels);
+  const redClassLevels = normalizeClassLevels(rosters.redClassLevels);
   const { generateMapPropsForMode } = mapPropsModule;
-  const board = placeModeCastles(createEmptyBoard(mode.size), boardMode);
+  const board = placeModeCastles(createEmptyBoard(mode.size), boardMode, {
+    blue: blueClassLevels,
+    red: redClassLevels,
+  });
 
   return {
     boardMode,
@@ -92,8 +98,8 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
     shadowClones: [],
     blueRoster: [...blueRoster],
     redRoster: [...redRoster],
-    blueReserve: createTeamReserve(blueRoster, 'blue', boardMode),
-    redReserve: createTeamReserve(redRoster, 'red', boardMode),
+    blueReserve: createTeamReserve(blueRoster, 'blue', boardMode, blueClassLevels),
+    redReserve: createTeamReserve(redRoster, 'red', boardMode, redClassLevels),
     actedUnitIds: [],
     actionsRemaining: mode.actionsPerTurn,
     message: `${TEAM.blue.name}先攻：每回合 ${mode.actionsPerTurn} 次行動`,
@@ -484,7 +490,7 @@ const EMPTY_ROSTER_ERROR = '請先編組至少一名角色';
 
 export async function createWaitingRoom(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
-  const { matchmaking = false, q = pool, roster = null } = options;
+  const { matchmaking = false, q = pool, roster = null, classLevels = null } = options;
 
   if (!hasPlayableRoster(roster, boardMode)) {
     return { ok: false, error: EMPTY_ROSTER_ERROR };
@@ -508,6 +514,7 @@ export async function createWaitingRoom(guestId, boardMode, nickname, options = 
     boardMode,
     matchmaking,
     blueRoster: resolveRoster(roster, boardMode),
+    blueClassLevels: normalizeClassLevels(classLevels),
   };
 
   const { rows } = await q.query(
@@ -526,7 +533,7 @@ export async function createWaitingRoom(guestId, boardMode, nickname, options = 
 
 export async function joinRoom(guestId, roomCode, nickname, options = {}) {
   await ensureDeps();
-  const { q = pool, roster = null } = options;
+  const { q = pool, roster = null, classLevels = null } = options;
 
   const { rows } = await q.query(
     "SELECT * FROM matches WHERE room_code = $1 AND status = 'waiting' FOR UPDATE",
@@ -554,6 +561,8 @@ export async function joinRoom(guestId, roomCode, nickname, options = {}) {
   const gameState = createGameState(match.board_mode, rng, {
     blueRoster: waitingState.blueRoster,
     redRoster: roster,
+    blueClassLevels: waitingState.blueClassLevels,
+    redClassLevels: classLevels,
   });
   const mode = getBoardMode(match.board_mode);
   const now = new Date();
@@ -600,7 +609,7 @@ export async function joinRoom(guestId, roomCode, nickname, options = {}) {
 
 export async function findMatch(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();
-  const { roster = null } = options;
+  const { roster = null, classLevels = null } = options;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -631,7 +640,7 @@ export async function findMatch(guestId, boardMode, nickname, options = {}) {
     );
 
     if (rows[0]) {
-      const result = await joinRoom(guestId, rows[0].room_code, nickname, { q: client, roster });
+      const result = await joinRoom(guestId, rows[0].room_code, nickname, { q: client, roster, classLevels });
       if (!result.ok) {
         await client.query('ROLLBACK');
         return result;
@@ -644,6 +653,7 @@ export async function findMatch(guestId, boardMode, nickname, options = {}) {
       matchmaking: true,
       q: client,
       roster,
+      classLevels,
     });
     if (!created.ok) {
       await client.query('ROLLBACK');

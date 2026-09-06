@@ -266,6 +266,74 @@ function buildBorderStoneMapProps(size) {
 
 export const CLASS_IDS = Object.keys(CLASSES);
 
+export const CLASS_LEVEL_MIN = 1;
+export const CLASS_LEVEL_MAX = 4;
+export const FRAGMENTS_PER_COPY = 10;
+
+/** Copies consumed to reach that level from the previous one. */
+export const CLASS_UPGRADE_COPY_COST = {
+  2: 3,
+  3: 7,
+  4: 12,
+};
+
+export function clampClassLevel(level) {
+  const n = Number(level);
+  if (!Number.isFinite(n)) return CLASS_LEVEL_MIN;
+  return Math.max(CLASS_LEVEL_MIN, Math.min(CLASS_LEVEL_MAX, Math.floor(n)));
+}
+
+export function getClassLevelLabel(level) {
+  const lv = clampClassLevel(level);
+  return lv >= CLASS_LEVEL_MAX ? 'MAX' : `Lv${lv}`;
+}
+
+export function getNextClassLevel(level) {
+  const lv = clampClassLevel(level);
+  if (lv >= CLASS_LEVEL_MAX) return null;
+  return lv + 1;
+}
+
+export function getUpgradeCopyCost(fromLevel) {
+  const next = getNextClassLevel(fromLevel);
+  if (next == null) return null;
+  return CLASS_UPGRADE_COPY_COST[next] ?? null;
+}
+
+export function getClassLevelBonuses(classId, level = CLASS_LEVEL_MIN) {
+  const lv = clampClassLevel(level);
+  let hp = 0;
+  let atk = 0;
+  if (lv >= 2) hp += 1;
+  if (lv >= 3) {
+    if (classId === 'castle') hp += 1;
+    else atk += 1;
+  }
+  return { hp, atk };
+}
+
+export function getClassCombatStats(classId, level = CLASS_LEVEL_MIN) {
+  const cls = CLASSES[classId];
+  if (!cls) return { hp: 0, atk: 0 };
+  const bonus = getClassLevelBonuses(classId, level);
+  return {
+    hp: cls.hp + bonus.hp,
+    atk: cls.atk + bonus.atk,
+  };
+}
+
+/** @param {unknown} raw */
+export function normalizeClassLevels(raw) {
+  /** @type {Record<string, number>} */
+  const levels = {};
+  if (!raw || typeof raw !== 'object') return levels;
+  for (const classId of CLASS_IDS) {
+    if (raw[classId] == null) continue;
+    levels[classId] = clampClassLevel(raw[classId]);
+  }
+  return levels;
+}
+
 export function getRosterClassIds(modeId = null) {
   if (modeId && modeHasAutoCastle(modeId)) {
     return CLASS_IDS.filter((id) => id !== 'castle');
@@ -304,16 +372,19 @@ export function getCastleCells(modeId) {
   }));
 }
 
-export function placeModeCastles(board, modeId) {
+export function placeModeCastles(board, modeId, classLevelsByTeam = {}) {
   const mode = getBoardMode(modeId);
   if (!mode.castles) return board;
   const next = cloneBoard(board);
-  const castleHp = getCastleHpForMode(modeId);
+  const baseHp = getCastleHpForMode(modeId);
   for (const [team, pos] of Object.entries(mode.castles)) {
-    const unit = createUnit('castle', team);
+    const teamLevels = classLevelsByTeam[team] ?? {};
+    const level = clampClassLevel(teamLevels.castle ?? CLASS_LEVEL_MIN);
+    const unit = createUnit('castle', team, { level });
+    const hp = baseHp + getClassLevelBonuses('castle', level).hp;
     unit.id = `${team}-castle`;
-    unit.hp = castleHp;
-    unit.maxHp = castleHp;
+    unit.hp = hp;
+    unit.maxHp = hp;
     unit.row = pos.row;
     unit.col = pos.col;
     next[pos.row][pos.col] = unit;
@@ -419,16 +490,19 @@ export function createRandomRoster(modeId, rng = Math.random) {
   return sortRosterByClass(roster);
 }
 
-export function createUnit(classId, teamId) {
+export function createUnit(classId, teamId, options = {}) {
   const cls = CLASSES[classId];
+  const level = clampClassLevel(options.level ?? CLASS_LEVEL_MIN);
+  const stats = getClassCombatStats(classId, level);
   return {
     id: `${teamId}-${classId}-${Math.random().toString(36).slice(2, 8)}`,
     classId,
     team: teamId,
-    hp: cls.hp,
-    maxHp: cls.hp,
-    atk: cls.atk,
-    baseAtk: cls.atk,
+    level,
+    hp: stats.hp,
+    maxHp: stats.hp,
+    atk: stats.atk,
+    baseAtk: stats.atk,
     range: cls.range,
     minRange: cls.minRange ?? null,
     moveRange: cls.moveRange ?? 1,
@@ -449,9 +523,11 @@ export function createUnit(classId, teamId) {
   };
 }
 
-export function createTeamReserve(roster, teamId, modeId = null) {
+export function createTeamReserve(roster, teamId, modeId = null, classLevels = {}) {
   const deployable = modeId ? getDeployableRoster(roster, modeId) : roster;
-  return deployable.map((classId) => createUnit(classId, teamId));
+  return deployable.map((classId) => createUnit(classId, teamId, {
+    level: classLevels[classId] ?? CLASS_LEVEL_MIN,
+  }));
 }
 
 export function createEmptyBoard(size = 3) {

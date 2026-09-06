@@ -40,6 +40,8 @@ export const COIN_REWARDS = {
 export const STARTING_COINS = 1000;
 export const STARTING_DIAMONDS = 0;
 
+export const FRAGMENT_PRICE = 50;
+
 export function getItem(id) {
   return ITEMS[id] ?? null;
 }

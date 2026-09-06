@@ -53,6 +53,7 @@ import {
   getSavedEquippedItem,
   persistEquippedItem,
   markDailyQuestReady,
+  getOwnedClassLevels,
 } from './save.js';
 import {
   TUTORIAL_BOARD_MODE,
@@ -627,6 +628,7 @@ export class Game {
       diamonds: save.diamonds,
       inventory: save.inventory,
       ownedClasses: save.ownedClasses,
+      classProgress: save.classProgress,
       dailyQuests: save.dailyQuests,
       lastCoinReward: this.lastCoinReward,
       canUseItem: this.canUseItem(),
@@ -960,9 +962,13 @@ export class Game {
     const mode = this.getModeConfig();
     this.board = createEmptyBoard(mode.size);
     this.mapProps = generateMapPropsForMode(this.boardMode);
-    this.board = placeModeCastles(this.board, this.boardMode);
+    const playerLevels = this.tutorial ? {} : getOwnedClassLevels();
+    this.board = placeModeCastles(this.board, this.boardMode, {
+      blue: playerLevels,
+      red: {},
+    });
     this.shadowClones = [];
-    this.blueReserve = createTeamReserve(this.blueRoster, 'blue', this.boardMode);
+    this.blueReserve = createTeamReserve(this.blueRoster, 'blue', this.boardMode, playerLevels);
     this.redReserve = createTeamReserve(this.redRoster, 'red', this.boardMode);
     this.currentPlayer = this.getRoundFirstPlayer();
     this.draggingUnitId = null;

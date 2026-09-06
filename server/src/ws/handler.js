@@ -287,6 +287,7 @@ export async function handleWsMessage(ws, guest, raw) {
 
       const result = await createWaitingRoom(guest.id, boardMode, payload.nickname, {
         roster: payload.roster,
+        classLevels: payload.classLevels,
       });
       if (!result.ok) {
         err(ws, result.error, 'EMPTY_ROSTER', reqId);
@@ -316,6 +317,7 @@ export async function handleWsMessage(ws, guest, raw) {
 
       const result = await findMatch(guest.id, boardMode, payload.nickname, {
         roster: payload.roster,
+        classLevels: payload.classLevels,
       });
       if (!result.ok) {
         err(ws, result.error, 'FIND_FAILED', reqId);
@@ -348,6 +350,7 @@ export async function handleWsMessage(ws, guest, raw) {
 
       const result = await joinRoom(guest.id, code, payload.nickname, {
         roster: payload.roster,
+        classLevels: payload.classLevels,
       });
       if (!result.ok) {
         err(ws, result.error, 'JOIN_FAILED', reqId);
