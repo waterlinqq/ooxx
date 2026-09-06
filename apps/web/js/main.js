@@ -131,6 +131,64 @@ const ownReserveBarEl = document.getElementById('ownReserveBar');
 const ownReserveCardsEl = document.getElementById('ownReserveCards');
 const reserveTutorialPointerEl = document.getElementById('reserveTutorialPointer');
 
+const RESERVE_SCROLL_DRAG_THRESHOLD = 6;
+
+function bindReserveBarScroll(scrollEl) {
+  if (!scrollEl || scrollEl.dataset.reserveScrollBound) return;
+  scrollEl.dataset.reserveScrollBound = '1';
+
+  let drag = null;
+
+  scrollEl.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScroll: scrollEl.scrollLeft,
+      moved: false,
+    };
+    scrollEl.setPointerCapture(event.pointerId);
+  });
+
+  scrollEl.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    if (Math.abs(dx) >= RESERVE_SCROLL_DRAG_THRESHOLD) drag.moved = true;
+    if (drag.moved) scrollEl.scrollLeft = drag.startScroll - dx;
+  });
+
+  const endDrag = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (scrollEl.hasPointerCapture(event.pointerId)) {
+      scrollEl.releasePointerCapture(event.pointerId);
+    }
+    if (drag.moved) scrollEl.dataset.dragged = '1';
+    drag = null;
+  };
+
+  scrollEl.addEventListener('pointerup', endDrag);
+  scrollEl.addEventListener('pointercancel', endDrag);
+
+  scrollEl.addEventListener('click', (event) => {
+    if (!scrollEl.dataset.dragged) return;
+    delete scrollEl.dataset.dragged;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
+  scrollEl.addEventListener('wheel', (event) => {
+    if (scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (delta === 0) return;
+    scrollEl.scrollLeft += delta;
+    event.preventDefault();
+  }, { passive: false });
+}
+
+for (const scrollEl of document.querySelectorAll('.reserve-bar-scroll')) {
+  bindReserveBarScroll(scrollEl);
+}
+
 const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
   formation: document.getElementById('screenFormation'),

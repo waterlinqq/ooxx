@@ -235,12 +235,15 @@ body {
   bottom: auto;
 }
 
+/* Scroll strip must receive gestures; only the bar chrome stays click-through. */
 .battle-layout.in-combat .reserve-bar-scroll {
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: pan-x;
 }
 
 .battle-layout.in-combat .reserve-card {
   pointer-events: auto;
+  touch-action: pan-x;
 }
 
 .battle-layout.in-combat .reserve-card {
@@ -1828,6 +1831,7 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
   scrollbar-width: none;
 }
 

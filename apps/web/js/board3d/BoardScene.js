@@ -265,15 +265,14 @@ export class BoardScene {
   }
 
   // Fit the board in camera view; includes current pivot orbit rotation/scale.
+  // Use tile geometry only — unit hover/selection animation shifts bounding boxes
+  // and would jitter the frame if included here.
   contentBounds() {
     this.boardPivot.updateMatrixWorld(true);
 
     CONTENT_BOX.makeEmpty();
     if (this.tileGrid.group.children.length) {
       CONTENT_BOX.expandByObject(this.tileGrid.group);
-    }
-    if (this.unitManager.group.children.length) {
-      CONTENT_BOX.expandByObject(this.unitManager.group);
     }
 
     let bounds = CONTENT_BOX.isEmpty()
@@ -353,6 +352,7 @@ export class BoardScene {
     this.input.setState(state);
     if (state.animating) return;
 
+    const boardSizeChanged = this.boardSize !== state.boardSize;
     this.boardSize = state.boardSize;
     this.tileGrid.ensureSize(state.boardSize);
     this.unitManager.setBoardSize(state.boardSize);
@@ -366,7 +366,9 @@ export class BoardScene {
     this.syncTutorialPointer(state);
     this.updateTurnAmbience(state);
 
-    if (this.visible) {
+    // Refit only when the grid dimensions change — routine state updates (e.g.
+    // selecting a reserve card) must not reframe the camera.
+    if (this.visible && boardSizeChanged) {
       this.scheduleResize();
     }
   }
