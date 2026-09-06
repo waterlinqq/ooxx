@@ -10,6 +10,12 @@ const HIGHLIGHT = {
   item: { color: 0xa855f7, opacity: 0.45, emissive: 0x6b21a8 },
 };
 
+const HIGHLIGHT_TYPES = Object.keys(HIGHLIGHT);
+const MAX_HIGHLIGHTS = 49;
+const HIGHLIGHT_Y = 0.09;
+const TMP_MATRIX = new THREE.Matrix4();
+const HIGHLIGHT_ROTATION = new THREE.Euler(-Math.PI / 2, 0, 0);
+
 function cellKey(r, c) {
   return `${r},${c}`;
 }
@@ -20,7 +26,28 @@ export class HighlightSystem {
     this.group = new THREE.Group();
     this.group.name = 'highlights';
     tileGrid.group.parent.add(this.group);
-    this.overlays = new Map();
+
+    this.planeGeometry = new THREE.PlaneGeometry(TILE_SIZE * 0.92, TILE_SIZE * 0.92);
+    this.instancedByType = new Map();
+
+    for (const type of HIGHLIGHT_TYPES) {
+      const spec = HIGHLIGHT[type];
+      const material = new THREE.MeshStandardMaterial({
+        color: spec.color,
+        emissive: spec.emissive,
+        emissiveIntensity: 0.65,
+        transparent: true,
+        opacity: spec.opacity,
+        depthWrite: false,
+      });
+      const mesh = new THREE.InstancedMesh(this.planeGeometry, material, MAX_HIGHLIGHTS);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 2;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.instancedByType.set(type, mesh);
+      this.group.add(mesh);
+    }
   }
 
   update(state) {
@@ -48,57 +75,46 @@ export class HighlightSystem {
       }
     }
 
-    for (const key of this.overlays.keys()) {
-      if (!desired.has(key)) {
-        this.removeOverlay(key);
-      }
-    }
+    const keysByType = new Map();
+    for (const type of HIGHLIGHT_TYPES) keysByType.set(type, []);
 
     for (const [key, type] of desired) {
-      const existing = this.overlays.get(key);
-      if (existing && existing.userData.highlightType === type) continue;
-      if (existing) this.removeOverlay(key);
-      this.addOverlay(key, type);
+      keysByType.get(type).push(key);
     }
-  }
 
-  addOverlay(key, type) {
-    const [row, col] = key.split(',').map(Number);
-    const tile = this.tileGrid.getTile(row, col);
-    if (!tile) return;
+    for (const type of HIGHLIGHT_TYPES) {
+      const mesh = this.instancedByType.get(type);
+      const keys = keysByType.get(type);
+      mesh.count = keys.length;
 
-    const spec = HIGHLIGHT[type];
-    const geometry = new THREE.PlaneGeometry(TILE_SIZE * 0.92, TILE_SIZE * 0.92);
-    const material = new THREE.MeshStandardMaterial({
-      color: spec.color,
-      emissive: spec.emissive,
-      emissiveIntensity: 0.65,
-      transparent: true,
-      opacity: spec.opacity,
-      depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.copy(tile.position);
-    mesh.position.y = 0.09;
-    mesh.userData.highlightType = type;
-    mesh.renderOrder = 2;
-    this.group.add(mesh);
-    this.overlays.set(key, mesh);
-  }
+      for (let i = 0; i < keys.length; i++) {
+        const [row, col] = keys[i].split(',').map(Number);
+        const tile = this.tileGrid.getTile(row, col);
+        if (!tile) continue;
 
-  removeOverlay(key) {
-    const mesh = this.overlays.get(key);
-    if (!mesh) return;
-    this.group.remove(mesh);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
-    this.overlays.delete(key);
+        TMP_MATRIX.makeRotationFromEuler(HIGHLIGHT_ROTATION);
+        TMP_MATRIX.setPosition(tile.position.x, HIGHLIGHT_Y, tile.position.z);
+        mesh.setMatrixAt(i, TMP_MATRIX);
+      }
+
+      mesh.instanceMatrix.needsUpdate = keys.length > 0;
+    }
   }
 
   clear() {
-    for (const key of [...this.overlays.keys()]) {
-      this.removeOverlay(key);
+    for (const mesh of this.instancedByType.values()) {
+      mesh.count = 0;
+      mesh.instanceMatrix.needsUpdate = true;
     }
+  }
+
+  dispose() {
+    this.clear();
+    this.planeGeometry.dispose();
+    for (const mesh of this.instancedByType.values()) {
+      mesh.material.dispose();
+      this.group.remove(mesh);
+    }
+    this.instancedByType.clear();
   }
 }

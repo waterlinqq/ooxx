@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const TILE_SIZE = 0.88;
 export const TILE_GAP = 0.12;
@@ -6,6 +7,9 @@ export const TILE_PITCH = TILE_SIZE + TILE_GAP;
 
 const BASE_COLOR = 0x1e293b;
 const BASE_EMISSIVE = 0x0f172a;
+const TILE_HEIGHT = 0.14;
+
+const TILE_BOX = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
 
 export function tileWorldPosition(row, col, boardSize) {
   const offset = ((boardSize - 1) * TILE_PITCH) / 2;
@@ -16,25 +20,61 @@ export function tileWorldPosition(row, col, boardSize) {
   };
 }
 
-function createTileMesh(row, col) {
-  const geometry = new THREE.BoxGeometry(TILE_SIZE, 0.14, TILE_SIZE);
-  const material = new THREE.MeshStandardMaterial({
+function translatedGeometry(geometry, x, y, z) {
+  const copy = geometry.clone();
+  copy.translate(x, y, z);
+  return copy;
+}
+
+function buildMergedTileMesh(boardSize) {
+  const tilePieces = [];
+  const edgePieces = [];
+  const edgeSource = new THREE.EdgesGeometry(TILE_BOX);
+
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      const pos = tileWorldPosition(r, c, boardSize);
+      tilePieces.push(translatedGeometry(TILE_BOX, pos.x, pos.y, pos.z));
+      edgePieces.push(translatedGeometry(edgeSource, pos.x, pos.y, pos.z));
+    }
+  }
+
+  edgeSource.dispose();
+
+  const mergedTiles = mergeGeometries(tilePieces, false);
+  for (const piece of tilePieces) piece.dispose();
+
+  const mergedEdges = mergeGeometries(edgePieces, false);
+  for (const piece of edgePieces) piece.dispose();
+
+  const tileMaterial = new THREE.MeshStandardMaterial({
     color: BASE_COLOR,
     emissive: BASE_EMISSIVE,
     emissiveIntensity: 0.35,
     roughness: 0.65,
     metalness: 0.15,
   });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.receiveShadow = true;
-  mesh.userData = { kind: 'tile', row, col };
+  const tileMesh = new THREE.Mesh(mergedTiles, tileMaterial);
+  tileMesh.receiveShadow = true;
+  tileMesh.name = 'tileGridMerged';
 
-  const edgeGeo = new THREE.EdgesGeometry(geometry);
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.6 });
-  const edges = new THREE.LineSegments(edgeGeo, edgeMat);
-  mesh.add(edges);
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: 0x334155,
+    transparent: true,
+    opacity: 0.6,
+  });
+  const edgeLines = new THREE.LineSegments(mergedEdges, edgeMaterial);
+  edgeLines.name = 'tileGridEdges';
 
-  return mesh;
+  return { tileMesh, edgeLines };
+}
+
+function createTileAnchor(row, col, boardSize) {
+  const anchor = new THREE.Object3D();
+  const pos = tileWorldPosition(row, col, boardSize);
+  anchor.position.set(pos.x, pos.y, pos.z);
+  anchor.userData = { kind: 'tile', row, col };
+  return anchor;
 }
 
 export class TileGrid {
@@ -45,6 +85,8 @@ export class TileGrid {
     scene.add(this.group);
     this.tiles = new Map();
     this.boardSize = 0;
+    this.mergedTiles = null;
+    this.mergedEdges = null;
   }
 
   ensureSize(boardSize) {
@@ -52,14 +94,15 @@ export class TileGrid {
     this.clear();
     this.boardSize = boardSize;
 
+    const { tileMesh, edgeLines } = buildMergedTileMesh(boardSize);
+    this.mergedTiles = tileMesh;
+    this.mergedEdges = edgeLines;
+    this.group.add(tileMesh, edgeLines);
+
     for (let r = 0; r < boardSize; r++) {
       for (let c = 0; c < boardSize; c++) {
         const key = `${r},${c}`;
-        const mesh = createTileMesh(r, c);
-        const pos = tileWorldPosition(r, c, boardSize);
-        mesh.position.set(pos.x, pos.y, pos.z);
-        this.group.add(mesh);
-        this.tiles.set(key, mesh);
+        this.tiles.set(key, createTileAnchor(r, c, boardSize));
       }
     }
   }
@@ -69,8 +112,8 @@ export class TileGrid {
   }
 
   getTileAtWorld(x, z) {
-    for (const mesh of this.tiles.values()) {
-      const { row, col } = mesh.userData;
+    for (const anchor of this.tiles.values()) {
+      const { row, col } = anchor.userData;
       const pos = tileWorldPosition(row, col, this.boardSize);
       const half = TILE_SIZE / 2;
       if (
@@ -79,21 +122,24 @@ export class TileGrid {
         z >= pos.z - half &&
         z <= pos.z + half
       ) {
-        return mesh;
+        return anchor;
       }
     }
     return null;
   }
 
   clear() {
-    for (const mesh of this.tiles.values()) {
-      this.group.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-      mesh.children.forEach((child) => {
-        child.geometry?.dispose();
-        child.material?.dispose();
-      });
+    if (this.mergedTiles) {
+      this.group.remove(this.mergedTiles);
+      this.mergedTiles.geometry.dispose();
+      this.mergedTiles.material.dispose();
+      this.mergedTiles = null;
+    }
+    if (this.mergedEdges) {
+      this.group.remove(this.mergedEdges);
+      this.mergedEdges.geometry.dispose();
+      this.mergedEdges.material.dispose();
+      this.mergedEdges = null;
     }
     this.tiles.clear();
     this.boardSize = 0;

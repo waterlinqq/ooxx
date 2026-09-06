@@ -1,37 +1,60 @@
-import { Group } from 'three';
-import { buildUnitModel } from './UnitModels.js';
+import * as THREE from 'three';
+import { resolveUnitColor } from '../units.js';
 import { playerFacingYaw } from './CameraFacing.js';
 
 const SHADOW_CLONE_BASE_Y = 0.072;
 const SHADOW_OPACITY = 0.38;
+
+const BODY_GEO = new THREE.CylinderGeometry(0.12, 0.17, 0.4, 8);
+const HEAD_GEO = new THREE.SphereGeometry(0.11, 8, 8);
+BODY_GEO.userData.shared = true;
+HEAD_GEO.userData.shared = true;
+
+const TEAM_MATERIALS = new Map();
+
+function shadowCloneMaterial(team) {
+  let material = TEAM_MATERIALS.get(team);
+  if (material) return material;
+
+  const teamColor = new THREE.Color(resolveUnitColor(team));
+  material = new THREE.MeshStandardMaterial({
+    color: teamColor.clone().lerp(new THREE.Color(0x0b1220), 0.62),
+    emissive: teamColor,
+    emissiveIntensity: 0.32,
+    transparent: true,
+    opacity: SHADOW_OPACITY,
+    depthWrite: false,
+    roughness: 0.92,
+    metalness: 0.05,
+  });
+  TEAM_MATERIALS.set(team, material);
+  return material;
+}
 
 function cellKey(r, c) {
   return `${r},${c}`;
 }
 
 function createShadowCloneMesh(team) {
-  const model = buildUnitModel('assassin', team);
-  model.root.position.y = SHADOW_CLONE_BASE_Y;
-  model.root.rotation.y = playerFacingYaw(team);
+  const root = new THREE.Group();
+  const material = shadowCloneMaterial(team);
 
-  if (model.ring) model.ring.visible = false;
-  if (model.shadow) model.shadow.visible = false;
+  const body = new THREE.Mesh(BODY_GEO, material);
+  body.position.y = 0.24;
 
-  for (const mat of model.materials) {
-    if (mat.userData?.skipTint) continue;
-    mat.transparent = true;
-    mat.opacity = SHADOW_OPACITY;
-    mat.depthWrite = false;
-    if (mat.emissive) mat.emissiveIntensity *= 0.25;
-  }
+  const head = new THREE.Mesh(HEAD_GEO, material);
+  head.position.y = 0.5;
 
-  return model.root;
+  root.add(body, head);
+  root.position.y = SHADOW_CLONE_BASE_Y;
+  root.rotation.y = playerFacingYaw(team);
+  return root;
 }
 
 export class ShadowCloneManager {
   constructor(tileGrid) {
     this.tileGrid = tileGrid;
-    this.group = new Group();
+    this.group = new THREE.Group();
     this.group.name = 'shadow-clones';
     tileGrid.group.parent.add(this.group);
     this.markers = new Map();
@@ -67,7 +90,7 @@ export class ShadowCloneManager {
     if (!tile) return;
 
     const root = createShadowCloneMesh(team);
-    root.position.set(tile.position.x, 0, tile.position.z);
+    root.position.set(tile.position.x, SHADOW_CLONE_BASE_Y, tile.position.z);
     this.group.add(root);
     this.markers.set(key, { team, root });
   }
@@ -77,10 +100,6 @@ export class ShadowCloneManager {
     if (!marker) return;
     this.markers.delete(key);
     this.group.remove(marker.root);
-    marker.root.traverse((child) => {
-      if (child.geometry && !child.geometry.userData?.shared) child.geometry.dispose();
-      if (child.material) child.material.dispose();
-    });
   }
 
   clear() {
