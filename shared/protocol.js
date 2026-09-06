@@ -23,7 +23,7 @@ export const MSG = {
 };
 
 /** Valid in-match emoji reaction ids (client ↔ server). */
-export const REACTION_IDS = ['happy', 'angry', 'cry', 'evil'];
+export const REACTION_IDS = ['happy', 'angry', 'cry', 'evil', 'surprised', 'sad', 'embarrassed'];
 
 export const MATCH_STATUS = {
   WAITING: 'waiting',

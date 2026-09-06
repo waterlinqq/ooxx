@@ -12,10 +12,23 @@ import { InputController } from './InputController.js';
 import { AttackFx3d } from './AttackFx3d.js';
 import { TutorialPointer, DEFAULT_ANCHOR_HEIGHT, UNIT_ANCHOR_HEIGHT } from './TutorialPointer.js';
 import { attachDevRendererStats } from './DevRendererStats.js';
+import {
+  LimitedOrbitControls,
+  isTouchDevice,
+  isValidLayoutBounds,
+  fitLayoutBoundsToAspect,
+  applyOrbitFrustumZoom,
+} from './LimitedOrbitControls.js';
+import {
+  isScene3dDebugEnabled,
+  Scene3dDebugHud,
+  buildScene3dDebugSnapshot,
+} from './Scene3dDebug.js';
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
 const FRAME_PADDING = 0.02;
+const ORBIT_FRUSTUM_HEADROOM = 1.14;
 const TMP_VIEW = new THREE.Vector3();
 
 export class BoardScene {
@@ -106,16 +119,21 @@ export class BoardScene {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    this.tileGrid = new TileGrid(this.scene);
-    this.unitManager = new UnitMeshManager(this.scene);
+    this.boardPivot = new THREE.Group();
+    this.boardPivot.name = 'boardPivot';
+    this.scene.add(this.boardPivot);
+
+    this.tileGrid = new TileGrid(this.boardPivot);
+    this.unitManager = new UnitMeshManager(this.boardPivot);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
     this.landmineMarkers = new LandmineMarkerManager(this.tileGrid);
     this.mapPropManager = new MapPropManager(this.tileGrid);
     this.shadowCloneManager = new ShadowCloneManager(this.tileGrid);
-    this.tutorialPointer = new TutorialPointer(this.scene);
+    this.tutorialPointer = new TutorialPointer(this.boardPivot);
     this.attackFx = new AttackFx3d({
-      scene: this.scene,
+      scene: this.boardPivot,
+      boardPivot: this.boardPivot,
       camera: this.camera,
       container: containerEl,
       fxLayer: fxLayerEl,
@@ -127,8 +145,22 @@ export class BoardScene {
       domElement: containerEl,
       camera: this.camera,
       tileGrid: this.tileGrid,
+      boardPivot: this.boardPivot,
       callbacks,
     });
+
+    this.orbitControls = new LimitedOrbitControls({
+      domElement: this.renderer.domElement,
+      pivot: this.boardPivot,
+      zoomViaScale: !isTouchDevice(),
+      onChange: () => this.applyOrbitZoom(),
+    });
+
+    this.layoutFrustum = null;
+    this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'board') : null;
+
+    this.lastValidWidth = width;
+    this.lastValidHeight = height;
 
     this.clock = new THREE.Clock();
     this.boardSize = 0;
@@ -142,6 +174,7 @@ export class BoardScene {
     });
     this.resizeObserver.observe(containerEl);
 
+    this.onResize();
     this.animate();
   }
 
@@ -164,7 +197,7 @@ export class BoardScene {
     return points;
   }
 
-  // Camera-space bounds of everything that must stay on screen, independent of canvas size.
+  // Fit the default board layout. Orbit/zoom only move boardPivot inside this box.
   contentBounds() {
     this.camera.updateMatrixWorld();
     this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
@@ -187,32 +220,37 @@ export class BoardScene {
     return {
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
-      halfW: (maxX - minX) / 2 + FRAME_PADDING,
-      halfH: (maxY - minY) / 2 + FRAME_PADDING,
+      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
+      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * ORBIT_FRUSTUM_HEADROOM,
     };
   }
 
+  applyOrbitZoom() {
+    applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
+  }
+
   onResize() {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+    if (this.orbitControls?.isGesturing()) return;
+
+    let width = this.container.clientWidth;
+    let height = this.container.clientHeight;
+    if (!width || !height) {
+      width = this.lastValidWidth ?? width;
+      height = this.lastValidHeight ?? height;
+    }
     if (!width || !height) return;
 
+    this.lastValidWidth = width;
+    this.lastValidHeight = height;
+
     const aspect = width / height;
-    const bounds = this.contentBounds();
+    const bounds = fitLayoutBoundsToAspect(this.contentBounds(), aspect);
+    if (!isValidLayoutBounds(bounds)) return;
 
-    let { halfW, halfH } = bounds;
-    if (halfW / halfH > aspect) {
-      halfH = halfW / aspect;
-    } else {
-      halfW = halfH * aspect;
-    }
-
-    this.frustumBase = halfH * 2;
-    this.camera.left = bounds.centerX - halfW;
-    this.camera.right = bounds.centerX + halfW;
-    this.camera.top = bounds.centerY + halfH;
-    this.camera.bottom = bounds.centerY - halfH;
-    this.camera.updateProjectionMatrix();
+    this.frustumBase = bounds.halfH * 2;
+    this.layoutFrustum = bounds;
+    this.orbitControls?.applyTransform();
+    this.applyOrbitZoom();
 
     this.renderer.setSize(width, height);
     this.labelRenderer.setSize(width, height);
@@ -309,6 +347,7 @@ export class BoardScene {
 
   setVisible(show) {
     this.visible = show;
+    if (this.orbitControls) this.orbitControls.enabled = show;
     this.container.classList.toggle('hidden', !show);
     if (show) {
       this.scheduleResize();
@@ -337,6 +376,17 @@ export class BoardScene {
       this.renderer.render(this.scene, this.camera);
       this.devStats?.end();
       this.labelRenderer.render(this.scene, this.camera);
+      if (this.debugHud) {
+        this.debugHud.update(buildScene3dDebugSnapshot({
+          renderer: this.renderer,
+          camera: this.camera,
+          pivot: this.boardPivot,
+          orbitControls: this.orbitControls,
+          layoutFrustum: this.layoutFrustum,
+          container: this.container,
+          boardSize: this.boardSize,
+        }));
+      }
     }
   }
 
@@ -346,6 +396,8 @@ export class BoardScene {
     this.pmrem.dispose();
     this.resizeObserver?.disconnect();
     this.input.dispose();
+    this.orbitControls?.dispose();
+    this.debugHud?.dispose();
     this.unitManager.dispose();
     this.mapPropManager.clear();
     this.tutorialPointer.dispose();

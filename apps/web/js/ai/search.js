@@ -52,7 +52,7 @@ const DIFFICULTY = {
 
 // Per-decision budget by board size, in ms. The search runs synchronously on the main
 // thread, so these double as the ceiling on how long the UI can stall for one AI action.
-const TIME_BUDGET_MS = { 3: 120, 4: 400, 5: 600 };
+const TIME_BUDGET_MS = { 3: 120, 4: 400, 5: 600, 6: 800 };
 
 class SearchAbort extends Error {}
 

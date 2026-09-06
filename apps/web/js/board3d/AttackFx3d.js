@@ -51,8 +51,9 @@ function spawnHealNumber(fxLayer, pos, amount) {
 }
 
 export class AttackFx3d {
-  constructor({ scene, camera, container, fxLayer, tileGrid, unitManager }) {
+  constructor({ scene, camera, container, fxLayer, tileGrid, unitManager, boardPivot = null }) {
     this.scene = scene;
+    this.boardPivot = boardPivot;
     this.camera = camera;
     this.container = container;
     this.fxLayer = fxLayer;
@@ -70,6 +71,10 @@ export class AttackFx3d {
 
   worldToScreen(x, y, z) {
     const vec = new THREE.Vector3(x, y, z);
+    if (this.boardPivot) {
+      this.boardPivot.updateMatrixWorld(true);
+      vec.applyMatrix4(this.boardPivot.matrixWorld);
+    }
     vec.project(this.camera);
     const rect = this.container.getBoundingClientRect();
     return {

@@ -1,12 +1,19 @@
-import { ITEM_IDS, SHOP_PRICES, STARTING_COINS } from './items.js';
+import { ITEM_IDS, SHOP_PRICES, STARTING_COINS, STARTING_DIAMONDS } from './items.js';
 import { CLASS_IDS, CLASSES } from './units.js';
 import { STARTER_CLASSES, getUnlockPrice, isUnlockable } from './unlocks.js';
 import { getAuthToken, ensureGuestToken } from './guestAuth.js';
 import { apiUrl } from './config.js';
+import {
+  DAILY_QUEST_MODES,
+  DAILY_QUEST_REWARD,
+  getTodayKey,
+  isDailyQuestMode,
+} from './dailyQuests.js';
 
 const SAVE_KEY = 'ooxx-save-v1';
 
-/** @typedef {{ coins: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]>, equippedItem: string | null }} SaveData */
+/** @typedef {{ dateKey: string, ready: string[], claimed: string[] }} DailyQuestsData */
+/** @typedef {{ coins: number, diamonds: number, inventory: Record<string, number>, tutorialDone: boolean, ownedClasses: string[], rostersByMode?: Record<string, string[]>, equippedItem: string | null, dailyQuests: DailyQuestsData }} SaveData */
 
 function createDefaultInventory() {
   return Object.fromEntries(ITEM_IDS.map((id) => [id, 0]));
@@ -46,13 +53,61 @@ function normalizeRostersByMode(raw) {
   return rosters;
 }
 
+function createDefaultDailyQuests() {
+  return { dateKey: getTodayKey(), ready: [], claimed: [] };
+}
+
+function normalizeDailyQuests(raw) {
+  const todayKey = getTodayKey();
+  const dateKey = typeof raw?.dateKey === 'string' ? raw.dateKey : '';
+
+  if (dateKey !== todayKey) {
+    return createDefaultDailyQuests();
+  }
+
+  const legacyCompleted = Array.isArray(raw?.completed) ? raw.completed : [];
+  const claimedSource = Array.isArray(raw?.claimed) ? raw.claimed : legacyCompleted;
+  const readySource = Array.isArray(raw?.ready) ? raw.ready : [];
+
+  const claimedSet = new Set(
+    claimedSource.filter((id) => DAILY_QUEST_MODES.includes(id)),
+  );
+  const ready = DAILY_QUEST_MODES.filter(
+    (id) => readySource.includes(id) && !claimedSet.has(id),
+  );
+
+  return {
+    dateKey: todayKey,
+    ready,
+    claimed: DAILY_QUEST_MODES.filter((id) => claimedSet.has(id)),
+  };
+}
+
+function mergeDailyQuests(local, cloud) {
+  const localNorm = normalizeDailyQuests(local);
+  const cloudNorm = normalizeDailyQuests(cloud);
+  const claimed = new Set([...localNorm.claimed, ...cloudNorm.claimed]);
+  const ready = new Set([
+    ...localNorm.ready.filter((id) => !claimed.has(id)),
+    ...cloudNorm.ready.filter((id) => !claimed.has(id)),
+  ]);
+
+  return {
+    dateKey: getTodayKey(),
+    ready: DAILY_QUEST_MODES.filter((id) => ready.has(id)),
+    claimed: DAILY_QUEST_MODES.filter((id) => claimed.has(id)),
+  };
+}
+
 const DEFAULT_SAVE = {
   coins: STARTING_COINS,
+  diamonds: STARTING_DIAMONDS,
   inventory: createDefaultInventory(),
   tutorialDone: false,
   ownedClasses: createDefaultOwnedClasses(),
   rostersByMode: {},
   equippedItem: null,
+  dailyQuests: createDefaultDailyQuests(),
 };
 
 /** @type {SaveData | null} */
@@ -62,11 +117,13 @@ let cloudPushTimer = null;
 function normalizeSave(raw) {
   const save = {
     coins: typeof raw?.coins === 'number' ? Math.max(0, raw.coins) : DEFAULT_SAVE.coins,
+    diamonds: typeof raw?.diamonds === 'number' ? Math.max(0, raw.diamonds) : DEFAULT_SAVE.diamonds,
     inventory: createDefaultInventory(),
     tutorialDone: raw?.tutorialDone === true,
     ownedClasses: normalizeOwnedClasses(raw),
     rostersByMode: normalizeRostersByMode(raw?.rostersByMode),
     equippedItem: normalizeEquippedItem(raw?.equippedItem ?? null),
+    dailyQuests: normalizeDailyQuests(raw?.dailyQuests ?? raw?.daily_quests),
   };
 
   for (const id of ITEM_IDS) {
@@ -82,6 +139,7 @@ function mergeCloudLocal(cloud, local) {
   const cloudNorm = normalizeSave(cloud);
 
   merged.coins = Math.max(merged.coins, cloudNorm.coins);
+  merged.diamonds = Math.max(merged.diamonds, cloudNorm.diamonds);
   merged.tutorialDone = merged.tutorialDone || cloudNorm.tutorialDone;
 
   const owned = new Set([...merged.ownedClasses, ...cloudNorm.ownedClasses]);
@@ -97,6 +155,7 @@ function mergeCloudLocal(cloud, local) {
   };
 
   merged.equippedItem = merged.equippedItem ?? cloudNorm.equippedItem ?? null;
+  merged.dailyQuests = mergeDailyQuests(local?.dailyQuests ?? local?.daily_quests, cloud?.dailyQuests ?? cloud?.daily_quests);
 
   return merged;
 }
@@ -161,14 +220,79 @@ function scheduleCloudPush() {
 
 export function getSaveSnapshot() {
   const save = loadSave();
+  const dailyQuests = getDailyQuests();
   return {
     coins: save.coins,
+    diamonds: save.diamonds,
     inventory: { ...save.inventory },
     tutorialDone: save.tutorialDone,
     ownedClasses: [...save.ownedClasses],
     rostersByMode: { ...save.rostersByMode },
     equippedItem: save.equippedItem ?? null,
+    dailyQuests,
   };
+}
+
+export function getDailyQuests() {
+  const save = loadSave();
+  const normalized = normalizeDailyQuests(save.dailyQuests);
+  if (
+    save.dailyQuests.dateKey !== normalized.dateKey
+    || save.dailyQuests.ready.length !== normalized.ready.length
+    || save.dailyQuests.claimed.length !== normalized.claimed.length
+    || save.dailyQuests.ready.some((id, i) => id !== normalized.ready[i])
+    || save.dailyQuests.claimed.some((id, i) => id !== normalized.claimed[i])
+  ) {
+    save.dailyQuests = normalized;
+    persistSave();
+  }
+  return {
+    dateKey: normalized.dateKey,
+    ready: [...normalized.ready],
+    claimed: [...normalized.claimed],
+  };
+}
+
+/** @returns {{ marked: boolean, modeId: string }} */
+export function markDailyQuestReady(modeId) {
+  if (!isDailyQuestMode(modeId)) {
+    return { marked: false, modeId };
+  }
+
+  const save = loadSave();
+  const quests = normalizeDailyQuests(save.dailyQuests);
+  if (quests.claimed.includes(modeId) || quests.ready.includes(modeId)) {
+    save.dailyQuests = quests;
+    return { marked: false, modeId };
+  }
+
+  quests.ready = [...quests.ready, modeId];
+  save.dailyQuests = quests;
+  persistSave();
+  return { marked: true, modeId };
+}
+
+/** @returns {{ ok: true, awarded: number } | { ok: false, reason: string }} */
+export function claimDailyQuest(modeId) {
+  if (!isDailyQuestMode(modeId)) {
+    return { ok: false, reason: '未知任務' };
+  }
+
+  const save = loadSave();
+  const quests = normalizeDailyQuests(save.dailyQuests);
+  if (quests.claimed.includes(modeId)) {
+    return { ok: false, reason: '已領取' };
+  }
+  if (!quests.ready.includes(modeId)) {
+    return { ok: false, reason: '尚未完成' };
+  }
+
+  quests.ready = quests.ready.filter((id) => id !== modeId);
+  quests.claimed = [...quests.claimed, modeId];
+  save.dailyQuests = quests;
+  save.diamonds = Math.max(0, save.diamonds + DAILY_QUEST_REWARD);
+  persistSave();
+  return { ok: true, awarded: DAILY_QUEST_REWARD };
 }
 
 export function getSavedRostersByMode() {
@@ -213,6 +337,12 @@ export function persistSave() {
 export function addCoins(amount) {
   const save = loadSave();
   save.coins = Math.max(0, save.coins + amount);
+  persistSave();
+}
+
+export function addDiamonds(amount) {
+  const save = loadSave();
+  save.diamonds = Math.max(0, save.diamonds + amount);
   persistSave();
 }
 

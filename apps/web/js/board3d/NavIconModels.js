@@ -239,38 +239,33 @@ function buildCharactersIcon(mats) {
   return root;
 }
 
-function buildBagIcon(mats) {
+function buildQuestsIcon(mats) {
   const root = new THREE.Group();
-  addContactShadow(root, 0.26, 0.58);
+  addContactShadow(root, 0.28, 0.58);
 
-  const bag = new THREE.Group();
-  part(bag, cached('nav-bag-body', () => new THREE.BoxGeometry(0.2, 0.18, 0.1)), mats.leather, {
+  part(root, cached('nav-quest-scroll', () => new THREE.BoxGeometry(0.16, 0.22, 0.02)), mats.page, {
     pos: [0, 0.11, 0],
-    rot: [0, 0.35, 0],
+    rot: [0.08, 0.35, 0],
     shadow: true,
   });
-  part(bag, cached('nav-bag-flap', () => new THREE.BoxGeometry(0.18, 0.08, 0.02)), mats.leather, {
-    pos: [0, 0.2, 0.04],
-    rot: [0.28, 0.35, 0],
+  part(root, cached('nav-quest-clip', () => new THREE.BoxGeometry(0.08, 0.03, 0.03)), mats.gold, {
+    pos: [0, 0.22, 0.02],
+    rot: [0.08, 0.35, 0],
     shadow: true,
   });
-  part(bag, cached('nav-bag-strap-l', () => new THREE.BoxGeometry(0.03, 0.14, 0.02)), mats.trim, {
-    pos: [-0.07, 0.16, 0.02],
-    rot: [0.1, 0.35, -0.22],
-    shadow: true,
-  });
-  part(bag, cached('nav-bag-strap-r', () => new THREE.BoxGeometry(0.03, 0.14, 0.02)), mats.trim, {
-    pos: [0.07, 0.16, 0.02],
-    rot: [0.1, 0.35, 0.22],
-    shadow: true,
-  });
-  part(bag, cached('nav-bag-buckle', () => new THREE.BoxGeometry(0.06, 0.04, 0.02)), mats.gold, {
-    pos: [0, 0.18, 0.06],
-    rot: [0.28, 0.35, 0],
+  for (let i = 0; i < 3; i++) {
+    part(root, cached(`nav-quest-line-${i}`, () => new THREE.BoxGeometry(0.1, 0.012, 0.006)), mats.trim, {
+      pos: [-0.01, 0.16 - i * 0.05, 0.02],
+      rot: [0.08, 0.35, 0],
+    });
+  }
+  part(root, cached('nav-quest-gem', () => new THREE.OctahedronGeometry(0.045, 0)), mats.arcane, {
+    pos: [0.08, 0.06, 0.05],
+    rot: [0.2, 0.35, 0.4],
     shadow: true,
   });
 
-  root.add(bag);
+  root.rotation.y = 0.35;
   return root;
 }
 
@@ -318,11 +313,11 @@ const BUILDERS = {
   battle: buildBattleIcon,
   formation: buildFormationIcon,
   codex: buildCharactersIcon,
-  bag: buildBagIcon,
+  quests: buildQuestsIcon,
   shop: buildShopIcon,
 };
 
-export const NAV_ICON_IDS = ['formation', 'codex', 'battle', 'bag', 'shop'];
+export const NAV_ICON_IDS = ['formation', 'codex', 'battle', 'quests', 'shop'];
 
 export function buildNavIconModel(navId) {
   const builder = BUILDERS[navId];

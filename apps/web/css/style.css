@@ -336,6 +336,35 @@ body {
   gap: 0;
 }
 
+.survival-round {
+  align-self: center;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.formation-actions {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 24px;
+}
+
+.formation-actions .btn {
+  min-width: 12rem;
+}
+
+.mode-btn[data-mode="6x6"] .mode-grid-cell:nth-child(-n+6),
+.mode-btn[data-mode="6x6"] .mode-grid-cell:nth-last-child(-n+6),
+.mode-btn[data-mode="6x6"] .mode-grid-cell:nth-child(6n+1),
+.mode-btn[data-mode="6x6"] .mode-grid-cell:nth-child(6n) {
+  opacity: 0.35;
+}
+
 /* ── Unified overlays / modals / toasts ── */
 
 .ui-overlay {
@@ -733,16 +762,18 @@ body {
 
 .battle-action-emojis {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
+  max-width: 156px;
 }
 
 .battle-action-emoji {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border: 1px solid var(--panel-2);
   border-radius: 12px;
@@ -757,6 +788,11 @@ body {
   transform: scale(1.06);
 }
 
+.battle-action-emoji-icon,
+.reaction-bubble-icon {
+  overflow: visible;
+}
+
 .battle-action-emoji:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -766,8 +802,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   pointer-events: none;
 }
 
@@ -812,19 +848,28 @@ body {
 
 .reaction-bubble {
   position: absolute;
-  top: 12%;
   left: 50%;
   z-index: 13;
   transform: translateX(-50%);
   pointer-events: none;
 }
 
+.reaction-bubble--opp {
+  top: 12%;
+  bottom: auto;
+}
+
+.reaction-bubble--own {
+  top: auto;
+  bottom: calc(80px + max(8px, env(safe-area-inset-bottom)));
+}
+
 .reaction-bubble-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 88px;
+  width: 104px;
+  height: 104px;
   filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.45));
 }
 
@@ -845,6 +890,190 @@ body {
 @keyframes reactionFadeOut {
   from { transform: scale(1); opacity: 1; }
   to { transform: scale(0.75); opacity: 0; }
+}
+
+/* ── Reaction face animations ── */
+
+.rx-svg {
+  display: block;
+  overflow: visible;
+}
+
+.rx-root,
+.rx-eye,
+.rx-mouth,
+.rx-brow,
+.rx-blush,
+.rx-tear,
+.rx-horn {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.rx-root {
+  transform-box: view-box;
+  transform-origin: 32px 36px;
+}
+
+.reaction-bubble.is-visible .rx-happy .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-happy .rx-root {
+  animation: rxHappyBob 0.55s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-happy .rx-mouth,
+.battle-action-emoji:hover:not(:disabled) .rx-happy .rx-mouth {
+  animation: rxHappySmile 0.55s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-happy .rx-blush,
+.battle-action-emoji:hover:not(:disabled) .rx-happy .rx-blush {
+  animation: rxBlushPulse 0.9s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-angry .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-angry .rx-root {
+  animation: rxAngryShake 0.22s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-angry .rx-brow,
+.battle-action-emoji:hover:not(:disabled) .rx-angry .rx-brow {
+  animation: rxAngryBrow 0.22s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-cry .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-cry .rx-root {
+  animation: rxCryBob 0.7s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-cry .rx-tear-l,
+.battle-action-emoji:hover:not(:disabled) .rx-cry .rx-tear-l {
+  animation: rxTearDrip 0.8s ease-in infinite;
+}
+
+.reaction-bubble.is-visible .rx-cry .rx-tear-r,
+.battle-action-emoji:hover:not(:disabled) .rx-cry .rx-tear-r {
+  animation: rxTearDrip 0.8s ease-in 0.22s infinite;
+}
+
+.reaction-bubble.is-visible .rx-evil .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-evil .rx-root {
+  animation: rxEvilBounce 0.6s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-evil .rx-horn-l,
+.battle-action-emoji:hover:not(:disabled) .rx-evil .rx-horn-l {
+  animation: rxHornWiggleL 0.6s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-evil .rx-horn-r,
+.battle-action-emoji:hover:not(:disabled) .rx-evil .rx-horn-r {
+  animation: rxHornWiggleR 0.6s ease-in-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-surprised .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-surprised .rx-root {
+  animation: rxSurprisePop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) 1,
+    rxSurprisePulse 0.85s ease-in-out 0.45s infinite;
+}
+
+.reaction-bubble.is-visible .rx-surprised .rx-eye,
+.reaction-bubble.is-visible .rx-surprised .rx-mouth,
+.battle-action-emoji:hover:not(:disabled) .rx-surprised .rx-eye,
+.battle-action-emoji:hover:not(:disabled) .rx-surprised .rx-mouth {
+  animation: rxSurpriseGrow 0.7s ease-out infinite;
+}
+
+.reaction-bubble.is-visible .rx-embarrassed .rx-root,
+.battle-action-emoji:hover:not(:disabled) .rx-embarrassed .rx-root {
+  animation: rxEmbWiggle 0.65s ease-in-out infinite;
+}
+
+@keyframes rxHappyBob {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  40% { transform: translateY(-7px) scale(1.08, 0.94); }
+  65% { transform: translateY(-2px) scale(0.97, 1.05); }
+}
+
+@keyframes rxHappySmile {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.06, 1.1); }
+}
+
+@keyframes rxBlushPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes rxAngryShake {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  20% { transform: rotate(-11deg) translateX(-3px); }
+  40% { transform: rotate(11deg) translateX(3px); }
+  60% { transform: rotate(-8deg) translateX(-2px); }
+  80% { transform: rotate(8deg) translateX(2px); }
+}
+
+@keyframes rxAngryBrow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.5px); }
+}
+
+@keyframes rxCryBob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(3px) rotate(2deg); }
+}
+
+@keyframes rxTearDrip {
+  0% { transform: translateY(-2px); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
+
+@keyframes rxEvilBounce {
+  0%, 100% { transform: translateY(0) rotate(-4deg) scale(1); }
+  50% { transform: translateY(-6px) rotate(5deg) scale(1.06); }
+}
+
+@keyframes rxHornWiggleL {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-12deg); }
+}
+
+@keyframes rxHornWiggleR {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(12deg); }
+}
+
+@keyframes rxSurprisePop {
+  0% { transform: scale(0.72); }
+  70% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes rxSurprisePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes rxSurpriseGrow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes rxEmbWiggle {
+  0%, 100% { transform: translateX(0) rotate(-5deg); }
+  50% { transform: translateX(4px) rotate(6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-root,
+  .rx-eye,
+  .rx-mouth,
+  .rx-brow,
+  .rx-blush,
+  .rx-tear,
+  .rx-horn {
+    animation: none !important;
+  }
 }
 
 .battle-layout.game-end {
@@ -1097,7 +1326,7 @@ body {
 .nav-item.active:hover:not(:disabled) .nav-thumb {
   opacity: 1;
   filter: saturate(1.12) drop-shadow(0 0 8px rgba(251, 191, 36, 0.5));
-  transform: scale(1.42);
+  transform: scale(1.58);
 }
 
 .nav-item:disabled .nav-thumb {
@@ -1154,6 +1383,23 @@ body {
   width: 100% !important;
   height: 100% !important;
   touch-action: none;
+}
+
+.scene-3d-debug-hud {
+  position: absolute;
+  z-index: 20;
+  left: 6px;
+  top: 6px;
+  max-width: min(96%, 360px);
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(15 23 42 / 88%);
+  color: #cbd5e1;
+  font: 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  pointer-events: none;
+  user-select: text;
 }
 
 .board-3d-labels {
@@ -1820,12 +2066,18 @@ body {
   overflow: hidden;
   flex-shrink: 0;
   margin-bottom: 12px;
+  touch-action: none;
 }
 
 .detail-preview-host canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+  touch-action: none;
+}
+
+.detail-preview-host .scene-3d-debug-hud {
+  font-size: 9px;
 }
 
 .range-legend {
@@ -2065,12 +2317,21 @@ body {
 
 .mode-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
+  gap: 6px;
+  min-height: 72px;
   min-width: 52px;
-  padding: 10px;
+  padding: 10px 8px;
   color: rgba(226, 232, 240, 0.9);
+}
+
+.mode-btn-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .mode-btn-icon {
@@ -2170,30 +2431,72 @@ body {
   line-height: 1;
 }
 
-.coin-badge {
+.currency-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.currency-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-weight: 700;
-  color: #fbbf24;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.15);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.currency-icon {
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.coin-badge {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.diamond-badge {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.15);
 }
 
 .coin-badge.coin-spent {
   animation: coinSpentPulse 0.55s ease;
 }
 
-.coin-spend-float {
+.diamond-badge.diamond-spent {
+  animation: diamondSpentPulse 0.55s ease;
+}
+
+.diamond-badge.diamond-earned {
+  animation: diamondEarnedPulse 0.55s ease;
+}
+
+.coin-spend-float,
+.diamond-spend-float,
+.diamond-earn-float {
   position: absolute;
-  right: 14px;
+  left: 50%;
   top: 50%;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #f87171;
   pointer-events: none;
-  animation: coinSpendFloat 0.75s ease forwards;
+  white-space: nowrap;
+  animation: currencySpendFloat 0.75s ease forwards;
+}
+
+.coin-spend-float,
+.diamond-spend-float {
+  color: #f87171;
+}
+
+.diamond-earn-float {
+  color: #34d399;
 }
 
 .item-row.purchase-success {
@@ -2210,14 +2513,26 @@ body {
   65% { transform: scale(1.08); }
 }
 
-@keyframes coinSpendFloat {
+@keyframes diamondSpentPulse {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(0.9); background: rgba(244, 114, 182, 0.18); color: #f9a8d4; }
+  65% { transform: scale(1.08); }
+}
+
+@keyframes diamondEarnedPulse {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(0.92); background: rgba(52, 211, 153, 0.2); color: #6ee7b7; }
+  65% { transform: scale(1.1); }
+}
+
+@keyframes currencySpendFloat {
   from {
     opacity: 1;
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
   }
   to {
     opacity: 0;
-    transform: translateY(calc(-50% - 18px));
+    transform: translate(-50%, calc(-50% - 18px));
   }
 }
 
@@ -2327,6 +2642,36 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.item-row--muted {
+  opacity: 0.72;
+}
+
+.item-row--ready {
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35), 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.item-row-icon-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.item-row-mode-icon .mode-grid {
+  width: 28px;
+  height: 28px;
+}
+
+.item-row-icon[data-mode="6x6"] .mode-grid-cell:nth-child(-n+6),
+.item-row-icon[data-mode="6x6"] .mode-grid-cell:nth-last-child(-n+6),
+.item-row-icon[data-mode="6x6"] .mode-grid-cell:nth-child(6n+1),
+.item-row-icon[data-mode="6x6"] .mode-grid-cell:nth-child(6n) {
+  opacity: 0.35;
+}
+
 .item-row-icon {
   font-size: 1.25rem;
   line-height: 1;
@@ -2367,6 +2712,10 @@ body {
   font-size: 0.78rem;
   font-weight: 600;
   color: #fbbf24;
+}
+
+.item-row-meta-owned {
+  color: #93c5fd;
 }
 
 .item-row-btn {
@@ -2442,6 +2791,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: 12px;
+}
+
+.survival-lobby-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   margin-top: 12px;
 }
 

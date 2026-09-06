@@ -5,7 +5,7 @@ import { generateUnitThumbnails, fillUnitIcon } from './board3d/UnitThumbnails.j
 import { generateNavThumbnails, applyNavIcons } from './board3d/NavThumbnails.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { generateItemThumbnails, fillItemIcon, generateMapPropThumbnails, fillMapPropIcon } from './board3d/ItemThumbnails.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode } from './units.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
 import { CODEX_TABS } from './codex.js';
 import { isUnlockable, getUnlockPrice } from './unlocks.js';
@@ -21,10 +21,10 @@ import {
   getSaveSnapshot,
   getSavedRostersByMode,
   getSavedEquippedItem,
+  claimDailyQuest,
 } from './save.js';
 import { onlineClient } from './online.js';
 import {
-  dismissTimedOverlay,
   hideTimedOverlay,
   revealOverlay,
   showAlert,
@@ -36,6 +36,7 @@ import {
   REACTION_COOLDOWN_MS,
   fillReactionIcon,
 } from './reactions.js';
+import { getDailyQuestDefinitions } from './dailyQuests.js';
 
 loadSave();
 
@@ -70,6 +71,7 @@ const codexRangeLegendEl = document.getElementById('codexRangeLegend');
 const endResultEl = document.getElementById('endResult');
 const gameEndOverlayEl = document.getElementById('gameEndOverlay');
 const modeButtonsEl = document.getElementById('onlineModeButtons');
+const dailyQuestListEl = document.getElementById('dailyQuestList');
 const onlineLobbyActionsEl = document.getElementById('onlineLobbyActions');
 const onlineWaitingEl = document.getElementById('onlineWaiting');
 const waitingRoomCodeEl = document.getElementById('waitingRoomCode');
@@ -88,16 +90,25 @@ const battleActionFabEl = document.getElementById('battleActionFab');
 const battleActionEmojisEl = document.getElementById('battleActionEmojis');
 const reactionBubbleEl = document.getElementById('reactionBubble');
 const reactionBubbleIconEl = document.getElementById('reactionBubbleIcon');
+const reactionBubbleOwnEl = document.getElementById('reactionBubbleOwn');
+const reactionBubbleOwnIconEl = document.getElementById('reactionBubbleOwnIcon');
 const bottomNavEl = document.getElementById('bottomNav');
 const winConditionToastEl = document.getElementById('winConditionToast');
 const turnToastEl = document.getElementById('turnToast');
 const turnToastTextEl = document.getElementById('turnToastText');
 const winConditionTextEl = document.getElementById('winConditionText');
 const coinBalanceEl = document.getElementById('coinBalance');
+const diamondBalanceEl = document.getElementById('diamondBalance');
+const coinBalanceAmountEl = coinBalanceEl?.querySelector('.currency-amount');
+const diamondBalanceAmountEl = diamondBalanceEl?.querySelector('.currency-amount');
 const purchaseToastEl = document.getElementById('purchaseToast');
 const purchaseToastTextEl = document.getElementById('purchaseToastText');
 const formationItemsEl = document.getElementById('formationItems');
-const bagGridEl = document.getElementById('bagGrid');
+const formationItemSectionEl = document.getElementById('formationItemSection');
+const startSurvivalBtnEl = document.getElementById('startSurvivalBtn');
+const survivalLobbyActionsEl = document.getElementById('survivalLobbyActions');
+const startSurvivalLobbyBtnEl = document.getElementById('startSurvivalLobbyBtn');
+const survivalRoundEl = document.getElementById('survivalRound');
 const shopGridEl = document.getElementById('shopGrid');
 const itemBattleBtnEl = document.getElementById('itemBattleBtn');
 const itemBattleIconEl = document.getElementById('itemBattleIcon');
@@ -116,7 +127,7 @@ const NAV_SCREENS = {
   battle: document.getElementById('screenBattle'),
   formation: document.getElementById('screenFormation'),
   codex: document.getElementById('screenCodex'),
-  bag: document.getElementById('screenBag'),
+  quests: document.getElementById('screenQuests'),
   shop: document.getElementById('screenShop'),
 };
 
@@ -240,7 +251,7 @@ function startMatchTimer(durationMs) {
 
 function syncMatchTimer(state) {
   // The tutorial follows a script, so neither clock may cut a step short.
-  if (state.phase !== 'battle' || state.tutorial) {
+  if (state.phase !== 'battle' || state.tutorial || state.isSurvivalMode || !state.matchDurationMs) {
     matchTimerEl.classList.add('hidden');
     matchTimerEl.setAttribute('aria-hidden', 'true');
     clearMatchTimer();
@@ -322,7 +333,11 @@ function startTurnTimer(
 }
 
 function syncTurnTimer(state) {
-  const active = state.phase === 'battle' && state.isHumanTurn && !state.tutorial;
+  const active = state.phase === 'battle'
+    && state.isHumanTurn
+    && !state.tutorial
+    && !state.isSurvivalMode
+    && state.turnDurationMs > 0;
 
   if (!active) {
     turnTimerEl.classList.add('hidden');
@@ -358,7 +373,7 @@ function syncTurnTimer(state) {
 }
 
 let onlineModeActive = true;
-let selectedOnlineMode = '3x3';
+let selectedOnlineMode = '4x4';
 let onlineTimerInterval = null;
 
 function getRosterForMode(modeId) {
@@ -442,26 +457,34 @@ function beginGameEndOverlay(message) {
 
   gameEndLeaveTimers.push(window.setTimeout(() => {
     gameEndOverlayStage = 'fading';
-    dismissTimedOverlay(gameEndOverlayEl, {
-      fadeMs: GAME_END_FADE_MS,
-      onHide: () => returnToHome(),
-    });
+    gameEndOverlayEl.classList.remove('ui-visible');
+    gameEndOverlayEl.classList.add('ui-dismiss');
+    gameEndLeaveTimers.push(window.setTimeout(() => {
+      hideTimedOverlay(gameEndOverlayEl);
+      returnToHome();
+    }, GAME_END_FADE_MS));
   }, GAME_END_MODAL_MS));
 }
 
+let gameEndReturning = false;
+
 function returnToHome() {
+  if (gameEndReturning) return;
+  gameEndReturning = true;
   clearGameEndLeaveTimers();
   gameEndOverlayStage = 'leaving';
   hideTimedOverlay(gameEndOverlayEl);
   if (isOnlinePlaying() || onlineClient.roomState) {
     onlineClient.leaveOnline().then(() => {
       hideGameEndOverlay();
+      gameEndReturning = false;
       render(getAppState());
     });
     return;
   }
   game.backToLobby();
   hideGameEndOverlay();
+  gameEndReturning = false;
   render(getAppState());
 }
 
@@ -490,11 +513,10 @@ const PURCHASE_TOAST_FADE_MS = 400;
 /** @type {{ clear: () => void } | null} */
 let turnToastController = null;
 let battleMenuOpen = false;
-let lastReactionShownAt = 0;
-/** @type {ReturnType<typeof setTimeout>|null} */
-let reactionDismissTimer = null;
-/** @type {ReturnType<typeof setTimeout>|null} */
-let reactionHideTimer = null;
+/** @type {ReturnType<typeof createReactionBubble>|null} */
+let opponentReactionBubble = null;
+/** @type {ReturnType<typeof createReactionBubble>|null} */
+let ownReactionBubble = null;
 let reactionButtonsReady = false;
 let lastReactionCooldownUntil = 0;
 /** @type {{ clear: () => void } | null} */
@@ -559,9 +581,13 @@ function showWinConditionToast(winCount, boardMode) {
     showMs: WIN_CONDITION_SHOW_MS,
     fadeMs: WIN_CONDITION_FADE_MS,
     setup: () => {
-      winConditionTextEl.textContent = boardMode === '5x5'
-        ? `連成 ${winCount} 子 · 全滅對手 · 攻破城堡`
-        : `連成 ${winCount} 子 · 全滅對手`;
+      if (boardMode === '6x6') {
+        winConditionTextEl.textContent = '撐過越多回合越好 · 卡牌全滅即結束';
+      } else if (boardMode === '5x5') {
+        winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手 · 攻破城堡`;
+      } else {
+        winConditionTextEl.textContent = `連成 ${winCount} 子 · 全滅對手`;
+      }
     },
   });
 }
@@ -922,8 +948,8 @@ function createItemRow(item, { count, price, onBuy }) {
   row.append(iconWrap, body);
   if (count != null) {
     const meta = document.createElement('span');
-    meta.className = 'item-row-meta';
-    meta.textContent = `×${count}`;
+    meta.className = 'item-row-meta item-row-meta-owned';
+    meta.textContent = `持有 ×${count}`;
     row.appendChild(meta);
   }
   if (price != null) {
@@ -947,8 +973,55 @@ function createItemRow(item, { count, price, onBuy }) {
   return row;
 }
 
-function renderCoinBalance(state) {
-  coinBalanceEl.textContent = String(state.coins ?? 0);
+function createDailyQuestRow(quest, { isReady, isClaimed }) {
+  const mode = BOARD_MODES[quest.modeId];
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  if (isClaimed) row.classList.add('item-row--muted');
+  if (isReady) row.classList.add('item-row--ready');
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'item-row-icon item-row-icon-mode';
+  if (mode) iconWrap.dataset.mode = mode.id;
+  const modeIcon = createModeGridIcon(mode?.size ?? 3);
+  modeIcon.classList.add('item-row-mode-icon');
+  iconWrap.appendChild(modeIcon);
+
+  const body = document.createElement('div');
+  body.className = 'item-row-body';
+  const statusText = isClaimed ? '今日已領取' : isReady ? '可領取獎勵' : '完成一場對戰';
+  body.innerHTML = `
+    <span class="item-row-name">${quest.label}</span>
+    <span class="item-row-desc">${statusText}</span>
+  `;
+
+  row.append(iconWrap, body);
+
+  const rewardMeta = document.createElement('span');
+  rewardMeta.className = 'item-row-meta';
+  rewardMeta.textContent = `💎 ${quest.reward}`;
+  row.appendChild(rewardMeta);
+
+  if (isClaimed) {
+    const doneMeta = document.createElement('span');
+    doneMeta.className = 'item-row-meta item-row-meta-owned';
+    doneMeta.textContent = '✓';
+    row.appendChild(doneMeta);
+  } else if (isReady) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn primary item-row-btn';
+    btn.textContent = '領取';
+    btn.addEventListener('click', () => handleClaimDailyQuest(quest.modeId, btn));
+    row.appendChild(btn);
+  }
+
+  return row;
+}
+
+function renderCurrencyBalances(state) {
+  if (coinBalanceAmountEl) coinBalanceAmountEl.textContent = String(state.coins ?? 0);
+  if (diamondBalanceAmountEl) diamondBalanceAmountEl.textContent = String(state.diamonds ?? 0);
 }
 
 function clearPurchaseNotifyTimer() {
@@ -958,19 +1031,45 @@ function clearPurchaseNotifyTimer() {
   }
 }
 
-function playCoinSpendAnimation(price) {
-  coinBalanceEl.classList.remove('coin-spent');
-  void coinBalanceEl.offsetWidth;
-  coinBalanceEl.classList.add('coin-spent');
-  window.setTimeout(() => coinBalanceEl.classList.remove('coin-spent'), 600);
+function playCurrencySpendAnimation(currency, price) {
+  const badgeEl = currency === 'diamond' ? diamondBalanceEl : coinBalanceEl;
+  const spentClass = currency === 'diamond' ? 'diamond-spent' : 'coin-spent';
+  const floatClass = currency === 'diamond' ? 'diamond-spend-float' : 'coin-spend-float';
+  if (!badgeEl) return;
+
+  badgeEl.classList.remove(spentClass);
+  void badgeEl.offsetWidth;
+  badgeEl.classList.add(spentClass);
+  window.setTimeout(() => badgeEl.classList.remove(spentClass), 600);
 
   if (!price) return;
-  const statusBar = coinBalanceEl.closest('.status-bar');
-  if (!statusBar) return;
   const floater = document.createElement('span');
-  floater.className = 'coin-spend-float';
+  floater.className = floatClass;
   floater.textContent = `-${price}`;
-  statusBar.appendChild(floater);
+  badgeEl.appendChild(floater);
+  window.setTimeout(() => floater.remove(), 750);
+}
+
+function playCoinSpendAnimation(price) {
+  playCurrencySpendAnimation('coin', price);
+}
+
+function playDiamondSpendAnimation(price) {
+  playCurrencySpendAnimation('diamond', price);
+}
+
+function playDiamondEarnAnimation(amount) {
+  if (!diamondBalanceEl || !amount) return;
+
+  diamondBalanceEl.classList.remove('diamond-earned');
+  void diamondBalanceEl.offsetWidth;
+  diamondBalanceEl.classList.add('diamond-earned');
+  window.setTimeout(() => diamondBalanceEl.classList.remove('diamond-earned'), 600);
+
+  const floater = document.createElement('span');
+  floater.className = 'diamond-earn-float';
+  floater.textContent = `+${amount}`;
+  diamondBalanceEl.appendChild(floater);
   window.setTimeout(() => floater.remove(), 750);
 }
 
@@ -986,12 +1085,12 @@ function showPurchaseToast(message, { success = true } = {}) {
   });
 }
 
-function handlePurchaseSuccess({ name, price, rowEl, kind = 'item' }) {
+function handlePurchaseSuccess({ name, price, rowEl, kind = 'item', currency = 'coin' }) {
   rowEl?.classList.add('purchase-success');
-  playCoinSpendAnimation(price);
+  playCurrencySpendAnimation(currency, price);
   const prefix = kind === 'class' ? '已解鎖' : '已購買';
   showPurchaseToast(`${prefix} ${name}`);
-  renderCoinBalance(getAppState());
+  renderCurrencyBalances(getAppState());
   clearPurchaseNotifyTimer();
   purchaseNotifyTimer = window.setTimeout(() => {
     purchaseNotifyTimer = null;
@@ -1008,6 +1107,10 @@ function handlePurchaseFailure(reason, btn) {
 }
 
 function renderFormationItems(state) {
+  const hideItems = isSurvivalMode(state.boardMode);
+  formationItemSectionEl?.classList.toggle('hidden', hideItems);
+  if (hideItems) return;
+
   formationItemsEl.innerHTML = '';
 
   for (const item of Object.values(ITEMS)) {
@@ -1015,16 +1118,6 @@ function renderFormationItems(state) {
       count: state.inventory[item.id] ?? 0,
       equipped: state.equippedItem === item.id,
       onSelect: (id) => game.selectEquippedItem(id),
-    }));
-  }
-}
-
-function renderBag(state) {
-  bagGridEl.innerHTML = '';
-
-  for (const item of Object.values(ITEMS)) {
-    bagGridEl.appendChild(createItemRow(item, {
-      count: state.inventory[item.id] ?? 0,
     }));
   }
 }
@@ -1070,6 +1163,7 @@ function renderShop(state) {
 
   for (const item of Object.values(ITEMS)) {
     shopGridEl.appendChild(createItemRow(item, {
+      count: state.inventory[item.id] ?? 0,
       price: SHOP_PRICES[item.id],
       onBuy: (id, btn) => {
         const result = buyItem(id);
@@ -1089,7 +1183,7 @@ function renderShop(state) {
 
 function renderBattleItem(state) {
   const inStock = state.equippedItem && (state.inventory[state.equippedItem] ?? 0) > 0;
-  const show = state.phase === 'battle' && inStock && state.itemDef && !state.tutorial;
+  const show = state.phase === 'battle' && inStock && state.itemDef && !state.tutorial && !state.isSurvivalMode;
   itemBattleBtnEl.classList.toggle('hidden', !show);
   if (!show) return;
 
@@ -1163,7 +1257,6 @@ function renderFormation(state) {
     card.insertAdjacentHTML('beforeend', `
       <span class="class-name">${cls.name}</span>
       <span class="class-meta">HP ${cls.hp} · ATK ${cls.atk}</span>
-      <span class="class-count">${selected ? '已選' : ''}</span>
     `);
     card.addEventListener('click', () => game.addToFormation(cls.id));
     formationPoolEl.appendChild(card);
@@ -1383,51 +1476,95 @@ function createModeGridIcon(size) {
   return wrap;
 }
 
+function createModeButton(mode, isActive, canPick, onSelect) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn mode-btn' + (isActive ? ' active' : '');
+  btn.dataset.mode = mode.id;
+  btn.setAttribute('aria-label', mode.label);
+  btn.appendChild(createModeGridIcon(mode.size));
+  const label = document.createElement('span');
+  label.className = 'mode-btn-label';
+  label.textContent = mode.label;
+  btn.appendChild(label);
+  btn.disabled = !canPick;
+  btn.addEventListener('click', onSelect);
+  return btn;
+}
+
 function renderFormationModePicker(state) {
   formationModeButtonsEl.innerHTML = '';
   const canPick = activeNav === 'formation' && game.canEditRoster();
 
   for (const mode of Object.values(BOARD_MODES)) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn mode-btn' + (state.boardMode === mode.id ? ' active' : '');
-    btn.setAttribute('aria-label', `${mode.size}×${mode.size}`);
-    btn.appendChild(createModeGridIcon(mode.size));
-    btn.disabled = !canPick;
-    btn.addEventListener('click', () => {
-      selectedOnlineMode = mode.id;
-      game.syncFormationMode(mode.id);
-      render(getAppState());
-    });
-    formationModeButtonsEl.appendChild(btn);
+    formationModeButtonsEl.appendChild(createModeButton(
+      mode,
+      state.boardMode === mode.id,
+      canPick,
+      () => {
+        selectedOnlineMode = mode.id;
+        game.syncFormationMode(mode.id);
+        render(getAppState());
+      },
+    ));
+  }
+
+  renderFormationActions(state);
+}
+
+function renderFormationActions(state) {
+  if (!startSurvivalBtnEl) return;
+  const showSurvival = state.boardMode === '6x6' && state.phase === 'formation';
+  startSurvivalBtnEl.classList.toggle('hidden', !showSurvival);
+  startSurvivalBtnEl.disabled = !game.canEditRoster();
+}
+
+function renderSurvivalRound(state) {
+  if (!survivalRoundEl) return;
+  const show = state.phase === 'battle' && state.isSurvivalMode;
+  survivalRoundEl.classList.toggle('hidden', !show);
+  if (show) {
+    survivalRoundEl.textContent = `第 ${state.survivalRound} 回合`;
   }
 }
 
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
-  const canPick = state.phase === 'onlineLobby';
+  const canPick = state.phase === 'onlineLobby' || state.phase === 'lobby';
 
   for (const mode of Object.values(BOARD_MODES)) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn mode-btn' + (selectedOnlineMode === mode.id ? ' active' : '');
-    btn.setAttribute('aria-label', `${mode.size}×${mode.size}`);
-    btn.appendChild(createModeGridIcon(mode.size));
-    btn.disabled = !canPick;
-    btn.addEventListener('click', () => {
-      selectedOnlineMode = mode.id;
-      game.syncFormationMode(mode.id);
-      render(getAppState());
-    });
-    modeButtonsEl.appendChild(btn);
+    modeButtonsEl.appendChild(createModeButton(
+      mode,
+      selectedOnlineMode === mode.id,
+      canPick,
+      () => {
+        selectedOnlineMode = mode.id;
+        game.syncFormationMode(mode.id);
+        render(getAppState());
+      },
+    ));
   }
+}
+
+function renderSurvivalLobbyActions(state) {
+  const inLobby = state.phase === 'onlineLobby' || state.phase === 'lobby';
+  const survivalSelected = selectedOnlineMode === '6x6';
+  const show = inLobby && survivalSelected;
+
+  survivalLobbyActionsEl?.classList.toggle('hidden', !show);
+  if (!show || !startSurvivalLobbyBtnEl) return;
+
+  startSurvivalLobbyBtnEl.disabled = false;
+  startSurvivalLobbyBtnEl.textContent = '開始生存戰';
 }
 
 function renderOnlineLobby(state) {
   const inLobby = state.phase === 'onlineLobby';
   const waiting = state.phase === 'onlineWaiting';
+  const survivalSelected = selectedOnlineMode === '6x6';
 
-  onlineLobbyActionsEl.classList.toggle('hidden', !inLobby);
+  onlineLobbyActionsEl.classList.toggle('hidden', !inLobby || survivalSelected);
+  renderSurvivalLobbyActions(state);
   onlineWaitingEl.classList.toggle('hidden', !waiting);
 
   if (waiting) {
@@ -1447,6 +1584,39 @@ function renderOnlineLobby(state) {
 function renderLobbyFooter(state) {
   const inLobby = state.phase === 'onlineLobby' || state.phase === 'lobby';
   startTutorialBtn.classList.toggle('hidden', !(inLobby && !isTutorialDone()));
+}
+
+function renderDailyQuests(state) {
+  if (!dailyQuestListEl || activeNav !== 'quests') return;
+
+  const ready = new Set(state.dailyQuests?.ready ?? []);
+  const claimed = new Set(state.dailyQuests?.claimed ?? []);
+  dailyQuestListEl.innerHTML = '';
+
+  const title = document.createElement('div');
+  title.className = 'section-title section-title-compact';
+  title.textContent = '每日任務';
+  dailyQuestListEl.appendChild(title);
+
+  for (const quest of getDailyQuestDefinitions()) {
+    dailyQuestListEl.appendChild(createDailyQuestRow(quest, {
+      isReady: ready.has(quest.modeId),
+      isClaimed: claimed.has(quest.modeId),
+    }));
+  }
+}
+
+function handleClaimDailyQuest(modeId, btn) {
+  const result = claimDailyQuest(modeId);
+  if (!result.ok) {
+    handlePurchaseFailure(result.reason, btn);
+    return;
+  }
+
+  const quest = getDailyQuestDefinitions().find((q) => q.modeId === modeId);
+  playDiamondEarnAnimation(result.awarded);
+  showPurchaseToast(`已領取 ${quest?.label ?? '任務'} +${result.awarded}💎`);
+  render(getAppState());
 }
 
 function renderTutorialPanel(state) {
@@ -1477,7 +1647,7 @@ function ensureReactionButtons() {
     btn.setAttribute('aria-label', reaction.label);
     const icon = document.createElement('span');
     icon.className = 'battle-action-emoji-icon';
-    fillReactionIcon(icon, reaction.id, 36);
+    fillReactionIcon(icon, reaction.id, 42);
     btn.appendChild(icon);
     btn.addEventListener('click', () => sendBattleReaction(reaction.id));
     battleActionEmojisEl.appendChild(btn);
@@ -1550,40 +1720,64 @@ function renderBattleActionMenu(state) {
   updateReactionButtonCooldown();
 }
 
-function dismissReactionBubble() {
-  if (reactionBubbleEl.classList.contains('hidden')) return;
-  reactionBubbleEl.classList.remove('is-visible');
-  reactionBubbleEl.classList.add('is-dismissing');
-  if (reactionHideTimer) clearTimeout(reactionHideTimer);
-  reactionHideTimer = setTimeout(() => {
-    reactionBubbleEl.classList.add('hidden');
-    reactionBubbleEl.classList.remove('is-dismissing');
-    reactionBubbleEl.setAttribute('aria-hidden', 'true');
-    if (isOnlinePlaying()) onlineClient.clearIncomingReaction();
-    else game.clearIncomingReaction();
-  }, 350);
+function clearReactionOnEngine(kind) {
+  const engine = isOnlinePlaying() ? onlineClient : game;
+  if (kind === 'incoming') engine.clearIncomingReaction();
+  else engine.clearOutgoingReaction();
 }
 
-function showReactionBubble(reaction) {
-  if (!reaction?.id) return;
-  if (reaction.at <= lastReactionShownAt) return;
-  lastReactionShownAt = reaction.at;
+function createReactionBubble(rootEl, iconEl, kind) {
+  let lastShownAt = 0;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let dismissTimer = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let hideTimer = null;
 
-  if (reactionDismissTimer) clearTimeout(reactionDismissTimer);
-  if (reactionHideTimer) clearTimeout(reactionHideTimer);
-
-  fillReactionIcon(reactionBubbleIconEl, reaction.id, 88);
-  reactionBubbleEl.classList.remove('hidden', 'is-dismissing');
-  reactionBubbleEl.classList.add('is-visible');
-  reactionBubbleEl.setAttribute('aria-hidden', 'false');
-
-  reactionDismissTimer = setTimeout(dismissReactionBubble, REACTION_DISPLAY_MS);
-}
-
-function renderIncomingReaction(state) {
-  if (state.incomingReaction) {
-    showReactionBubble(state.incomingReaction);
+  function dismiss() {
+    if (!rootEl || rootEl.classList.contains('hidden')) return;
+    rootEl.classList.remove('is-visible');
+    rootEl.classList.add('is-dismissing');
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      rootEl.classList.add('hidden');
+      rootEl.classList.remove('is-dismissing');
+      rootEl.setAttribute('aria-hidden', 'true');
+      clearReactionOnEngine(kind);
+    }, 350);
   }
+
+  function show(reaction) {
+    if (!rootEl || !iconEl || !reaction?.id) return;
+    if (reaction.at <= lastShownAt) return;
+    lastShownAt = reaction.at;
+
+    if (dismissTimer) clearTimeout(dismissTimer);
+    if (hideTimer) clearTimeout(hideTimer);
+
+    fillReactionIcon(iconEl, reaction.id, 104);
+    rootEl.classList.remove('hidden', 'is-dismissing');
+    rootEl.classList.add('is-visible');
+    rootEl.setAttribute('aria-hidden', 'false');
+
+    dismissTimer = setTimeout(dismiss, REACTION_DISPLAY_MS);
+  }
+
+  return { show };
+}
+
+function ensureReactionBubbles() {
+  if (!opponentReactionBubble && reactionBubbleEl && reactionBubbleIconEl) {
+    opponentReactionBubble = createReactionBubble(reactionBubbleEl, reactionBubbleIconEl, 'incoming');
+  }
+  if (!ownReactionBubble && reactionBubbleOwnEl && reactionBubbleOwnIconEl) {
+    ownReactionBubble = createReactionBubble(reactionBubbleOwnEl, reactionBubbleOwnIconEl, 'outgoing');
+  }
+}
+
+function renderReactions(state) {
+  ensureReactionBubbles();
+  if (state.incomingReaction) opponentReactionBubble?.show(state.incomingReaction);
+  if (state.outgoingReaction) ownReactionBubble?.show(state.outgoingReaction);
 }
 
 function updateBottomNav(state) {
@@ -1647,19 +1841,21 @@ function render(state) {
   renderTutorialPanel(state);
   renderLobbyFooter(state);
   renderOnlineLobby(state);
-  renderCoinBalance(state);
+  renderCurrencyBalances(state);
   syncTurnToast(state);
   if (inFormation || (activeNav === 'formation' && game.canEditRoster())) {
     renderFormation(state);
     renderFormationItems(state);
+    renderFormationActions(state);
   }
   if (activeNav === 'formation' && game.canEditRoster()) {
     renderFormationModePicker(state);
   }
   if (inBattleFlow) renderBattleItem(state);
-  if (inBattleFlow) renderIncomingReaction(state);
+  if (inBattleFlow) renderReactions(state);
   if (inBattleFlow) renderReserveBars(state);
-  if (activeNav === 'bag') renderBag(state);
+  renderSurvivalRound(state);
+  if (activeNav === 'quests') renderDailyQuests(state);
   if (activeNav === 'shop') renderShop(state);
 
   const showBoard = inBattleFlow && activeNav === 'battle';
@@ -1695,15 +1891,20 @@ codexTabsEl?.addEventListener('click', (e) => {
   render(getAppState());
 });
 
+function getOnlineBoardMode() {
+  return isLocalOnlyMode(selectedOnlineMode) ? '4x4' : selectedOnlineMode;
+}
+
 findMatchBtn.addEventListener('click', async () => {
-  const roster = ensureRosterForMatch(selectedOnlineMode);
+  const boardMode = getOnlineBoardMode();
+  const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
     await showAlert('請先編組至少一名角色');
     return;
   }
   findMatchBtn.disabled = true;
   try {
-    await onlineClient.findMatch(selectedOnlineMode, undefined, roster);
+    await onlineClient.findMatch(boardMode, undefined, roster);
     render(getAppState());
   } catch (e) {
     await showAlert(e.message ?? '匹配失敗');
@@ -1713,14 +1914,15 @@ findMatchBtn.addEventListener('click', async () => {
 });
 
 createRoomBtn.addEventListener('click', async () => {
-  const roster = ensureRosterForMatch(selectedOnlineMode);
+  const boardMode = getOnlineBoardMode();
+  const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
     await showAlert('請先編組至少一名角色');
     return;
   }
   createRoomBtn.disabled = true;
   try {
-    await onlineClient.createRoom(selectedOnlineMode, undefined, roster);
+    await onlineClient.createRoom(boardMode, undefined, roster);
     render(getAppState());
   } catch (e) {
     await showAlert(e.message ?? '建立房間失敗');
@@ -1735,7 +1937,8 @@ joinRoomBtn.addEventListener('click', async () => {
     await showAlert('請輸入 6 位房間碼');
     return;
   }
-  const roster = ensureRosterForMatch(selectedOnlineMode);
+  const boardMode = getOnlineBoardMode();
+  const roster = ensureRosterForMatch(boardMode);
   if (!roster) {
     await showAlert('請先編組至少一名角色');
     return;
@@ -1781,6 +1984,21 @@ document.addEventListener('keydown', (event) => {
   if (isOnlinePlaying() || !game.itemTargeting) return;
   game.cancelItemTargeting();
 });
+async function beginSurvivalBattle() {
+  const modeId = '6x6';
+  if (!ensureRosterForMatch(modeId)) {
+    await showAlert('請先編組至少一名角色');
+    return;
+  }
+  hideGameEndOverlay();
+  game.startSurvivalBattle();
+  if (game.phase !== 'battle') return;
+  switchNav('battle');
+  render(getAppState());
+}
+
+startSurvivalBtnEl?.addEventListener('click', () => { beginSurvivalBattle(); });
+startSurvivalLobbyBtnEl?.addEventListener('click', () => { beginSurvivalBattle(); });
 startTutorialBtn.addEventListener('click', () => game.startTutorial());
 tutorialSkipBtn.addEventListener('click', () => game.skipTutorial());
 

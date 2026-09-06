@@ -9,6 +9,7 @@ import { enemyOf, hasCompletedLine, isEliminated, getWinLinesForSize } from './b
 import { buildThreatMap, isLethalAt, coverageAt, damageAt } from './threat.js';
 import { isFlagCell } from '../mapPropUtils.js';
 import { checkCastleVictory } from '../rules.js';
+import { isSurvivalMode } from '../units.js';
 
 export const WIN_SCORE = 1000000;
 
@@ -248,12 +249,13 @@ function scoreElimination(ctx, team) {
 export function terminalScore(ctx, team) {
   const enemy = enemyOf(team);
   const boardMode = ctx.boardMode ?? `${ctx.size}x${ctx.size}`;
-  const teamWon = hasCompletedLine(ctx, team)
+  const survival = isSurvivalMode(boardMode);
+  const teamWon = (!survival && hasCompletedLine(ctx, team))
     || isEliminated(ctx, enemy)
-    || checkCastleVictory(ctx.board, team, boardMode);
-  const enemyWon = hasCompletedLine(ctx, enemy)
+    || (!survival && checkCastleVictory(ctx.board, team, boardMode));
+  const enemyWon = (!survival && hasCompletedLine(ctx, enemy))
     || isEliminated(ctx, team)
-    || checkCastleVictory(ctx.board, enemy, boardMode);
+    || (!survival && checkCastleVictory(ctx.board, enemy, boardMode));
 
   if (teamWon && enemyWon) {
     // Reachable: killing the opponent's last unit can be a bomber whose blast takes our
@@ -273,11 +275,12 @@ export function evaluate(ctx, team) {
 
   const myThreat = buildThreatMap(ctx, team);
   const theirThreat = buildThreatMap(ctx, enemyOf(team));
+  const survival = isSurvivalMode(ctx.boardMode ?? `${ctx.size}x${ctx.size}`);
 
   return Math.round(
     scoreUnits(ctx, team, myThreat, theirThreat)
     + scoreReserves(ctx, team)
-    + scoreLines(ctx, team, myThreat, theirThreat)
-    + scoreElimination(ctx, team),
+    + (survival ? 0 : scoreLines(ctx, team, myThreat, theirThreat))
+    + scoreElimination(ctx, team) * (survival ? 2 : 1),
   );
 }

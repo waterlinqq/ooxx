@@ -113,7 +113,7 @@ const NAV_LABELS = {
   battle: '戰鬥',
   formation: '編組',
   codex: '圖鑑',
-  bag: '背包',
+  quests: '任務',
   shop: '商店',
 };
 

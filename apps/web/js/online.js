@@ -15,6 +15,7 @@ import {
 } from './onlineView.js';
 import { GAME_END_REVEAL_MS } from './game.js';
 import { REACTION_COOLDOWN_MS } from './reactions.js';
+import { markDailyQuestReady } from './save.js';
 
 export class OnlineClient {
   constructor() {
@@ -59,6 +60,8 @@ export class OnlineClient {
     this._gameEndRevealGen = 0;
     /** @type {{ id: string, at: number }|null} */
     this.incomingReaction = null;
+    /** @type {{ id: string, at: number }|null} */
+    this.outgoingReaction = null;
     this.lastReactionSentAt = 0;
   }
 
@@ -342,6 +345,7 @@ export class OnlineClient {
     await this.playSecondaryFxIfNeeded(payload);
 
     if (gameEnd && this.gameState?.phase === 'gameEnd') {
+      markDailyQuestReady(this.gameState.boardMode);
       const endMessage = this.gameState.message;
       const revealGen = ++this._gameEndRevealGen;
       this.gameState.phase = 'battle';
@@ -451,6 +455,7 @@ export class OnlineClient {
       canUseItem: false,
       tutorial: null,
       incomingReaction: this.incomingReaction,
+      outgoingReaction: this.outgoingReaction,
     };
   }
 
@@ -599,16 +604,23 @@ export class OnlineClient {
     if (!this.gameState || this.gameState.phase !== 'battle') return false;
 
     this.lastReactionSentAt = now;
+    this.outgoingReaction = { id: reactionId, at: now };
     const reqId = this.fire(MSG.SEND_REACTION, { reactionId });
     if (!reqId) {
       this.lastReactionSentAt = 0;
+      this.outgoingReaction = null;
       return false;
     }
+    this.notify();
     return true;
   }
 
   clearIncomingReaction() {
     this.incomingReaction = null;
+  }
+
+  clearOutgoingReaction() {
+    this.outgoingReaction = null;
   }
 
   beginDragUnit(unitId) {

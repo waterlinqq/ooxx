@@ -18,8 +18,16 @@
 <body>
   <div class="app">
     <header class="status-bar" id="statusBar">
-      <span class="status-icon">💰</span>
-      <span class="coin-badge" id="coinBalance" aria-label="金幣">0</span>
+      <div class="currency-group">
+        <span class="currency-badge coin-badge" id="coinBalance" aria-label="金幣">
+          <span class="currency-icon" aria-hidden="true">💰</span>
+          <span class="currency-amount">0</span>
+        </span>
+        <span class="currency-badge diamond-badge" id="diamondBalance" aria-label="鑽石">
+          <span class="currency-icon" aria-hidden="true">💎</span>
+          <span class="currency-amount">0</span>
+        </span>
+      </div>
     </header>
     <main class="game-main" id="gameMain">
       <!-- 戰鬥 -->
@@ -34,6 +42,9 @@
                 <input class="online-room-input" id="roomCodeInput" type="text" maxlength="6" placeholder="房間碼" autocomplete="off" />
                 <button class="btn primary" id="joinRoomBtn" type="button">加入</button>
               </div>
+            </div>
+            <div class="survival-lobby-actions hidden" id="survivalLobbyActions">
+              <button class="btn primary btn-lg" id="startSurvivalLobbyBtn" type="button">開始生存戰</button>
             </div>
             <div class="online-waiting hidden" id="onlineWaiting">
               <div class="online-match-indicator hidden" id="onlineMatchIndicator" aria-live="polite">
@@ -62,6 +73,7 @@
               <div class="board-container">
                 <div class="board-hud" id="boardHud">
                   <div class="board-timers">
+                    <div class="survival-round hidden" id="survivalRound" aria-live="polite"></div>
                     <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
                       <time class="match-timer-time" id="matchTimerText">00:00</time>
                       <div class="match-timer-track">
@@ -88,8 +100,11 @@
                     <p class="ui-card__body" id="winConditionText"></p>
                   </div>
                 </div>
-                <div class="reaction-bubble hidden" id="reactionBubble" aria-hidden="true">
+                <div class="reaction-bubble reaction-bubble--opp hidden" id="reactionBubble" aria-hidden="true">
                   <div class="reaction-bubble-icon" id="reactionBubbleIcon"></div>
+                </div>
+                <div class="reaction-bubble reaction-bubble--own hidden" id="reactionBubbleOwn" aria-hidden="true">
+                  <div class="reaction-bubble-icon" id="reactionBubbleOwnIcon"></div>
                 </div>
                 <div class="battle-panels">
                   <div class="tutorial-panel ui-card ui-card--accent hidden" id="tutorialPanel" aria-live="polite">
@@ -159,6 +174,10 @@
             <div class="class-grid" id="formationPool"></div>
           </div>
 
+          <div class="formation-actions">
+            <button class="btn primary btn-lg hidden" id="startSurvivalBtn" type="button">開始生存戰</button>
+          </div>
+
         </div>
       </section>
 
@@ -183,10 +202,10 @@
         </div>
       </section>
 
-      <!-- 背包 -->
-      <section class="game-screen" id="screenBag" data-screen="bag">
+      <!-- 任務 -->
+      <section class="game-screen" id="screenQuests" data-screen="quests">
         <div class="screen-scroll">
-          <div class="item-list" id="bagGrid"></div>
+          <div class="item-list" id="dailyQuestList"></div>
         </div>
       </section>
 
@@ -211,9 +230,9 @@
         <span class="nav-icon" aria-hidden="true"></span>
         <span class="nav-label">戰鬥</span>
       </button>
-      <button type="button" class="nav-item" data-nav="bag" aria-label="背包">
+      <button type="button" class="nav-item" data-nav="quests" aria-label="任務">
         <span class="nav-icon" aria-hidden="true"></span>
-        <span class="nav-label">背包</span>
+        <span class="nav-label">任務</span>
       </button>
       <button type="button" class="nav-item" data-nav="shop" aria-label="商店">
         <span class="nav-icon" aria-hidden="true"></span>

@@ -1929,17 +1929,6 @@ function crabCarapaceGeometry() {
   });
 }
 
-function crabCrestFinGeometry() {
-  return cached('crab-crest-fin', () => {
-    const shape = new THREE.Shape();
-    shape.moveTo(-0.062, 0);
-    shape.lineTo(0.062, 0);
-    shape.bezierCurveTo(0.07, 0.06, 0.038, 0.115, 0, 0.135);
-    shape.bezierCurveTo(-0.038, 0.115, -0.07, 0.06, -0.062, 0);
-    return extrude(shape, 0.016, 0.005);
-  });
-}
-
 function crabDomeGeometry() {
   return cached('crab-carapace-dome', () => {
     const geometry = new THREE.SphereGeometry(1, 26, 14, 0, Math.PI * 2, 0, Math.PI * 0.56);
@@ -2183,29 +2172,6 @@ function buildCrabGeneral(mats) {
     pos: [0, -0.045, -0.005],
   });
 
-  // A forward-facing fan crest, so the "general" reads from the board's camera
-  // instead of only in profile.
-  const crest = new THREE.Group();
-  crest.position.set(0, 0.1, -0.01);
-  body.add(crest);
-  part(crest, cached('crab-crest-base', () => new THREE.CylinderGeometry(0.038, 0.058, 0.03, 14)), mats.armorDeep);
-  part(crest, crabCrestFinGeometry(), mats.armor, {
-    pos: [0, 0.02, 0.004],
-    rot: [-0.22, 0, 0],
-  });
-  part(crest, cached('crab-crest-gem', () => new THREE.OctahedronGeometry(0.026, 0)), mats.trim, {
-    pos: [0, 0.036, 0.03],
-    rot: [0, 0, Math.PI / 4],
-    shadow: false,
-  });
-  for (const side of [-1, 1]) {
-    part(crest, cached('crab-crest-horn', () => new THREE.ConeGeometry(0.012, 0.09, 6)), mats.gold, {
-      pos: [side * 0.075, 0.075, 0.01],
-      rot: [-0.2, 0, side * 0.62],
-      shadow: false,
-    });
-  }
-
   // Face sits in the notch under the front lip, where the shell overhangs it.
   const head = new THREE.Group();
   head.position.set(0, -0.012, 0.132);
@@ -2256,7 +2222,6 @@ function buildCrabGeneral(mats) {
     armL: clawL,
     armR: clawR,
     eyes,
-    crest,
     eyeStalkL: eyeStalks.left.stalk,
     eyeStalkR: eyeStalks.right.stalk,
     extraMaterials,

@@ -14,6 +14,9 @@ import {
   isCastleUnit,
   getDeployableRoster,
   modeHasAutoCastle,
+  isSurvivalMode,
+  isLocalOnlyMode,
+  getEnemyRosterForMode,
 } from './units.js';
 import {
   getValidMoves,
@@ -49,6 +52,7 @@ import {
   persistRostersByMode,
   getSavedEquippedItem,
   persistEquippedItem,
+  markDailyQuestReady,
 } from './save.js';
 import {
   TUTORIAL_BOARD_MODE,
@@ -73,7 +77,7 @@ export const GAME_END_FADE_MS = 450;
 
 export class Game {
   constructor() {
-    this.boardMode = '3x3';
+    this.boardMode = '4x4';
     this.phase = 'lobby';
     this.currentPlayer = 'blue';
     this.draggingUnitId = null;
@@ -106,12 +110,15 @@ export class Game {
     this.pendingLandmines = [];
     this.shadowClones = [];
     this.lastCoinReward = 0;
+    this.survivalRound = 0;
     this._endRevealTimer = null;
     this._endRevealPending = false;
     /** @type {{ stepIndex: number, stage: 'player'|'enemy'|'done' } | null} */
     this.tutorial = null;
     /** @type {{ id: string, at: number }|null} */
     this.incomingReaction = null;
+    /** @type {{ id: string, at: number }|null} */
+    this.outgoingReaction = null;
     this.lastReactionSentAt = 0;
   }
 
@@ -298,6 +305,7 @@ export class Game {
   }
 
   canUseItem() {
+    if (isSurvivalMode(this.boardMode)) return false;
     return this.phase === 'battle'
       && this.canHumanAct()
       && !this.animating
@@ -444,12 +452,16 @@ export class Game {
   }
 
   checkWinAfterItemEffect(detail) {
-    for (const team of ['blue', 'red']) {
-      const winLine = checkWin(this.board, team, this.mapProps);
-      if (winLine) {
-        this.lastWinLine = winLine;
-        this.handleRoundWin(team, `連 ${this.getWinCountLabel()} 子`);
-        return true;
+    const survival = isSurvivalMode(this.boardMode);
+
+    if (!survival) {
+      for (const team of ['blue', 'red']) {
+        const winLine = checkWin(this.board, team, this.mapProps);
+        if (winLine) {
+          this.lastWinLine = winLine;
+          this.handleRoundWin(team, `連 ${this.getWinCountLabel()} 子`);
+          return true;
+        }
       }
     }
 
@@ -458,16 +470,22 @@ export class Game {
       const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
       if (isTeamEliminated(this.board, enemy, enemyReserve)) {
         this.lastWinLine = null;
+        if (survival) {
+          this.handleSurvivalEnd(team === 'blue');
+          return true;
+        }
         this.handleRoundWin(team, '全滅');
         return true;
       }
     }
 
-    for (const team of ['blue', 'red']) {
-      if (checkCastleVictory(this.board, team, this.boardMode)) {
-        this.lastWinLine = null;
-        this.handleRoundWin(team, '攻破城堡', 'castle');
-        return true;
+    if (!survival) {
+      for (const team of ['blue', 'red']) {
+        if (checkCastleVictory(this.board, team, this.boardMode)) {
+          this.lastWinLine = null;
+          this.handleRoundWin(team, '攻破城堡', 'castle');
+          return true;
+        }
       }
     }
 
@@ -569,6 +587,8 @@ export class Game {
       turnDurationMs: mode.turnDurationMs,
       turnBonusMs: mode.turnBonusMs,
       matchDurationMs: mode.matchDurationMs,
+      isSurvivalMode: isSurvivalMode(this.boardMode),
+      survivalRound: this.survivalRound,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
       isHumanTurn: this.canHumanAct(),
@@ -604,8 +624,10 @@ export class Game {
       pendingLandmines: this.pendingLandmines.map((m) => ({ ...m })),
       showLandmines: true,
       coins: save.coins,
+      diamonds: save.diamonds,
       inventory: save.inventory,
       ownedClasses: save.ownedClasses,
+      dailyQuests: save.dailyQuests,
       lastCoinReward: this.lastCoinReward,
       canUseItem: this.canUseItem(),
       itemDef: equippedItem ? getItem(equippedItem) : null,
@@ -614,6 +636,7 @@ export class Game {
       tutorialActorCell: this.getTutorialActorCell(),
       tutorialPointer: this.getTutorialPointer(),
       incomingReaction: this.incomingReaction,
+      outgoingReaction: this.outgoingReaction,
     };
   }
 
@@ -891,7 +914,7 @@ export class Game {
 
   /** 匹配逾時：用玩家當前編組立刻開打 AI */
   startQuickAiBattle(boardMode) {
-    if (!BOARD_MODES[boardMode]) return;
+    if (!BOARD_MODES[boardMode] || isLocalOnlyMode(boardMode)) return;
     this.tutorial = null;
     this.syncFormationMode(boardMode);
     if (getDeployableRoster(this.blueRoster, this.boardMode).length === 0) {
@@ -905,6 +928,27 @@ export class Game {
     this.pendingLandmines = [];
     this.animating = false;
     this.redRoster = createRandomRoster(this.boardMode);
+    this.startRound();
+  }
+
+  /** 生存模式：本地 AI，固定敵方 13 人 */
+  startSurvivalBattle() {
+    const modeId = '6x6';
+    if (!BOARD_MODES[modeId]) return;
+    this.tutorial = null;
+    this.syncFormationMode(modeId);
+    if (getDeployableRoster(this.blueRoster, this.boardMode).length === 0) {
+      this.message = '請先編組至少一名角色';
+      this.notify();
+      return;
+    }
+    this.itemUsed = false;
+    this.itemTargeting = null;
+    this.pendingBombs = [];
+    this.pendingLandmines = [];
+    this.animating = false;
+    this.redRoster = getEnemyRosterForMode(modeId);
+    this.survivalRound = 0;
     this.startRound();
   }
 
@@ -1289,21 +1333,28 @@ export class Game {
 
     if (this.tutorial) this.advanceTutorial();
 
-    const winLine = checkWin(this.board, this.currentPlayer, this.mapProps);
+    const survival = isSurvivalMode(this.boardMode);
 
-    if (winLine) {
-      this.lastWinLine = winLine;
-      this.handleRoundWin(this.currentPlayer, `連 ${this.getWinCountLabel()} 子`);
-      return;
+    if (!survival) {
+      const winLine = checkWin(this.board, this.currentPlayer, this.mapProps);
+      if (winLine) {
+        this.lastWinLine = winLine;
+        this.handleRoundWin(this.currentPlayer, `連 ${this.getWinCountLabel()} 子`);
+        return;
+      }
     }
 
     if (isTeamEliminated(this.board, enemy, enemyReserve)) {
       this.lastWinLine = null;
+      if (survival) {
+        this.handleSurvivalEnd(this.currentPlayer === 'blue');
+        return;
+      }
       this.handleRoundWin(this.currentPlayer, '全滅');
       return;
     }
 
-    if (checkCastleVictory(this.board, this.currentPlayer, this.boardMode)) {
+    if (!survival && checkCastleVictory(this.board, this.currentPlayer, this.boardMode)) {
       this.lastWinLine = null;
       this.handleRoundWin(this.currentPlayer, '攻破城堡', 'castle');
       return;
@@ -1331,6 +1382,10 @@ export class Game {
     this.currentPlayer = this.currentPlayer === 'blue' ? 'red' : 'blue';
     this.shadowClones = expireShadowClonesForTurnStart(this.shadowClones, this.currentPlayer);
     this.resetTurnActions();
+
+    if (isSurvivalMode(this.boardMode) && endedTeam === 'red') {
+      this.survivalRound++;
+    }
 
     if (this.applyTurnBoundaryEffects(endedTeam)) return;
 
@@ -1430,6 +1485,10 @@ export class Game {
     this.selectedReserveId = null;
     this.inspectedUnitId = null;
     this.lastWinLine = null;
+    if (isSurvivalMode(this.boardMode)) {
+      this.handleSurvivalEnd(false, 'surrender');
+      return;
+    }
     this.handleRoundWin('red', `${TEAM.blue.name}投降`);
   }
 
@@ -1439,13 +1498,17 @@ export class Game {
     if (this.phase !== 'battle' || this.animating || this.tutorial) return false;
 
     this.lastReactionSentAt = now;
-    this.incomingReaction = { id: reactionId, at: now };
+    this.outgoingReaction = { id: reactionId, at: now };
     this.notify();
     return true;
   }
 
   clearIncomingReaction() {
     this.incomingReaction = null;
+  }
+
+  clearOutgoingReaction() {
+    this.outgoingReaction = null;
   }
 
   endMatchByTime() {
@@ -1504,12 +1567,39 @@ export class Game {
 
       addCoins(reward);
       this.lastCoinReward = reward;
+      markDailyQuestReady(this.boardMode);
 
       const coinText = reward > 0 ? ` +${reward}` : '';
       endMessage = winner
         ? `${TEAM[winner].name}獲勝${coinText}`
         : `平手${coinText}`;
     }
+
+    this.clearEndSequence();
+    this._endRevealPending = true;
+    this.notify();
+
+    this._endRevealTimer = setTimeout(() => {
+      this._endRevealTimer = null;
+      if (!this._endRevealPending) return;
+      this._endRevealPending = false;
+      this.phase = 'gameEnd';
+      this.message = endMessage;
+      this.animating = false;
+      this.notify();
+    }, GAME_END_REVEAL_MS);
+  }
+
+  handleSurvivalEnd(cleared, reason = 'eliminated') {
+    this.endReason = cleared ? 'survival_clear' : reason;
+    this.animating = true;
+    this.lastCoinReward = 0;
+    markDailyQuestReady(this.boardMode);
+
+    const rounds = this.survivalRound;
+    const endMessage = cleared
+      ? `通關！存活 ${rounds} 回合`
+      : `存活 ${rounds} 回合`;
 
     this.clearEndSequence();
     this._endRevealPending = true;
@@ -1536,6 +1626,7 @@ export class Game {
     this.lastWinLine = null;
     this.endReason = null;
     this.finalScores = null;
+    this.survivalRound = 0;
     this.blueReserve = [];
     this.redReserve = [];
     this.message = '';

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 
 const DRAG_THRESHOLD = 8;
+const TMP_PIVOT_INVERSE = new THREE.Matrix4();
 
 export class InputController {
-  constructor({ domElement, camera, tileGrid, callbacks }) {
+  constructor({ domElement, camera, tileGrid, boardPivot = null, callbacks }) {
     this.domElement = domElement;
     this.camera = camera;
     this.tileGrid = tileGrid;
+    this.boardPivot = boardPivot;
     this.callbacks = callbacks;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -15,6 +17,7 @@ export class InputController {
     this.ignoreNextClick = false;
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.14);
     this.intersectPoint = new THREE.Vector3();
+    this.localPick = new THREE.Vector3();
 
     domElement.addEventListener('pointerdown', this.onPointerDown);
     domElement.addEventListener('click', this.onClick);
@@ -43,7 +46,17 @@ export class InputController {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     if (!this.raycaster.ray.intersectPlane(this.plane, this.intersectPoint)) return null;
 
-    const tile = this.tileGrid.getTileAtWorld(this.intersectPoint.x, this.intersectPoint.z);
+    let pickX = this.intersectPoint.x;
+    let pickZ = this.intersectPoint.z;
+    if (this.boardPivot) {
+      this.boardPivot.updateMatrixWorld(true);
+      TMP_PIVOT_INVERSE.copy(this.boardPivot.matrixWorld).invert();
+      this.localPick.copy(this.intersectPoint).applyMatrix4(TMP_PIVOT_INVERSE);
+      pickX = this.localPick.x;
+      pickZ = this.localPick.z;
+    }
+
+    const tile = this.tileGrid.getTileAtWorld(pickX, pickZ);
     if (!tile) return null;
 
     const { row, col } = tile.userData;

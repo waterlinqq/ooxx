@@ -3,12 +3,29 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { buildUnitModel } from './UnitModels.js';
 import { CLASSES, createEmptyBoard, createUnit } from '../units.js';
 import { getValidMoves, isInBounds } from '../rules.js';
+import {
+  LimitedOrbitControls,
+  isTouchDevice,
+  isValidLayoutBounds,
+  fitLayoutBoundsToAspect,
+  applyOrbitFrustumZoom,
+} from './LimitedOrbitControls.js';
+import {
+  isScene3dDebugEnabled,
+  Scene3dDebugHud,
+  buildScene3dDebugSnapshot,
+} from './Scene3dDebug.js';
 
 const UNIT_BASE_Y = 0.072;
 const PREVIEW_BOARD_SIZE = 7;
 const PREVIEW_TILE_SIZE = 0.25;
 const PREVIEW_TILE_PITCH = 0.29;
+const PREVIEW_FRUSTUM = 2.8;
+const PREVIEW_FRAME_PADDING = 0.08;
+const PREVIEW_ORBIT_HEADROOM = 1.14;
 const RANGE_Y = 0.047;
+const PREVIEW_BOX = new THREE.Box3();
+const PREVIEW_VIEW = new THREE.Vector3();
 
 const ORTHOGONAL_DIRECTIONS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
@@ -89,7 +106,7 @@ export class CharacterPreviewScene {
     const width = containerEl.clientWidth || 320;
     const height = containerEl.clientHeight || 240;
     const aspect = width / height;
-    const frustum = 2.8;
+    const frustum = PREVIEW_FRUSTUM;
 
     this.camera = new THREE.OrthographicCamera(
       (-frustum * aspect) / 2,
@@ -110,6 +127,23 @@ export class CharacterPreviewScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.3;
     containerEl.appendChild(this.renderer.domElement);
+
+    this.previewPivot = new THREE.Group();
+    this.previewPivot.name = 'previewPivot';
+    this.scene.add(this.previewPivot);
+
+    this.orbitControls = new LimitedOrbitControls({
+      domElement: this.renderer.domElement,
+      pivot: this.previewPivot,
+      zoomViaScale: !isTouchDevice(),
+      onChange: () => this.applyOrbitZoom(),
+    });
+
+    this.layoutFrustum = null;
+    this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'codex') : null;
+
+    this.lastValidWidth = width;
+    this.lastValidHeight = height;
 
     this.pmrem = new THREE.PMREMGenerator(this.renderer);
     this.envMap = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -142,7 +176,7 @@ export class CharacterPreviewScene {
     this.rangeOverlays = new THREE.Group();
     this.rangeOverlays.name = 'previewRangeOverlays';
     this.rangeBoard.add(this.rangeOverlays);
-    this.scene.add(this.rangeBoard);
+    this.previewPivot.add(this.rangeBoard);
     this.createRangeBoard();
 
     this.clock = new THREE.Clock();
@@ -159,25 +193,92 @@ export class CharacterPreviewScene {
     this.animate();
   }
 
+  previewContentBounds() {
+    const rotX = this.previewPivot.rotation.x;
+    const rotY = this.previewPivot.rotation.y;
+    this.previewPivot.rotation.set(0, 0, 0);
+    this.previewPivot.scale.setScalar(1);
+    this.previewPivot.updateMatrixWorld(true);
+
+    PREVIEW_BOX.makeEmpty();
+    if (this.preview?.root) PREVIEW_BOX.expandByObject(this.preview.root);
+    if (this.rangeBoard) PREVIEW_BOX.expandByObject(this.rangeBoard);
+
+    this.previewPivot.rotation.x = rotX;
+    this.previewPivot.rotation.y = rotY;
+    this.previewPivot.updateMatrixWorld(true);
+
+    if (PREVIEW_BOX.isEmpty()) {
+      return {
+        centerX: 0,
+        centerY: 0.45,
+        halfW: (PREVIEW_FRUSTUM / 2) * PREVIEW_ORBIT_HEADROOM,
+        halfH: (PREVIEW_FRUSTUM / 2) * PREVIEW_ORBIT_HEADROOM,
+      };
+    }
+
+    this.camera.updateMatrixWorld();
+    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    const { min, max } = PREVIEW_BOX;
+    for (const x of [min.x, max.x]) {
+      for (const y of [min.y, max.y]) {
+        for (const z of [min.z, max.z]) {
+          PREVIEW_VIEW.set(x, y, z).applyMatrix4(this.camera.matrixWorldInverse);
+          minX = Math.min(minX, PREVIEW_VIEW.x);
+          maxX = Math.max(maxX, PREVIEW_VIEW.x);
+          minY = Math.min(minY, PREVIEW_VIEW.y);
+          maxY = Math.max(maxY, PREVIEW_VIEW.y);
+        }
+      }
+    }
+
+    return {
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
+      halfW: ((maxX - minX) / 2 + PREVIEW_FRAME_PADDING) * PREVIEW_ORBIT_HEADROOM,
+      halfH: ((maxY - minY) / 2 + PREVIEW_FRAME_PADDING) * PREVIEW_ORBIT_HEADROOM,
+    };
+  }
+
+  applyOrbitZoom() {
+    applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
+  }
+
   onResize() {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+    if (this.orbitControls?.isGesturing()) return;
+
+    let width = this.container.clientWidth;
+    let height = this.container.clientHeight;
+    if (!width || !height) {
+      width = this.lastValidWidth ?? width;
+      height = this.lastValidHeight ?? height;
+    }
     if (!width || !height) return;
 
+    this.lastValidWidth = width;
+    this.lastValidHeight = height;
+
     const aspect = width / height;
-    const frustum = 2.8;
-    this.camera.left = (-frustum * aspect) / 2;
-    this.camera.right = (frustum * aspect) / 2;
-    this.camera.top = frustum / 2;
-    this.camera.bottom = -frustum / 2;
-    this.camera.updateProjectionMatrix();
+    const bounds = fitLayoutBoundsToAspect(this.previewContentBounds(), aspect);
+    if (!isValidLayoutBounds(bounds)) return;
+
+    this.layoutFrustum = bounds;
+    this.orbitControls?.applyTransform();
+    this.applyOrbitZoom();
+
     this.renderer.setSize(width, height);
   }
 
   disposePreview() {
     if (!this.preview) return;
     const { root, materials } = this.preview;
-    this.scene.remove(root);
+    this.previewPivot.remove(root);
     root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });
@@ -272,7 +373,7 @@ export class CharacterPreviewScene {
     if (model.ring) model.ring.visible = false;
 
     model.root.position.set(0, UNIT_BASE_Y, 0);
-    this.scene.add(model.root);
+    this.previewPivot.add(model.root);
     this.updateRangeOverlay(classId);
 
     const rig = model.rig;
@@ -305,6 +406,8 @@ export class CharacterPreviewScene {
       materials: model.materials,
       shadow: model.shadow,
     };
+
+    if (this.visible) this.onResize();
   }
 
   posePreview(entry, time) {
@@ -417,6 +520,7 @@ export class CharacterPreviewScene {
 
   setVisible(show) {
     this.visible = show;
+    if (this.orbitControls) this.orbitControls.enabled = show;
     this.renderer.domElement.style.display = show ? 'block' : 'none';
     if (show) {
       this.onResize();
@@ -442,10 +546,23 @@ export class CharacterPreviewScene {
     }
 
     this.renderer.render(this.scene, this.camera);
+    if (this.debugHud) {
+      this.debugHud.update(buildScene3dDebugSnapshot({
+        renderer: this.renderer,
+        camera: this.camera,
+        pivot: this.previewPivot,
+        orbitControls: this.orbitControls,
+        layoutFrustum: this.layoutFrustum,
+        container: this.container,
+        boardSize: PREVIEW_BOARD_SIZE,
+      }));
+    }
   }
 
   dispose() {
     this.resizeObserver?.disconnect();
+    this.orbitControls?.dispose();
+    this.debugHud?.dispose();
     this.disposePreview();
     this.clearRangeOverlays();
     this.rangeBoard.traverse((obj) => {

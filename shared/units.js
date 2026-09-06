@@ -176,7 +176,7 @@ export function resolveUnitColor(team) {
 export const BOARD_MODES = {
   '3x3': {
     id: '3x3',
-    label: '九宮格',
+    label: '快速模式',
     size: 3,
     actionsPerTurn: 1,
     turnDurationMs: 10000,
@@ -192,7 +192,7 @@ export const BOARD_MODES = {
   },
   '4x4': {
     id: '4x4',
-    label: '十六宮格',
+    label: '標準模式',
     size: 4,
     actionsPerTurn: 1,
     turnDurationMs: 15000,
@@ -207,7 +207,7 @@ export const BOARD_MODES = {
   },
   '5x5': {
     id: '5x5',
-    label: '攻城戰',
+    label: '攻城模式',
     size: 5,
     actionsPerTurn: 1,
     turnDurationMs: 18000,
@@ -228,7 +228,41 @@ export const BOARD_MODES = {
       { row: 3, col: 1, kind: 'flag' }, // (4,2)
     ],
   },
+  '6x6': {
+    id: '6x6',
+    label: '生存模式',
+    size: 6,
+    actionsPerTurn: 1,
+    turnDurationMs: 0,
+    turnBonusMs: 0,
+    matchDurationMs: 0,
+    rosterSize: 5,
+    maxPerClass: 1,
+    roster: [],
+    mapProps: false,
+    survival: true,
+    localOnly: true,
+    lineWin: false,
+    enemyRoster: Object.keys(CLASSES).filter((id) => id !== 'castle'),
+    fixedMapProps: null, // filled by getBorderStoneMapProps(6) at init
+  },
 };
+
+const SURVIVAL_BORDER_STONES = buildBorderStoneMapProps(6);
+BOARD_MODES['6x6'].fixedMapProps = SURVIVAL_BORDER_STONES;
+
+function buildBorderStoneMapProps(size) {
+  /** @type {{ row: number, col: number, kind: 'stone' }[]} */
+  const props = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (r === 0 || r === size - 1 || c === 0 || c === size - 1) {
+        props.push({ row: r, col: c, kind: 'stone' });
+      }
+    }
+  }
+  return props;
+}
 
 export const CLASS_IDS = Object.keys(CLASSES);
 
@@ -289,6 +323,20 @@ export function placeModeCastles(board, modeId) {
 
 export function getBoardMode(modeId) {
   return BOARD_MODES[modeId] ?? BOARD_MODES['3x3'];
+}
+
+export function isSurvivalMode(modeId) {
+  return Boolean(getBoardMode(modeId).survival);
+}
+
+export function isLocalOnlyMode(modeId) {
+  return Boolean(getBoardMode(modeId).localOnly);
+}
+
+export function getEnemyRosterForMode(modeId) {
+  const mode = getBoardMode(modeId);
+  if (mode.enemyRoster?.length) return [...mode.enemyRoster];
+  return createRandomRoster(modeId);
 }
 
 export function getRosterLimit(modeId) {
