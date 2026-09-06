@@ -19,11 +19,15 @@ export function webglShadowMapSize() {
   return isTouchDevice() ? 1024 : 2048;
 }
 
+export function webglShadowsEnabled() {
+  return !isTouchDevice();
+}
+
 export function applyShadowRendererSettings(renderer) {
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = isTouchDevice()
-    ? THREE.PCFShadowMap
-    : THREE.PCFSoftShadowMap;
+  const enabled = webglShadowsEnabled();
+  renderer.shadowMap.enabled = enabled;
+  if (!enabled) return;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 }
 
 export function attachWebGLRecovery(renderer, { onRestore } = {}) {

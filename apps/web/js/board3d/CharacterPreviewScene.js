@@ -20,6 +20,7 @@ import {
   webglRendererOptions,
   webglPixelRatio,
   webglShadowMapSize,
+  webglShadowsEnabled,
   applyShadowRendererSettings,
   attachWebGLRecovery,
   attachPageVisibility,
@@ -161,13 +162,15 @@ export class CharacterPreviewScene {
 
     this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
     this.keyLight.position.set(4, 8, 4);
-    this.keyLight.castShadow = true;
-    const previewShadowSize = webglShadowMapSize();
-    this.keyLight.shadow.mapSize.set(previewShadowSize, previewShadowSize);
-    this.keyLight.shadow.camera.left = -3;
-    this.keyLight.shadow.camera.right = 3;
-    this.keyLight.shadow.camera.top = 3;
-    this.keyLight.shadow.camera.bottom = -3;
+    this.keyLight.castShadow = webglShadowsEnabled();
+    if (this.keyLight.castShadow) {
+      const previewShadowSize = webglShadowMapSize();
+      this.keyLight.shadow.mapSize.set(previewShadowSize, previewShadowSize);
+      this.keyLight.shadow.camera.left = -3;
+      this.keyLight.shadow.camera.right = 3;
+      this.keyLight.shadow.camera.top = 3;
+      this.keyLight.shadow.camera.bottom = -3;
+    }
     this.scene.add(this.keyLight);
 
     const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
@@ -345,7 +348,7 @@ export class CharacterPreviewScene {
         );
         const position = previewTilePosition(row, col);
         tile.position.set(position.x, 0, position.z);
-        tile.receiveShadow = true;
+        tile.receiveShadow = webglShadowsEnabled();
         this.rangeBoard.add(tile);
       }
     }

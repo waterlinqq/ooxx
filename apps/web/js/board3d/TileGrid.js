@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { webglShadowsEnabled } from './WebGLSceneRuntime.js';
 
 export const TILE_SIZE = 0.88;
 export const TILE_GAP = 0.12;
@@ -55,7 +56,7 @@ function buildMergedTileMesh(boardSize) {
     metalness: 0.15,
   });
   const tileMesh = new THREE.Mesh(mergedTiles, tileMaterial);
-  tileMesh.receiveShadow = true;
+  tileMesh.receiveShadow = webglShadowsEnabled();
   tileMesh.name = 'tileGridMerged';
 
   const edgeMaterial = new THREE.LineBasicMaterial({

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildNavIconModel } from './NavIconModels.js';
+import { applyShadowRendererSettings, webglShadowsEnabled } from './WebGLSceneRuntime.js';
 
 const ICON_PX = 52;
 const PREVIEW_ROTATION_Y = 0.35;
@@ -253,8 +254,7 @@ export class NavIconAnimator {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(ICON_PX, ICON_PX, false);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    applyShadowRendererSettings(renderer);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
 
@@ -333,12 +333,14 @@ function setupSceneWithRenderer(renderer) {
 
   const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
   keyLight.position.set(4, 8, 4);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(512, 512);
-  keyLight.shadow.camera.left = -3;
-  keyLight.shadow.camera.right = 3;
-  keyLight.shadow.camera.top = 3;
-  keyLight.shadow.camera.bottom = -3;
+  keyLight.castShadow = webglShadowsEnabled();
+  if (keyLight.castShadow) {
+    keyLight.shadow.mapSize.set(512, 512);
+    keyLight.shadow.camera.left = -3;
+    keyLight.shadow.camera.right = 3;
+    keyLight.shadow.camera.top = 3;
+    keyLight.shadow.camera.bottom = -3;
+  }
   scene.add(keyLight);
 
   const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);

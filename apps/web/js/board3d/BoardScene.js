@@ -29,6 +29,7 @@ import {
   webglRendererOptions,
   webglPixelRatio,
   webglShadowMapSize,
+  webglShadowsEnabled,
   applyShadowRendererSettings,
   attachWebGLRecovery,
   attachPageVisibility,
@@ -98,20 +99,22 @@ export class BoardScene {
 
     this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
     this.keyLight.position.set(5, 9, 5);
-    this.keyLight.castShadow = true;
-    const shadowSize = webglShadowMapSize();
-    this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
-    this.keyLight.shadow.radius = 3;
-    this.keyLight.shadow.bias = -0.0008;
-    this.keyLight.shadow.normalBias = 0.02;
-    const shadowCam = this.keyLight.shadow.camera;
-    shadowCam.left = -5;
-    shadowCam.right = 5;
-    shadowCam.top = 5;
-    shadowCam.bottom = -5;
-    shadowCam.near = 0.5;
-    shadowCam.far = 24;
-    shadowCam.updateProjectionMatrix();
+    this.keyLight.castShadow = webglShadowsEnabled();
+    if (this.keyLight.castShadow) {
+      const shadowSize = webglShadowMapSize();
+      this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
+      this.keyLight.shadow.radius = 3;
+      this.keyLight.shadow.bias = -0.0008;
+      this.keyLight.shadow.normalBias = 0.02;
+      const shadowCam = this.keyLight.shadow.camera;
+      shadowCam.left = -5;
+      shadowCam.right = 5;
+      shadowCam.top = 5;
+      shadowCam.bottom = -5;
+      shadowCam.near = 0.5;
+      shadowCam.far = 24;
+      shadowCam.updateProjectionMatrix();
+    }
     this.scene.add(this.keyLight);
 
     this.fillLight = new THREE.DirectionalLight(0x93c5fd, 0.4);
@@ -128,7 +131,7 @@ export class BoardScene {
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.08;
-    ground.receiveShadow = true;
+    ground.receiveShadow = webglShadowsEnabled();
     this.scene.add(ground);
 
     this.boardPivot = new THREE.Group();
