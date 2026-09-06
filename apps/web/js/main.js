@@ -14,6 +14,7 @@ import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCas
 import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
 import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml } from './uiIcons.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
+import { STAGNATION_ROUND_THRESHOLD, STAGNATION_HINT_THRESHOLD } from '@ooxx/shared/stagnation.js';
 import { CODEX_TABS } from './codex.js';
 import { getClassDiamondPrice } from './unlocks.js';
 import {
@@ -123,6 +124,7 @@ const startSurvivalBtnEl = document.getElementById('startSurvivalBtn');
 const survivalLobbyActionsEl = document.getElementById('survivalLobbyActions');
 const startSurvivalLobbyBtnEl = document.getElementById('startSurvivalLobbyBtn');
 const survivalRoundEl = document.getElementById('survivalRound');
+const stagnationHintEl = document.getElementById('stagnationHint');
 const shopGridEl = document.getElementById('shopGrid');
 const itemBattleBtnEl = document.getElementById('itemBattleBtn');
 const itemBattleIconEl = document.getElementById('itemBattleIcon');
@@ -1839,6 +1841,18 @@ function renderSurvivalRound(state) {
   }
 }
 
+function renderStagnationHint(state) {
+  if (!stagnationHintEl) return;
+  const rounds = state.stagnationRounds ?? 0;
+  const show = state.phase === 'battle'
+    && !state.tutorial
+    && rounds >= STAGNATION_HINT_THRESHOLD;
+  stagnationHintEl.classList.toggle('hidden', !show);
+  if (show) {
+    stagnationHintEl.textContent = `僵持 ${rounds}/${STAGNATION_ROUND_THRESHOLD} 回合`;
+  }
+}
+
 function renderModePicker(state) {
   modeButtonsEl.innerHTML = '';
   const canPick = state.phase === 'onlineLobby' || state.phase === 'lobby';
@@ -2167,6 +2181,7 @@ function render(state) {
   if (inBattleFlow) renderReactions(state);
   if (inBattleFlow) renderReserveBars(state);
   renderSurvivalRound(state);
+  renderStagnationHint(state);
   if (activeNav === 'quests') renderDailyQuests(state);
   if (activeNav === 'shop') renderShop(state);
 

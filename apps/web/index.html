@@ -98,6 +98,7 @@
                 <div class="board-hud" id="boardHud">
                   <div class="board-timers">
                     <div class="survival-round hidden" id="survivalRound" aria-live="polite"></div>
+                    <div class="stagnation-hint hidden" id="stagnationHint" aria-live="polite"></div>
                     <div class="match-timer hidden" id="matchTimer" aria-hidden="true">
                       <time class="match-timer-time" id="matchTimerText">00:00</time>
                       <div class="match-timer-track">
@@ -291,7 +292,7 @@
       </div>
     </div>
     <div id="mailOverlay" class="ui-overlay ui-overlay--modal hidden" role="dialog" aria-modal="true" aria-labelledby="mailTitle">
-      <div class="ui-card ui-card--accent ui-card--mail">
+      <div class="ui-card ui-card--mail">
         <div class="mail-modal-header">
           <h2 class="ui-card__title mail-modal-title" id="mailTitle">信箱</h2>
           <div class="mail-modal-header-actions">

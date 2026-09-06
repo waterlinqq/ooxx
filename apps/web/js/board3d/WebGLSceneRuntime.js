@@ -4,7 +4,7 @@ import { isTouchDevice } from './LimitedOrbitControls.js';
 export function webglRendererOptions() {
   const mobile = isTouchDevice();
   return {
-    antialias: !mobile,
+    antialias: true,
     alpha: true,
     powerPreference: mobile ? 'low-power' : 'default',
   };

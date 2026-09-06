@@ -71,6 +71,11 @@ import {
   cloneMapProps,
 } from './mapProps.js';
 import { REACTION_COOLDOWN_MS } from './reactions.js';
+import {
+  createStagnationState,
+  markCombatProgress,
+  applyStagnationAfterTurnBoundary,
+} from '@ooxx/shared/stagnation.js';
 
 export const GAME_END_REVEAL_MS = 1000;
 export const GAME_END_MODAL_MS = 3000;
@@ -121,6 +126,15 @@ export class Game {
     /** @type {{ id: string, at: number }|null} */
     this.outgoingReaction = null;
     this.lastReactionSentAt = 0;
+    this.resetStagnationState();
+  }
+
+  resetStagnationState() {
+    const stagnation = createStagnationState();
+    this.stagnationRounds = stagnation.stagnationRounds;
+    this.combatProgressThisRound = stagnation.combatProgressThisRound;
+    this.stagnationSpawnCount = stagnation.stagnationSpawnCount;
+    this.stagnationRngSeed = stagnation.stagnationRngSeed;
   }
 
   subscribe(fn) {
@@ -561,6 +575,8 @@ export class Game {
     const result = applyPoisonTurnTicks(this.board, endedTeam);
     this.board = result.board;
 
+    if (result.ticks.length > 0) markCombatProgress(this);
+
     const labels = result.ticks.map(({ unit }) => {
       const cls = CLASSES[unit.classId];
       return `${cls?.name ?? '單位'} -1（中毒）`;
@@ -590,6 +606,7 @@ export class Game {
       matchDurationMs: mode.matchDurationMs,
       isSurvivalMode: isSurvivalMode(this.boardMode),
       survivalRound: this.survivalRound,
+      stagnationRounds: this.stagnationRounds,
       phase: this.phase,
       currentPlayer: this.currentPlayer,
       isHumanTurn: this.canHumanAct(),
@@ -680,6 +697,7 @@ export class Game {
     const result = resolveMapPropOnEnter(this.board, this.mapProps, row, col, unitId);
     this.board = result.board;
     this.mapProps = result.mapProps;
+    if (result.events.length > 0) markCombatProgress(this);
     // The trap animation waits for the unit's mesh to finish walking in, so this
     // runs alongside the rest of the turn instead of blocking it.
     if (result.trigger) this.playMapPropFx?.(result.trigger);
@@ -699,6 +717,8 @@ export class Game {
     this.board = damaged.board;
 
     if (!damaged.hit) return [];
+
+    markCombatProgress(this);
 
     let events = [`🪤 地雷 -${damage}`];
     if (damaged.killed) {
@@ -980,6 +1000,7 @@ export class Game {
     this.phase = 'battle';
     this.resetTurnActions();
     this.resetBattleItemState();
+    this.resetStagnationState();
 
     this.message = this.tutorial ? '' : this.getPlayerTurnMessage();
 
@@ -1290,6 +1311,7 @@ export class Game {
       detail += `，自爆波及 ${blastHits} 人`;
     }
     detail += '）';
+    if (result.hits.length > 0) markCombatProgress(this);
     await this.endAction(detail, unit.id);
   }
 
@@ -1309,6 +1331,8 @@ export class Game {
   }
 
   async endAction(actionLabel, unitId, { isDeploy = false } = {}) {
+    if (isDeploy) markCombatProgress(this);
+
     const team = TEAM[this.currentPlayer];
     const enemy = this.currentPlayer === 'blue' ? 'red' : 'blue';
     const enemyReserve = enemy === 'blue' ? this.blueReserve : this.redReserve;
@@ -1395,7 +1419,10 @@ export class Game {
 
     if (this.applyTurnBoundaryEffects(endedTeam)) return;
 
-    this.message = this.getPlayerTurnMessage();
+    const stagnationMessage = applyStagnationAfterTurnBoundary(this, endedTeam, {
+      tutorial: Boolean(this.tutorial),
+    });
+    this.message = stagnationMessage ?? this.getPlayerTurnMessage();
     this.notify();
     this.scheduleAiIfNeeded();
   }

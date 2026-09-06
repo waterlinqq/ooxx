@@ -29,6 +29,11 @@ import {
   resolveDeathExplosions,
 } from '../../../shared/rules.js';
 import { isObstacleCell } from '../../../shared/mapPropUtils.js';
+import {
+  createStagnationState,
+  markCombatProgress,
+  applyStagnationAfterTurnBoundary,
+} from '../../../shared/stagnation.js';
 import { MATCHMAKING_TIMEOUT_MS } from '../../../shared/protocol.js';
 import { pool } from '../db.js';
 
@@ -90,6 +95,8 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
   });
 
   return {
+    ...createStagnationState(),
+    stagnationRngSeed: rosters.rngSeed ?? null,
     boardMode,
     phase: 'battle',
     currentPlayer: 'blue',
@@ -150,6 +157,7 @@ function applyTerrainAfterLanding(state, unitId, row, col) {
   const result = resolveMapPropOnEnter(state.board, state.mapProps, row, col, unitId);
   state.board = result.board;
   state.mapProps = result.mapProps;
+  if ((result.events ?? []).length > 0) markCombatProgress(state);
   return { events: result.events ?? [], trigger: result.trigger ?? null };
 }
 
@@ -216,6 +224,8 @@ function applyTurnBoundaryEffects(state, endedTeam) {
   const result = applyPoisonTurnTicks(state.board, endedTeam);
   state.board = result.board;
 
+  if (result.ticks.length > 0) markCombatProgress(state);
+
   const labels = result.ticks.map(({ unit }) => {
     const cls = CLASSES[unit.classId];
     return `${cls?.name ?? '單位'} -1（中毒）`;
@@ -239,7 +249,9 @@ function switchPlayer(state) {
 
   if (applyTurnBoundaryEffects(state, endedTeam)) return;
 
-  state.message = `${TEAM[state.currentPlayer].name}回合（剩餘 ${state.actionsRemaining}/${mode.actionsPerTurn} 次行動）`;
+  const stagnationMessage = applyStagnationAfterTurnBoundary(state, endedTeam);
+  state.message = stagnationMessage
+    ?? `${TEAM[state.currentPlayer].name}回合（剩餘 ${state.actionsRemaining}/${mode.actionsPerTurn} 次行動）`;
 }
 
 function finishGame(state, winner, detail, reason) {
@@ -250,6 +262,8 @@ function finishGame(state, winner, detail, reason) {
 }
 
 function endAction(state, actionLabel, unitId, { isDeploy = false } = {}) {
+  if (isDeploy) markCombatProgress(state);
+
   const team = state.currentPlayer;
   const enemy = team === 'blue' ? 'red' : 'blue';
   const enemyReserve = enemy === 'blue' ? state.blueReserve : state.redReserve;
@@ -394,6 +408,7 @@ export function applyGameAction(state, action, team) {
     }
     detail += '）';
 
+    if (result.hits.length > 0) markCombatProgress(state);
     return endAction(state, detail, unit.id);
   }
 
@@ -563,6 +578,7 @@ export async function joinRoom(guestId, roomCode, nickname, options = {}) {
     redRoster: roster,
     blueClassLevels: waitingState.blueClassLevels,
     redClassLevels: classLevels,
+    rngSeed: seedNum,
   });
   const mode = getBoardMode(match.board_mode);
   const now = new Date();

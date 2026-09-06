@@ -9,6 +9,10 @@
     "./protocol.js": "./protocol.js",
     "./dailyQuests.js": "./dailyQuests.js",
     "./save.js": "./save.js",
-    "./mail.js": "./mail.js"
+    "./mail.js": "./mail.js",
+    "./stagnation.js": "./stagnation.js"
+  },
+  "scripts": {
+    "test": "node --test stagnation.test.js"
   }
 }
