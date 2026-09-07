@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { TileGrid, TILE_PITCH, TILE_SIZE, tileWorldPosition } from './TileGrid.js';
+import { BoardSceneryManager } from './BoardSceneryManager.js';
 import { UnitMeshManager } from './UnitMesh.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
@@ -16,7 +17,7 @@ import {
   LimitedOrbitControls,
   isTouchDevice,
   isValidLayoutBounds,
-  prepareOrbitLayoutFrustum,
+  fitLayoutBoundsToAspect,
   projectBoxToCameraBounds,
   applyOrbitFrustumZoom,
 } from './LimitedOrbitControls.js';
@@ -37,14 +38,58 @@ import {
 
 // Headroom above the ground plane for unit models and their floating labels.
 const CONTENT_HEIGHT = 1.35;
-const FRAME_PADDING = 0.02;
-// Small margin above the framed board (was 1.2 for manual orbit/zoom).
-const BOARD_FRAMING_HEADROOM = 1.04;
+const FRAME_PADDING = 0.01;
+// Tight crop on the tile grid; border planting may clip at the edges.
+const BOARD_FRAMING_HEADROOM = 1.0;
+// Survival frames the inner playable core (stones sit outside the crop).
+const SURVIVAL_FRAMING_HEADROOM = 0.98;
+const SURVIVAL_BORDER_MARGIN = 1;
 const TILE_HALF_HEIGHT = 0.07;
 const CONTENT_BOX = new THREE.Box3();
 const TMP_VIEW = new THREE.Vector3();
-const TMP_GROUND = new THREE.Vector3();
-const GROUND_Y = -0.08;
+
+let grassTexture = null;
+
+function createGrassTexture() {
+  if (grassTexture) return grassTexture;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#3f7040';
+  ctx.fillRect(0, 0, size, size);
+
+  // Broad mown patches first, then fine blades on top, so the lawn has large
+  // scale variation instead of uniform noise that vanishes at this camera range.
+  for (let i = 0; i < 70; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 14 + Math.random() * 40;
+    const light = Math.random() > 0.5;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, light ? 'rgba(96,140,84,0.3)' : 'rgba(38,74,44,0.32)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const g = 95 + Math.floor(Math.random() * 55);
+    ctx.fillStyle = `rgba(${38 + g * 0.16}, ${g}, ${34 + g * 0.1}, 0.22)`;
+    ctx.fillRect(x, y, 1, 2 + Math.random() * 3);
+  }
+
+  grassTexture = new THREE.CanvasTexture(canvas);
+  grassTexture.colorSpace = THREE.SRGBColorSpace;
+  grassTexture.wrapS = THREE.RepeatWrapping;
+  grassTexture.wrapT = THREE.RepeatWrapping;
+  grassTexture.repeat.set(4, 4);
+  return grassTexture;
+}
 
 export class BoardScene {
   constructor(containerEl, fxLayerEl, callbacks) {
@@ -53,8 +98,8 @@ export class BoardScene {
     this.callbacks = callbacks;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0b1220);
-    this.scene.fog = new THREE.Fog(0x0b1220, 12, 28);
+    this.scene.background = new THREE.Color(0x101820);
+    this.scene.fog = new THREE.Fog(0x121c18, 14, 30);
 
     const width = containerEl.clientWidth || 480;
     const height = containerEl.clientHeight || 480;
@@ -94,7 +139,7 @@ export class BoardScene {
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
     this.scene.add(this.ambientLight);
 
-    this.skyLight = new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7);
+    this.skyLight = new THREE.HemisphereLight(0xc8dcc8, 0x243828, 0.65);
     this.scene.add(this.skyLight);
 
     this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
@@ -127,7 +172,12 @@ export class BoardScene {
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(24, 24),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 1 })
+      new THREE.MeshStandardMaterial({
+        color: 0x40733f,
+        map: createGrassTexture(),
+        roughness: 1,
+        metalness: 0,
+      })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.08;
@@ -139,6 +189,7 @@ export class BoardScene {
     this.scene.add(this.boardPivot);
 
     this.tileGrid = new TileGrid(this.boardPivot);
+    this.scenery = new BoardSceneryManager(this.boardPivot);
     this.unitManager = new UnitMeshManager(this.boardPivot);
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
@@ -181,6 +232,7 @@ export class BoardScene {
 
     this.clock = new THREE.Clock();
     this.boardSize = 0;
+    this.survivalMode = false;
     this.visible = true;
     this.pageHidden = document.hidden;
     this.animating = false;
@@ -290,38 +342,26 @@ export class BoardScene {
     return {
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
-      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
+      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * this.framingHeadroom(),
+      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * this.framingHeadroom(),
     };
   }
 
-  extendBoundsForVisibleGround(bounds) {
-    if (!bounds) return bounds;
+  framingHeadroom() {
+    return this.survivalMode ? SURVIVAL_FRAMING_HEADROOM : BOARD_FRAMING_HEADROOM;
+  }
 
-    this.boardPivot.updateMatrixWorld(true);
-    this.camera.updateMatrixWorld();
-    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
+  survivalInnerBox() {
+    const margin = SURVIVAL_BORDER_MARGIN;
+    const innerMax = this.boardSize - 1 - margin;
+    const half = TILE_SIZE / 2;
+    const nw = tileWorldPosition(margin, margin, this.boardSize);
+    const se = tileWorldPosition(innerMax, innerMax, this.boardSize);
 
-    let minX = bounds.centerX - bounds.halfW;
-    let maxX = bounds.centerX + bounds.halfW;
-    let minY = bounds.centerY - bounds.halfH;
-    let maxY = bounds.centerY + bounds.halfH;
-
-    for (const point of this.contentGroundPoints()) {
-      TMP_VIEW.set(point.x, 0, point.z).applyMatrix4(this.boardPivot.matrixWorld);
-      TMP_GROUND.set(TMP_VIEW.x, GROUND_Y, TMP_VIEW.z).applyMatrix4(this.camera.matrixWorldInverse);
-      minX = Math.min(minX, TMP_GROUND.x);
-      maxX = Math.max(maxX, TMP_GROUND.x);
-      minY = Math.min(minY, TMP_GROUND.y);
-      maxY = Math.max(maxY, TMP_GROUND.y);
-    }
-
-    return {
-      centerX: (minX + maxX) / 2,
-      centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
-      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * BOARD_FRAMING_HEADROOM,
-    };
+    CONTENT_BOX.set(
+      new THREE.Vector3(nw.x - half, -TILE_HALF_HEIGHT, nw.z - half),
+      new THREE.Vector3(se.x + half, TILE_HALF_HEIGHT, se.z + half),
+    );
   }
 
   // Fit the board in camera view; includes current pivot orbit rotation/scale.
@@ -330,17 +370,21 @@ export class BoardScene {
   contentBounds() {
     this.boardPivot.updateMatrixWorld(true);
 
-    CONTENT_BOX.makeEmpty();
-    if (this.tileGrid.group.children.length) {
-      CONTENT_BOX.expandByObject(this.tileGrid.group);
+    if (this.survivalMode && this.boardSize > 2) {
+      this.survivalInnerBox();
+    } else {
+      CONTENT_BOX.makeEmpty();
+      if (this.tileGrid.group.children.length) {
+        CONTENT_BOX.expandByObject(this.tileGrid.group);
+      }
     }
 
+    const headroom = this.framingHeadroom();
     let bounds = CONTENT_BOX.isEmpty()
       ? this.fallbackContentBounds()
-      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, BOARD_FRAMING_HEADROOM);
+      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, headroom);
 
-    bounds = bounds ?? this.fallbackContentBounds();
-    return this.extendBoundsForVisibleGround(bounds);
+    return bounds ?? this.fallbackContentBounds();
   }
 
   updateLayoutFrustum() {
@@ -351,8 +395,32 @@ export class BoardScene {
     const bounds = this.orbitControls.withNeutralOrbit(() => this.contentBounds());
     if (!isValidLayoutBounds(bounds)) return false;
 
-    this.frustumBase = bounds.halfH * 2;
-    this.layoutFrustum = prepareOrbitLayoutFrustum(bounds, width / height, this.orbitControls);
+    const aspect = width / height;
+    let layout = fitLayoutBoundsToAspect(bounds, aspect);
+
+    // Portrait: expand-fit leaves empty bands above/below. Shrink the frustum
+    // toward the grid until the sides would clip — decor may crop, tiles must not.
+    if (aspect < 0.85) {
+      for (let t = 0.72; t <= 1.001; t += 0.02) {
+        const halfH = Math.max(bounds.halfH, layout.halfH * t);
+        const halfW = halfH * aspect;
+        if (halfW + 1e-4 >= bounds.halfW) {
+          layout = { ...layout, halfH, halfW };
+          break;
+        }
+      }
+    }
+
+    if (this.orbitControls && !this.orbitControls.zoomViaScale) {
+      const zoom = Math.min(
+        Math.max(this.orbitControls.zoom, this.orbitControls.minZoom),
+        this.orbitControls.maxZoom,
+      );
+      layout = { ...layout, halfW: layout.halfW * zoom, halfH: layout.halfH * zoom };
+    }
+
+    this.frustumBase = layout.halfH * 2;
+    this.layoutFrustum = layout;
     return true;
   }
 
@@ -386,7 +454,7 @@ export class BoardScene {
     const redTurn = state.phase === 'battle' && state.currentPlayer === 'red';
     this.fillLight.color.setHex(blueTurn ? 0x93c5fd : redTurn ? 0xfca5a5 : 0x64748b);
     this.ambientLight.intensity = blueTurn || redTurn ? 0.46 : 0.42;
-    this.skyLight.color.setHex(blueTurn ? 0xbfdbfe : redTurn ? 0xfecdd3 : 0xc7d2fe);
+    this.skyLight.color.setHex(blueTurn ? 0xb8d8f0 : redTurn ? 0xf0d0d4 : 0xc8dcc8);
   }
 
   syncTutorialPointer(state) {
@@ -413,8 +481,11 @@ export class BoardScene {
     if (state.animating) return;
 
     const boardSizeChanged = this.boardSize !== state.boardSize;
+    const survivalChanged = this.survivalMode !== Boolean(state.isSurvivalMode);
+    this.survivalMode = Boolean(state.isSurvivalMode);
     this.boardSize = state.boardSize;
     this.tileGrid.ensureSize(state.boardSize);
+    this.scenery.ensureSize(state.boardSize, { survival: this.survivalMode });
     this.unitManager.setBoardSize(state.boardSize);
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
@@ -428,7 +499,7 @@ export class BoardScene {
 
     // Refit only when the grid dimensions change — routine state updates (e.g.
     // selecting a reserve card) must not reframe the camera.
-    if (this.visible && boardSizeChanged) {
+    if (this.visible && (boardSizeChanged || survivalChanged)) {
       this.scheduleResize();
     }
   }
@@ -489,6 +560,7 @@ export class BoardScene {
     this.landmineMarkers.clear();
     this.mapPropManager.clear();
     this.shadowCloneManager.clear();
+    this.scenery.clear();
     this.tutorialPointer.hide();
   }
 
@@ -534,6 +606,7 @@ export class BoardScene {
     this.debugHud?.dispose();
     this.unitManager.dispose();
     this.mapPropManager.clear();
+    this.scenery.clear();
     this.tutorialPointer.dispose();
     this.tileGrid.clear();
     this.highlightSystem.clear();

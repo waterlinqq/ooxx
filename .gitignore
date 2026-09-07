@@ -2,5 +2,6 @@ node_modules/
 dist/
 apps/web/dist/
 data/*.json
+.board-shots/
 .DS_Store
 .env
