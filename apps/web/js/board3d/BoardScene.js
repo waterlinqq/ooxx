@@ -4,6 +4,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { TileGrid, TILE_PITCH, TILE_SIZE, tileWorldPosition } from './TileGrid.js';
 import { BoardSceneryManager } from './BoardSceneryManager.js';
 import { UnitMeshManager } from './UnitMesh.js';
+import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
 import { HighlightSystem } from './HighlightSystem.js';
 import { BombMarkerManager } from './BombMarkerManager.js';
 import { LandmineMarkerManager } from './LandmineMarkerManager.js';
@@ -191,6 +192,12 @@ export class BoardScene {
     this.tileGrid = new TileGrid(this.boardPivot);
     this.scenery = new BoardSceneryManager(this.boardPivot);
     this.unitManager = new UnitMeshManager(this.boardPivot);
+    this._lastSyncState = null;
+    getUnitAssetLoader().init().then(() => {
+      if (this._lastSyncState) {
+        this.unitManager.rebuildFromAssets(this._lastSyncState.board, this._lastSyncState);
+      }
+    });
     this.highlightSystem = new HighlightSystem(this.tileGrid);
     this.bombMarkers = new BombMarkerManager(this.tileGrid);
     this.landmineMarkers = new LandmineMarkerManager(this.tileGrid);
@@ -476,6 +483,7 @@ export class BoardScene {
   }
 
   sync(state) {
+    this._lastSyncState = state;
     // Input must stay in sync even while attack animations block board updates.
     this.input.setState(state);
     if (state.animating) return;

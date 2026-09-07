@@ -3,6 +3,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
 import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
+import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
 import { applyStatBadge } from '../statIcons.js';
 import { CLASS_LEVEL_MIN } from '../units.js';
 
@@ -110,6 +111,27 @@ export class UnitMeshManager {
     this.boardSize = size;
   }
 
+  rebuildFromAssets(board, state) {
+    const loader = getUnitAssetLoader();
+    if (!loader.ready) return;
+
+    let needsRebuild = false;
+    for (const entry of this.units.values()) {
+      if (!entry.fromGlb && loader.canInstantiate(entry.classId)) {
+        needsRebuild = true;
+        break;
+      }
+    }
+    if (!needsRebuild) return;
+
+    for (const [id, entry] of [...this.units]) {
+      this.group.remove(entry.root);
+      this.disposeEntry(entry);
+      this.units.delete(id);
+    }
+    this.syncBoard(board, state);
+  }
+
   syncBoard(board, state) {
     const seen = new Set();
     const acted = new Set(state.actedUnitIds);
@@ -154,7 +176,11 @@ export class UnitMeshManager {
   }
 
   createUnitEntry(unit) {
-    const model = buildUnitModel(unit.classId, unit.team);
+    const assetLoader = getUnitAssetLoader();
+    const fromGlb = assetLoader.canInstantiate(unit.classId);
+    const model = fromGlb
+      ? assetLoader.instantiate(unit.classId, unit.team)
+      : buildUnitModel(unit.classId, unit.team);
     const root = model.root;
     root.userData = { kind: 'unit', unitId: unit.id };
 
@@ -199,11 +225,12 @@ export class UnitMeshManager {
       targetPos: new THREE.Vector3(),
       displayPos: new THREE.Vector3(),
       classId: unit.classId,
+      fromGlb,
       crouchDepth: CROUCH_DEPTH[unit.classId] ?? 1,
       team: unit.team,
       seed: Math.random() * Math.PI * 2,
       jitter: Math.random(),
-      spawnStyle: SPAWN_STYLE[unit.classId] ?? 'drop',
+      spawnStyle: model.spawnStyle ?? SPAWN_STYLE[unit.classId] ?? 'drop',
       spawn: null,
       spawnLift: 0,
       spawnScale: 1,

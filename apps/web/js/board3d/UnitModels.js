@@ -64,7 +64,7 @@ function markNeutralTemplate(material) {
 }
 
 function createNeutralCloneTemplates() {
-  return {
+  const templates = {
     ember: markNeutralTemplate(standard(0xfff0c2, {
       roughness: 0.4,
       emissive: 0xffbe3d,
@@ -79,10 +79,14 @@ function createNeutralCloneTemplates() {
       opacity: 0.92,
     })),
   };
+  for (const [key, material] of Object.entries(templates)) {
+    material.name = key;
+  }
+  return templates;
 }
 
 function createGlobalMaterials() {
-  return {
+  const materials = {
     steel: markGlobalShared(standard(0xc9d4e2, { roughness: 0.32, metalness: 0.72 })),
     gold: markGlobalShared(standard(0xf5c451, {
       roughness: 0.3,
@@ -95,6 +99,10 @@ function createGlobalMaterials() {
     skin: markGlobalShared(standard(0xf0cba8, { roughness: 0.78, metalness: 0 })),
     charcoal: markGlobalShared(standard(0x1b2333, { roughness: 0.68, metalness: 0.25 })),
   };
+  for (const [key, material] of Object.entries(materials)) {
+    material.name = key;
+  }
+  return materials;
 }
 
 const GLOBAL_MATERIALS = createGlobalMaterials();
@@ -166,7 +174,8 @@ function buildTeamMaterialTemplate(team) {
     shadow,
   };
 
-  for (const material of Object.values(template)) {
+  for (const [key, material] of Object.entries(template)) {
+    material.name = key;
     material.userData.teamTemplate = true;
   }
 
