@@ -188,15 +188,13 @@ export class BoardSceneryManager {
     this.group.userData.decorative = true;
     boardPivot.add(this.group);
     this.boardSize = 0;
-    this.survival = false;
   }
 
-  ensureSize(boardSize, { survival = false } = {}) {
-    if (this.boardSize === boardSize && this.survival === survival) return;
+  ensureSize(boardSize) {
+    if (this.boardSize === boardSize) return;
     this.clear();
     this.boardSize = boardSize;
-    this.survival = survival;
-    if (!boardSize || survival) return;
+    if (!boardSize) return;
 
     const halfExtent = boardHalfExtent(boardSize);
 
@@ -241,6 +239,5 @@ export class BoardSceneryManager {
       });
     }
     this.boardSize = 0;
-    this.survival = false;
   }
 }

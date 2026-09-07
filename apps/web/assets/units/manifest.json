@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "description": "Engine-neutral unit asset metadata. Geometry lives in public/units/*.glb.",
+  "units": {
+    "archer": {
+      "file": "archer.glb",
+      "scale": [0.94, 1.04, 0.94],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "legSegments": { "thigh": 0.0748, "shin": 0.06375 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackRanged": "attack_ranged",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "artillery": {
+      "file": "artillery.glb",
+      "scale": [1.02, 0.96, 1.04],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "legSegments": { "thigh": 0.0616, "shin": 0.0525 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackRanged": "attack_ranged",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "tower": {
+      "file": "tower.glb",
+      "scale": [0.92, 0.92, 0.92],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "attackRanged": "attack_ranged",
+        "spawn": "spawn_drop"
+      }
+    },
+    "shield": {
+      "file": "shield.glb",
+      "scale": [1.1, 0.94, 1.08],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "legSegments": { "thigh": 0.0572, "shin": 0.04875 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "swordsman": {
+      "file": "swordsman.glb",
+      "scale": [1, 1, 1],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "legSegments": { "thigh": 0.066, "shin": 0.05625 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "mage": {
+      "file": "mage.glb",
+      "scale": [0.96, 1.02, 0.96],
+      "globalScale": 0.88,
+      "spawnStyle": "warp",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "arcane"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackRanged": "attack_ranged",
+        "spawn": "spawn_warp",
+        "acted": "acted"
+      }
+    },
+    "assassin": {
+      "file": "assassin.glb",
+      "scale": [0.92, 1.03, 0.92],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "legSegments": { "thigh": 0.0792, "shin": 0.0675 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "bomber": {
+      "file": "bomber.glb",
+      "scale": [1.06, 0.9, 1.06],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "ember"],
+      "legSegments": { "thigh": 0.0484, "shin": 0.04125 },
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "eagle": {
+      "file": "eagle.glb",
+      "scale": [1, 1, 1],
+      "globalScale": 0.88,
+      "spawnStyle": "warp",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_warp",
+        "acted": "acted"
+      }
+    },
+    "priest": {
+      "file": "priest.glb",
+      "scale": [0.94, 1, 0.94],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "arcane"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "ghost": {
+      "file": "ghost.glb",
+      "scale": [0.9, 1.08, 0.9],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "viper": {
+      "file": "viper.glb",
+      "scale": [0.98, 1.04, 0.98],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "crabGeneral": {
+      "file": "crabGeneral.glb",
+      "scale": [1.14, 0.86, 1.14],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
+    "castle": {
+      "file": "castle.glb",
+      "scale": [1.08, 1.08, 1.08],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "spawn": "spawn_drop"
+      }
+    }
+  }
+}

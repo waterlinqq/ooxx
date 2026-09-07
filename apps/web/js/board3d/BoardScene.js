@@ -42,7 +42,7 @@ const FRAME_PADDING = 0.01;
 // Tight crop on the tile grid; border planting may clip at the edges.
 const BOARD_FRAMING_HEADROOM = 1.0;
 // Survival frames the inner playable core (stones sit outside the crop).
-const SURVIVAL_FRAMING_HEADROOM = 0.98;
+const SURVIVAL_FRAMING_HEADROOM = 1.18;
 const SURVIVAL_BORDER_MARGIN = 1;
 const TILE_HALF_HEIGHT = 0.07;
 const CONTENT_BOX = new THREE.Box3();
@@ -485,7 +485,7 @@ export class BoardScene {
     this.survivalMode = Boolean(state.isSurvivalMode);
     this.boardSize = state.boardSize;
     this.tileGrid.ensureSize(state.boardSize);
-    this.scenery.ensureSize(state.boardSize, { survival: this.survivalMode });
+    this.scenery.ensureSize(state.boardSize);
     this.unitManager.setBoardSize(state.boardSize);
     this.attackFx.setBoardSize(state.boardSize);
     this.highlightSystem.update(state);
