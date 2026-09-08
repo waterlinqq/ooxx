@@ -203,6 +203,7 @@ export class CharacterPreviewScene {
     this.clock = new THREE.Clock();
     this.preview = null;
     this.classId = null;
+    this.loadGeneration = 0;
     this.assetLoaderReady = initUnitAssets();
     this.visible = false;
     this.pageHidden = document.hidden;
@@ -466,11 +467,12 @@ export class CharacterPreviewScene {
     this.classId = classId;
     this.disposePreview();
 
-    const pending = classId;
+    const generation = ++this.loadGeneration;
     this.assetLoaderReady.then(() => {
-      if (this.classId !== pending) return;
-      this.preview = this.buildPreviewEntry(pending);
-      this.updateRangeOverlay(pending);
+      if (this.loadGeneration !== generation || this.classId !== classId) return;
+      this.disposePreview();
+      this.preview = this.buildPreviewEntry(classId);
+      this.updateRangeOverlay(classId);
       if (this.visible) this.onResize();
       this.updateAnimationLoop();
     });

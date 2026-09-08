@@ -340,6 +340,73 @@ function shieldGeometry() {
   });
 }
 
+function trapezoidPlateGeometry(topW, bottomW, h, depth) {
+  return cached(`trap-plate-${topW.toFixed(3)}-${bottomW.toFixed(3)}-${h.toFixed(3)}`, () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-topW / 2, h / 2);
+    shape.lineTo(topW / 2, h / 2);
+    shape.lineTo(bottomW / 2, -h / 2);
+    shape.lineTo(-bottomW / 2, -h / 2);
+    shape.lineTo(-topW / 2, h / 2);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -depth / 2);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+// Open cylinder band. theta=0 faces +Z, so the plate hugs the front of a limb
+// instead of sitting as a floating card.
+function wrapBandGeometry(radiusTop, radiusBottom, height, arc, segs = 8) {
+  const key = `wrap-${radiusTop.toFixed(3)}-${radiusBottom.toFixed(3)}-${height.toFixed(3)}-${arc.toFixed(2)}-${segs}`;
+  return cached(key, () =>
+    new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segs, 1, true, -arc / 2, arc)
+  );
+}
+
+function tabardPlateGeometry() {
+  return cached('swordsman-tabard-shape', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.068, 0.11);
+    shape.lineTo(0.068, 0.11);
+    shape.lineTo(0.068, -0.02);
+    shape.quadraticCurveTo(0.034, -0.1, 0, -0.065);
+    shape.quadraticCurveTo(-0.034, -0.1, -0.068, -0.02);
+    shape.lineTo(-0.068, 0.11);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.014,
+      bevelEnabled: false,
+      curveSegments: 3,
+    });
+    geometry.translate(0, 0, -0.007);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function scabbardGeometry() {
+  return cached('swordsman-scabbard-shape', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.022, 0.15);
+    shape.lineTo(0.022, 0.15);
+    shape.lineTo(0.026, -0.14);
+    shape.quadraticCurveTo(0, -0.155, -0.026, -0.14);
+    shape.lineTo(-0.022, 0.15);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.065,
+      bevelEnabled: false,
+      curveSegments: 3,
+    });
+    geometry.translate(0, 0, -0.0325);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
 function addContactShadow(root, mats, radius) {
   const mesh = part(root, cached(`shadow-${radius}`, () => new THREE.PlaneGeometry(radius * 2, radius * 2)), mats.shadow, {
     pos: [0, 0.006, 0],
@@ -360,7 +427,7 @@ function addTeamRing(root, mats) {
 
 // Legs are hip/knee chains so they can walk and crouch; the animator relies on
 // the returned thigh/shin lengths to keep the feet planted while joints bend.
-function addLegs(parent, mats, { spread = 0.082, legLength = 0.15, bootMat = mats.leather } = {}) {
+function addLegs(parent, mats, { spread = 0.082, legLength = 0.15, bootMat = mats.leather, boots = true } = {}) {
   const hipY = 0.09 + legLength;
   const thigh = hipY * 0.44;
   const shin = hipY * 0.375;
@@ -379,7 +446,9 @@ function addLegs(parent, mats, { spread = 0.082, legLength = 0.15, bootMat = mat
     const knee = new THREE.Group();
     knee.position.set(0, -thigh, 0);
     part(knee, shinGeo, mats.armorDeep, { pos: [0, -shin / 2, 0] });
-    part(knee, bootGeo, bootMat, { pos: [0, -shin - 0.012, 0.015] });
+    if (boots) {
+      part(knee, bootGeo, bootMat, { pos: [0, -shin - 0.012, 0.015] });
+    }
     hip.add(knee);
 
     legs.add(hip);
@@ -403,18 +472,20 @@ function addArm(parent, mats, side, { shoulderY = 0.55, shoulderX = 0.163, sleev
   return { pivot, hand };
 }
 
-function addTorso(parent, mats, { width = 1, height = 0.26, y = 0.46, material = mats.armor } = {}) {
+function addTorso(parent, mats, { width = 1, height = 0.26, y = 0.46, material = mats.armor, fittings = true } = {}) {
   const torso = new THREE.Group();
   torso.position.set(0, y, 0);
   const geo = cached(`torso-${height}`, () => new THREE.CylinderGeometry(0.15, 0.115, height, 14, 1));
   part(torso, geo, material, { scale: [width, 1, 0.76] });
-  part(torso, cached('belt', () => new THREE.CylinderGeometry(0.125, 0.125, 0.045, 14)), mats.leather, {
-    pos: [0, -height / 2 + 0.01, 0],
-    scale: [width, 1, 0.82],
-  });
-  part(torso, cached('buckle', () => new THREE.BoxGeometry(0.05, 0.045, 0.03)), mats.gold, {
-    pos: [0, -height / 2 + 0.01, 0.095],
-  });
+  if (fittings) {
+    part(torso, cached('belt', () => new THREE.CylinderGeometry(0.125, 0.125, 0.045, 14)), mats.leather, {
+      pos: [0, -height / 2 + 0.01, 0],
+      scale: [width, 1, 0.82],
+    });
+    part(torso, cached('buckle', () => new THREE.BoxGeometry(0.05, 0.045, 0.03)), mats.gold, {
+      pos: [0, -height / 2 + 0.01, 0.095],
+    });
+  }
   parent.add(torso);
   return torso;
 }
@@ -556,6 +627,223 @@ function buildSword(mats, { length = 0.34 } = {}) {
     pos: [0, 0.026 + length * 0.4, 0],
   });
   return sword;
+}
+
+// Longsword — thin guard, wrapped grip, no stacked ricasso blocks.
+function buildKnightSword(mats, { length = 0.36 } = {}) {
+  const sword = new THREE.Group();
+  part(sword, cached('knight-grip', () => new THREE.CylinderGeometry(0.015, 0.017, 0.092, 8)), mats.leather, {
+    pos: [0, -0.05, 0],
+  });
+  const ringGeo = cached('knight-grip-ring', () => new THREE.TorusGeometry(0.018, 0.004, 5, 8));
+  part(sword, ringGeo, mats.gold, {
+    pos: [0, -0.018, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(sword, ringGeo, mats.gold, {
+    pos: [0, -0.082, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(sword, cached('knight-pommel', () => new THREE.CylinderGeometry(0.026, 0.022, 0.02, 8)), mats.gold, {
+    pos: [0, -0.108, 0],
+  });
+  part(sword, cached('knight-guard', () => new THREE.BoxGeometry(0.132, 0.016, 0.026)), mats.gold, {
+    pos: [0, 0.01, 0],
+  });
+  const quillonGeo = cached('knight-quillon-tip', () => new THREE.BoxGeometry(0.034, 0.012, 0.02));
+  for (const side of [-1, 1]) {
+    part(sword, quillonGeo, mats.gold, {
+      pos: [side * 0.078, 0.004, 0],
+      rot: [0, 0, side * 0.42],
+    });
+  }
+  part(sword, cached('knight-guard-gem', () => new THREE.CylinderGeometry(0.012, 0.012, 0.01, 6)), mats.eye, {
+    pos: [0, 0.02, 0.016],
+    rot: [-Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(sword, bladeGeometry(length, 0.046, 0.015), mats.steel, { pos: [0, 0.018, 0] });
+  part(sword, cached(`knight-fuller-${length}`, () => new THREE.BoxGeometry(0.008, length * 0.62, 0.018)), mats.trim, {
+    pos: [0, 0.018 + length * 0.36, 0],
+    shadow: false,
+  });
+  return sword;
+}
+
+// Wrap bands sit on the capsules so thighs/shins read as armour, not stickers.
+function addSwordsmanLegPlates(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.054, 0.05, 0.088, 2.05, 8);
+  const shinGeo = wrapBandGeometry(0.048, 0.044, 0.1, 2.2, 8);
+  const kneeGeo = cached('swordsman-knee-cop', () =>
+    new THREE.SphereGeometry(0.034, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.58)
+  );
+  const sabatonGeo = trapezoidPlateGeometry(0.09, 0.068, 0.118, 0.032);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.armor, { pos: [0, -legs.thigh * 0.48, 0.006] });
+    part(knee, kneeGeo, mats.armor, {
+      pos: [0, 0.004, 0.03],
+      scale: [1.15, 0.62, 1],
+    });
+    part(knee, shinGeo, mats.armorDeep, { pos: [0, -legs.shin * 0.52, 0.004] });
+    part(knee, sabatonGeo, mats.armor, {
+      pos: [0, -legs.shin - 0.016, 0.032],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addSwordsmanBracers(arm, mats) {
+  part(arm.pivot, wrapBandGeometry(0.044, 0.04, 0.1, 2.15, 8), mats.armorDeep, {
+    pos: [0, -0.152, 0.004],
+  });
+  part(arm.pivot, cached('swordsman-elbow', () =>
+    new THREE.SphereGeometry(0.028, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  ), mats.armor, {
+    pos: [0, -0.172, 0.024],
+    scale: [1.1, 0.55, 0.95],
+  });
+  part(arm.hand, wrapBandGeometry(0.04, 0.038, 0.042, 2.3, 8), mats.armor, {
+    pos: [0, -0.004, 0.004],
+  });
+}
+
+// Sallet: one skull, a short tail, and a visor that wraps the face.
+function addSwordsmanHelm(head, mats) {
+  part(head, cached('swordsman-helm-skull', () =>
+    new THREE.SphereGeometry(0.12, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62)
+  ), mats.armor, {
+    pos: [0, 0.012, -0.004],
+    scale: [1, 0.9, 1.08],
+  });
+  part(head, cached('swordsman-helm-tail', () =>
+    new THREE.SphereGeometry(0.078, 8, 6, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.42)
+  ), mats.armor, {
+    pos: [0, -0.018, -0.07],
+    rot: [0.55, 0, 0],
+    scale: [1.05, 0.85, 1.15],
+  });
+  part(head, wrapBandGeometry(0.112, 0.11, 0.038, 2.35, 8), mats.charcoal, {
+    pos: [0, 0.006, 0.002],
+  });
+  part(head, cached('swordsman-visor-slit', () => new THREE.BoxGeometry(0.072, 0.006, 0.01)), mats.eye, {
+    pos: [0, 0.01, 0.112],
+    shadow: false,
+  });
+  part(head, cached('swordsman-nasal', () => new THREE.BoxGeometry(0.014, 0.05, 0.012)), mats.armorDeep, {
+    pos: [0, -0.02, 0.108],
+  });
+  part(head, cached('swordsman-helm-band', () => new THREE.TorusGeometry(0.1, 0.008, 5, 12)), mats.trim, {
+    pos: [0, 0.042, -0.002],
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [1, 1.02, 1],
+    shadow: false,
+  });
+  part(head, trapezoidPlateGeometry(0.01, 0.02, 0.07, 0.012), mats.trim, {
+    pos: [0, 0.118, -0.008],
+    rot: [0.2, 0, 0],
+  });
+}
+
+function addSwordsmanPauldrons(parent, mats) {
+  const capGeo = cached('swordsman-pauldron-cap', () =>
+    new THREE.SphereGeometry(0.08, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.52)
+  );
+  const lameGeo = cached('swordsman-pauldron-lame', () =>
+    new THREE.SphereGeometry(0.078, 10, 6, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.22)
+  );
+
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.168, 0.568, 0.008);
+    pad.rotation.z = side * -0.32;
+    part(pad, capGeo, mats.armor, { scale: [1.05, 0.52, 1.02] });
+    part(pad, lameGeo, mats.armorDeep, {
+      pos: [0, -0.012, 0],
+      scale: [1.08, 0.7, 1.06],
+    });
+    part(pad, wrapBandGeometry(0.072, 0.07, 0.028, 2.0, 8), mats.trim, {
+      pos: [0, -0.03, 0.004],
+      shadow: false,
+    });
+    parent.add(pad);
+  }
+}
+
+function addSwordsmanCape(parent, mats) {
+  const cape = new THREE.Group();
+  cape.position.set(0, 0.5, -0.04);
+  part(cape, cached('swordsman-capelet', () =>
+    new THREE.CylinderGeometry(0.138, 0.168, 0.11, 12, 1, true, Math.PI * 0.66, Math.PI * 0.68)
+  ), mats.cloth, {
+    pos: [0, 0.02, -0.01],
+  });
+  part(cape, cached('swordsman-cape', () =>
+    new THREE.CylinderGeometry(0.15, 0.205, 0.34, 12, 2, true, Math.PI * 0.72, Math.PI * 0.56)
+  ), mats.cloth, {
+    pos: [0, -0.12, -0.012],
+  });
+  part(cape, cached('swordsman-cape-collar', () => new THREE.TorusGeometry(0.1, 0.016, 5, 12, Math.PI * 1.15)), mats.cloth, {
+    pos: [0, 0.062, 0.012],
+    rot: [-Math.PI / 2 + 0.2, 0, 0],
+    scale: [1.05, 0.9, 1],
+  });
+  parent.add(cape);
+  return cape;
+}
+
+// Breastplate wraps the torso; tabard hangs from the belt as one cloth.
+function addSwordsmanCuirass(torso, mats) {
+  part(torso, wrapBandGeometry(0.162, 0.148, 0.145, 2.05, 10), mats.armor, {
+    pos: [0, 0.03, 0],
+    scale: [1.04, 1, 0.82],
+  });
+  part(torso, cached('swordsman-keel', () => new THREE.BoxGeometry(0.018, 0.12, 0.02)), mats.trim, {
+    pos: [0, 0.034, 0.128],
+    shadow: false,
+  });
+  part(torso, wrapBandGeometry(0.15, 0.138, 0.036, 2.15, 8), mats.armorDeep, {
+    pos: [0, -0.058, 0],
+    scale: [1.02, 1, 0.84],
+    rot: [0.12, 0, 0],
+  });
+  part(torso, cached('swordsman-belt', () => new THREE.CylinderGeometry(0.128, 0.128, 0.038, 12)), mats.leather, {
+    pos: [0, -0.09, 0],
+    scale: [1.04, 1, 0.8],
+  });
+  part(torso, cached('swordsman-buckle', () => new THREE.CylinderGeometry(0.02, 0.02, 0.014, 8)), mats.gold, {
+    pos: [0, -0.09, 0.108],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(torso, tabardPlateGeometry(), mats.cloth, {
+    pos: [0, -0.012, 0.118],
+  });
+  part(torso, cached('swordsman-tabard-cross-v', () => new THREE.BoxGeometry(0.018, 0.11, 0.006)), mats.trim, {
+    pos: [0, 0.0, 0.128],
+    shadow: false,
+  });
+  part(torso, cached('swordsman-tabard-cross-h', () => new THREE.BoxGeometry(0.07, 0.018, 0.006)), mats.trim, {
+    pos: [0, 0.032, 0.128],
+    shadow: false,
+  });
+}
+
+function addSwordsmanScabbard(parent, mats) {
+  const scabbard = new THREE.Group();
+  scabbard.position.set(-0.118, 0.355, 0.042);
+  scabbard.rotation.set(0.08, 0.28, 0.22);
+  part(scabbard, scabbardGeometry(), mats.leather);
+  part(scabbard, cached('swordsman-scabbard-chape', () => new THREE.BoxGeometry(0.042, 0.022, 0.06)), mats.steel, {
+    pos: [0, -0.15, 0],
+  });
+  part(scabbard, cached('swordsman-scabbard-throat', () => new THREE.BoxGeometry(0.046, 0.024, 0.066)), mats.gold, {
+    pos: [0, 0.138, 0],
+  });
+  parent.add(scabbard);
 }
 
 // The stave sits in the XY plane so the whole D-shape faces the viewer. Held
@@ -804,45 +1092,29 @@ export function buildLandmineBoardMarker() {
 
 function buildSwordsman(mats) {
   const group = new THREE.Group();
-  const legs = addLegs(group, mats);
-  const torso = addTorso(group, mats, { width: 1.02 });
-  part(torso, cached('chest-plate', () => new THREE.BoxGeometry(0.16, 0.13, 0.03)), mats.trim, {
-    pos: [0, 0.03, 0.098],
-  });
-  part(torso, cached('swordsman-belt', () => new THREE.BoxGeometry(0.2, 0.05, 0.05)), mats.leather, {
-    pos: [0, -0.08, 0.09],
-  });
-  part(torso, cached('swordsman-buckle', () => new THREE.BoxGeometry(0.05, 0.06, 0.02)), mats.gold, {
-    pos: [0, -0.08, 0.115],
-    shadow: false,
-  });
-  addPauldrons(group, mats);
-  addGorget(group, mats);
-  addCape(group, mats);
-  const armL = addArm(group, mats, -1, {});
-  const armR = addArm(group, mats, 1, {});
-  const head = addHead(group, mats);
-  const eyes = addEyes(head, mats, { socket: false });
-  part(head, cached('helm-shell', () => new THREE.SphereGeometry(0.128, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.56)), mats.armor, {
-    pos: [0, 0.014, 0],
-    scale: [1, 1.02, 1],
-  });
-  part(head, cached('helm-brim', () => new THREE.TorusGeometry(0.116, 0.013, 6, 14)), mats.trim, {
-    pos: [0, 0.036, 0],
-    rot: [-Math.PI / 2, 0, 0],
-  });
-  part(head, cached('helm-crest', () => new THREE.BoxGeometry(0.024, 0.07, 0.19)), mats.trim, {
-    pos: [0, 0.12, -0.01],
-  });
+  const legs = addLegs(group, mats, { spread: 0.084, boots: false });
+  addSwordsmanLegPlates(legs, mats);
+  const torso = addTorso(group, mats, { width: 1.04, height: 0.265, y: 0.458, fittings: false });
+  addSwordsmanCuirass(torso, mats);
+  addSwordsmanPauldrons(group, mats);
+  addGorget(group, mats, 0.608);
+  addSwordsmanCape(group, mats);
+  addSwordsmanScabbard(group, mats);
+  const armL = addArm(group, mats, -1, { shoulderX: 0.168 });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.168 });
+  addSwordsmanBracers(armL, mats);
+  addSwordsmanBracers(armR, mats);
+  const head = addHead(group, mats, { y: 0.712, radius: 0.092 });
+  addSwordsmanHelm(head, mats);
 
-  const sword = buildSword(mats);
-  sword.position.set(0.012, 0.025, 0.045);
-  sword.rotation.set(-0.24, 0, 0.34);
+  const sword = buildKnightSword(mats);
+  sword.position.set(0.01, 0.022, 0.04);
+  sword.rotation.set(-0.22, 0, 0.3);
   armR.hand.add(sword);
   armR.pivot.rotation.set(-0.36, 0, 0.28);
   armL.pivot.rotation.set(0.1, 0, -0.12);
 
-  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, weapon: sword };
+  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, weapon: sword };
 }
 
 function buildArcher(mats) {
