@@ -40,7 +40,7 @@ export function applyTeamTintToMaterials(materials, team, tintSlots = []) {
 
   for (const material of materials) {
     const slot = material.name ?? '';
-    if (keepColor(material)) {
+    if (keepColor(material) && slot !== 'ring') {
       stampMaterialBaselines(material);
       continue;
     }
@@ -108,10 +108,16 @@ export function collectMeshMaterials(root) {
 export function normalizeGltfMaterials(materials) {
   for (const material of materials) {
     const slot = material.name ?? '';
-    if (slot === 'shadow' || slot === 'ring') {
+    if (slot === 'shadow') {
       material.transparent = true;
       material.depthWrite = false;
       material.userData.skipTint = true;
+      material.userData.baseOpacity = material.opacity;
+      continue;
+    }
+    if (slot === 'ring') {
+      material.transparent = true;
+      material.depthWrite = false;
       material.userData.baseOpacity = material.opacity;
       continue;
     }

@@ -1,5 +1,5 @@
-import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
-import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
+import { disposeUnitMaterials } from './UnitModels.js';
+import { resolveUnitModel } from './units/resolveUnitModel.js';
 import {
   PREVIEW_ROTATION_Y,
   setupBakeScene,
@@ -24,10 +24,7 @@ function disposeModel(model) {
 }
 
 export function bakeUnitThumbnail(renderer, scene, camera, classId) {
-  const loader = getUnitAssetLoader();
-  const model = loader.canInstantiate(classId)
-    ? loader.instantiate(classId, 'blue')
-    : buildUnitModel(classId, 'blue');
+  const model = resolveUnitModel(classId, 'blue');
   if (model.ring) model.ring.visible = false;
   if (model.shadow) model.shadow.visible = false;
   model.animation?.dispose?.();

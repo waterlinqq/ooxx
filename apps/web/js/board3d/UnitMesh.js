@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
-import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
+import { disposeUnitMaterials } from './UnitModels.js';
+import { resolveUnitModel } from './units/resolveUnitModel.js';
 import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
 import { applyStatBadge } from '../statIcons.js';
 import { CLASS_LEVEL_MIN } from '../units.js';
@@ -187,10 +188,8 @@ export class UnitMeshManager {
 
   createUnitEntry(unit) {
     const assetLoader = getUnitAssetLoader();
-    const fromGlb = assetLoader.canInstantiate(unit.classId);
-    const model = fromGlb
-      ? assetLoader.instantiate(unit.classId, unit.team)
-      : buildUnitModel(unit.classId, unit.team);
+    const model = resolveUnitModel(unit.classId, unit.team);
+    const fromGlb = model.fromGlb;
     const root = model.root;
     root.userData = { kind: 'unit', unitId: unit.id };
 

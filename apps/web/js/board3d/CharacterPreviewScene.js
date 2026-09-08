@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
+import { disposeUnitMaterials } from './UnitModels.js';
+import { resolveUnitModel, initUnitAssets } from './units/resolveUnitModel.js';
 import { CLASSES, createEmptyBoard, createUnit } from '../units.js';
 import { getValidMoves, isInBounds } from '../rules.js';
 import {
@@ -97,11 +98,21 @@ function captureRest(node) {
   };
 }
 
+function legPivot(pivot) {
+  return pivot?.node ?? pivot ?? null;
+}
+
 function captureLegs(legs) {
   if (!legs) return null;
   return {
-    left: { hip: captureRest(legs.left.hip), knee: captureRest(legs.left.knee) },
-    right: { hip: captureRest(legs.right.hip), knee: captureRest(legs.right.knee) },
+    left: {
+      hip: captureRest(legPivot(legs.left?.hip)),
+      knee: captureRest(legPivot(legs.left?.knee)),
+    },
+    right: {
+      hip: captureRest(legPivot(legs.right?.hip)),
+      knee: captureRest(legPivot(legs.right?.knee)),
+    },
   };
 }
 
@@ -192,6 +203,7 @@ export class CharacterPreviewScene {
     this.clock = new THREE.Clock();
     this.preview = null;
     this.classId = null;
+    this.assetLoaderReady = initUnitAssets();
     this.visible = false;
     this.pageHidden = document.hidden;
     this.animating = false;
@@ -322,13 +334,55 @@ export class CharacterPreviewScene {
 
   disposePreview() {
     if (!this.preview) return;
-    const { root, materials } = this.preview;
+    const { root, materials, animation } = this.preview;
+    animation?.dispose?.();
     this.previewPivot.remove(root);
     root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });
     disposeUnitMaterials(materials);
     this.preview = null;
+  }
+
+  buildPreviewEntry(classId) {
+    const model = resolveUnitModel(classId, 'blue');
+    if (model.ring) model.ring.visible = false;
+
+    model.root.position.set(0, UNIT_BASE_Y, 0);
+    this.previewPivot.add(model.root);
+
+    const rig = model.rig;
+    return {
+      root: model.root,
+      body: model.body,
+      rig,
+      fromGlb: model.fromGlb,
+      animation: model.animation ?? null,
+      rest: {
+        group: captureRest(rig.group),
+        legs: captureLegs(rig.legs),
+        torso: captureRest(rig.torso),
+        head: captureRest(rig.head),
+        armL: captureRest(rig.armL),
+        armR: captureRest(rig.armR),
+        weapon: captureRest(rig.weapon),
+        hood: captureRest(rig.hood),
+        scarf: captureRest(rig.scarf),
+        shield: captureRest(rig.shield),
+        robe: captureRest(rig.robe),
+        orb: captureRest(rig.orb),
+        bomb: captureRest(rig.bomb),
+        wingL: captureRest(rig.wingL),
+        wingR: captureRest(rig.wingR),
+        crest: captureRest(rig.crest),
+        banner: captureRest(rig.banner),
+        eyeStalkL: captureRest(rig.eyeStalkL),
+        eyeStalkR: captureRest(rig.eyeStalkR),
+      },
+      seed: Math.random() * Math.PI * 2,
+      materials: model.materials,
+      shadow: model.shadow,
+    };
   }
 
   createRangeBoard() {
@@ -412,49 +466,18 @@ export class CharacterPreviewScene {
     this.classId = classId;
     this.disposePreview();
 
-    const model = buildUnitModel(classId, 'blue');
-    if (model.ring) model.ring.visible = false;
-
-    model.root.position.set(0, UNIT_BASE_Y, 0);
-    this.previewPivot.add(model.root);
-    this.updateRangeOverlay(classId);
-
-    const rig = model.rig;
-    this.preview = {
-      root: model.root,
-      body: model.body,
-      rig,
-      rest: {
-        group: captureRest(rig.group),
-        legs: captureLegs(rig.legs),
-        torso: captureRest(rig.torso),
-        head: captureRest(rig.head),
-        armL: captureRest(rig.armL),
-        armR: captureRest(rig.armR),
-        weapon: captureRest(rig.weapon),
-        hood: captureRest(rig.hood),
-        scarf: captureRest(rig.scarf),
-        shield: captureRest(rig.shield),
-        robe: captureRest(rig.robe),
-        orb: captureRest(rig.orb),
-        bomb: captureRest(rig.bomb),
-        wingL: captureRest(rig.wingL),
-        wingR: captureRest(rig.wingR),
-        crest: captureRest(rig.crest),
-        banner: captureRest(rig.banner),
-        eyeStalkL: captureRest(rig.eyeStalkL),
-        eyeStalkR: captureRest(rig.eyeStalkR),
-      },
-      seed: Math.random() * Math.PI * 2,
-      materials: model.materials,
-      shadow: model.shadow,
-    };
-
-    if (this.visible) this.onResize();
-    this.updateAnimationLoop();
+    const pending = classId;
+    this.assetLoaderReady.then(() => {
+      if (this.classId !== pending) return;
+      this.preview = this.buildPreviewEntry(pending);
+      this.updateRangeOverlay(pending);
+      if (this.visible) this.onResize();
+      this.updateAnimationLoop();
+    });
   }
 
   posePreview(entry, time) {
+    if (entry.animation?.drivesPose) return;
     const { rig, rest } = entry;
     const t = time + entry.seed;
     const idle = 1;
@@ -580,9 +603,15 @@ export class CharacterPreviewScene {
       return;
     }
 
+    const delta = this.clock.getDelta();
     const time = this.clock.getElapsedTime();
     this.preview.body.rotation.y = Math.sin(time * 0.22) * 0.35;
-    this.posePreview(this.preview, time);
+
+    if (this.preview.animation?.drivesPose) {
+      this.preview.animation.update(delta);
+    } else {
+      this.posePreview(this.preview, time);
+    }
 
     const hover = Math.sin(time * 2 + this.preview.seed) * 0.008;
     this.preview.root.position.y = UNIT_BASE_Y + hover;

@@ -1,5 +1,6 @@
 import { Group } from 'three';
-import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
+import { disposeUnitMaterials } from './UnitModels.js';
+import { resolveUnitModel } from './units/resolveUnitModel.js';
 import { playerFacingYaw } from './CameraFacing.js';
 
 const SHADOW_CLONE_BASE_Y = 0.072;
@@ -10,7 +11,7 @@ function cellKey(r, c) {
 }
 
 function createShadowCloneMesh(team) {
-  const model = buildUnitModel('assassin', team);
+  const model = resolveUnitModel('assassin', team);
   model.root.position.y = SHADOW_CLONE_BASE_Y;
   model.root.rotation.y = playerFacingYaw(team);
 
@@ -69,13 +70,14 @@ export class ShadowCloneManager {
     const model = createShadowCloneMesh(team);
     model.root.position.set(tile.position.x, SHADOW_CLONE_BASE_Y, tile.position.z);
     this.group.add(model.root);
-    this.markers.set(key, { team, root: model.root, materials: model.materials });
+    this.markers.set(key, { team, root: model.root, materials: model.materials, animation: model.animation });
   }
 
   removeMarker(key) {
     const marker = this.markers.get(key);
     if (!marker) return;
     this.markers.delete(key);
+    marker.animation?.dispose?.();
     this.group.remove(marker.root);
     marker.root.traverse((child) => {
       if (child.geometry && !child.geometry.userData?.shared) child.geometry.dispose();
