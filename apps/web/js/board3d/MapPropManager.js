@@ -1,15 +1,19 @@
 import { Group } from 'three';
 import { MAP_PROPS } from '../mapProps.js';
 import { buildMapPropModel } from './MapPropModels.js';
+import { MapPropStoneInstances } from './scenery/mapPropInstances.js';
+import { getMapPropStoneMode } from './scenery/sceneryPipeline.js';
+import {
+  buildBakedStoneGroup,
+  disposeBakedStoneGroup,
+} from './scenery/mapPropSceneBake.js';
 
-// Props sit on the tile surface, matching the ground plane the unit models use.
 const PROP_BASE_Y = 0.072;
 
 function cellKey(r, c) {
   return `${r},${c}`;
 }
 
-// Stable per-cell seed, so a boulder keeps its shape across re-syncs.
 function cellSeed(row, col) {
   return (Math.imul(row + 1, 73856093) ^ Math.imul(col + 1, 19349663)) >>> 0;
 }
@@ -20,27 +24,35 @@ export class MapPropManager {
     this.group = new Group();
     this.group.name = 'map-props';
     tileGrid.group.parent.add(this.group);
+    this.stoneInstances = new MapPropStoneInstances(this.group);
+    this.bakedStones = null;
+    this.stoneMode = getMapPropStoneMode();
     this.markers = new Map();
     this.effects = new Set();
     this.boardSize = 0;
   }
 
   sync(mapProps = null) {
-    // Tile world positions shift when the board resizes, so surviving markers
-    // cannot be reused as-is.
-    if (this.boardSize !== this.tileGrid.boardSize) {
+    const stoneMode = getMapPropStoneMode();
+    if (this.boardSize !== this.tileGrid.boardSize || this.stoneMode !== stoneMode) {
       this.clear();
       this.boardSize = this.tileGrid.boardSize;
+      this.stoneMode = stoneMode;
     }
 
     const desired = new Map();
+    const stoneCells = [];
 
     if (mapProps) {
       for (let r = 0; r < mapProps.length; r++) {
         for (let c = 0; c < mapProps[r].length; c++) {
           const prop = mapProps[r][c];
           if (!prop) continue;
-          desired.set(cellKey(r, c), prop.kind);
+          const key = cellKey(r, c);
+          desired.set(key, prop.kind);
+          if (prop.kind === 'stone') {
+            stoneCells.push({ key, row: r, col: c });
+          }
         }
       }
     }
@@ -49,13 +61,36 @@ export class MapPropManager {
       if (!desired.has(key)) this.removeMarker(key);
     }
 
+    this.syncStones(stoneCells);
+
     for (const [key, kind] of desired) {
+      if (kind === 'stone') continue;
+
       const existing = this.markers.get(key);
       if (existing?.kind === kind) continue;
       if (existing) this.removeMarker(key);
       const [row, col] = key.split(',').map(Number);
       this.addMarker(key, row, col, kind);
     }
+  }
+
+  syncStones(cells) {
+    if (this.bakedStones) {
+      this.group.remove(this.bakedStones);
+      disposeBakedStoneGroup(this.bakedStones);
+      this.bakedStones = null;
+    }
+    this.stoneInstances.clear();
+
+    if (cells.length === 0) return;
+
+    if (this.stoneMode === 'instanced') {
+      this.stoneInstances.sync(cells, this.tileGrid);
+      return;
+    }
+
+    this.bakedStones = buildBakedStoneGroup(cells, this.tileGrid, cellSeed);
+    this.group.add(this.bakedStones);
   }
 
   addMarker(key, row, col, kind) {
@@ -83,17 +118,11 @@ export class MapPropManager {
     });
   }
 
-  /**
-   * Play a prop's trigger animation. `ready` is awaited first so the trap fires
-   * as the unit lands on it rather than the moment the move is committed.
-   */
   trigger({ kind, row, col }, ready = Promise.resolve()) {
     const key = cellKey(row, col);
     const marker = this.markers.get(key);
     if (!marker?.activate || marker.kind !== kind) return;
 
-    // A consumed prop is already gone from the game state, so take it out of the
-    // synced set now: otherwise the next sync deletes the mesh mid-animation.
     if (!marker.persistent) this.markers.delete(key);
     marker.effect = { start: null };
     this.effects.add(marker);
@@ -125,7 +154,6 @@ export class MapPropManager {
     const marker = this.markers.get(key);
     if (!marker) return;
     this.markers.delete(key);
-    // A marker mid-trigger owns itself until the animation ends.
     if (marker.effect) {
       marker.discard = true;
       return;
@@ -135,8 +163,6 @@ export class MapPropManager {
 
   disposeMarker(marker) {
     this.group.remove(marker.root);
-    // Geometry is cached and reused between props; materials never are, because
-    // each prop drives its own emissive and opacity during a trigger.
     marker.root.traverse((child) => {
       if (child.geometry && !child.geometry.userData?.shared) child.geometry.dispose();
       if (child.material) child.material.dispose();
@@ -144,7 +170,12 @@ export class MapPropManager {
   }
 
   clear() {
-    // A persistent prop mid-trigger sits in both collections.
+    if (this.bakedStones) {
+      this.group.remove(this.bakedStones);
+      disposeBakedStoneGroup(this.bakedStones);
+      this.bakedStones = null;
+    }
+    this.stoneInstances.clear();
     for (const marker of new Set([...this.markers.values(), ...this.effects])) {
       marker.effect = null;
       this.disposeMarker(marker);
