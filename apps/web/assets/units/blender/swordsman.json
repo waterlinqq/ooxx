@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "classId": "swordsman",
+  "template": true,
+  "referenceGlb": "../../../public/units/swordsman.glb",
+  "outputGlb": "swordsman.glb",
+  "dimensions": {
+    "silhouetteScale": [1, 1, 1],
+    "globalScale": 0.88,
+    "height": 0.72,
+    "shadowRadius": 0.3,
+    "legSegments": { "thigh": 0.066, "shin": 0.05625 }
+  },
+  "hierarchy": {
+    "root": "ooxx:UnitRoot",
+    "children": [
+      { "name": "ooxx:Shadow", "type": "decal", "animated": false },
+      { "name": "ooxx:TeamRing", "type": "decal", "animated": false },
+      {
+        "name": "ooxx:Body",
+        "children": [
+          {
+            "name": "ooxx:Rig",
+            "children": [
+              { "name": "ooxx:LegL_Hip", "pivot": "hip", "side": "left" },
+              { "name": "ooxx:LegL_Knee", "pivot": "knee", "parent": "ooxx:LegL_Hip" },
+              { "name": "ooxx:LegR_Hip", "pivot": "hip", "side": "right" },
+              { "name": "ooxx:LegR_Knee", "pivot": "knee", "parent": "ooxx:LegR_Hip" },
+              { "name": "ooxx:Torso", "pivot": "spine" },
+              { "name": "ooxx:Head", "pivot": "head", "parent": "ooxx:Torso" },
+              { "name": "ooxx:ArmL", "pivot": "shoulder", "side": "left", "parent": "ooxx:Torso" },
+              { "name": "ooxx:ArmR", "pivot": "shoulder", "side": "right", "parent": "ooxx:Torso" },
+              { "name": "ooxx:Weapon", "parent": "ooxx:ArmR", "attach": "hand" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "bones": {
+    "convention": "Mixamo-compatible humanoid; map to ooxx: node names on export.",
+    "required": [
+      "Hips", "Spine", "Chest", "Neck", "Head",
+      "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
+      "RightShoulder", "RightArm", "RightForeArm", "RightHand",
+      "LeftUpLeg", "LeftLeg", "LeftFoot",
+      "RightUpLeg", "RightLeg", "RightFoot"
+    ],
+    "nodeMapping": {
+      "Hips": "ooxx:Rig",
+      "Spine": "ooxx:Torso",
+      "Head": "ooxx:Head",
+      "LeftArm": "ooxx:ArmL",
+      "RightArm": "ooxx:ArmR",
+      "LeftUpLeg": "ooxx:LegL_Hip",
+      "LeftLeg": "ooxx:LegL_Knee",
+      "RightUpLeg": "ooxx:LegR_Hip",
+      "RightLeg": "ooxx:LegR_Knee",
+      "RightHand": "ooxx:Weapon"
+    }
+  },
+  "clips": {
+    "idle": {
+      "gltfName": "idle",
+      "durationSec": 2.0,
+      "loop": true,
+      "notes": "Breathing + subtle sway; matches poseUnit breath frequency ~2.1 rad/s."
+    },
+    "walk": {
+      "gltfName": "walk",
+      "durationSec": 0.667,
+      "loop": true,
+      "notes": "One stride; game WALK_SPEED=2.4, STRIDE=0.3 tile."
+    },
+    "attack_melee": {
+      "gltfName": "attack_melee",
+      "durationSec": 0.42,
+      "loop": false,
+      "hitFrame": 0.55,
+      "notes": "Matches UnitMesh.triggerAttack melee duration 420ms."
+    },
+    "spawn_drop": {
+      "gltfName": "spawn_drop",
+      "durationSec": 0.65,
+      "loop": false,
+      "notes": "Drop from height ~1.0 unit; squash on land."
+    },
+    "acted": {
+      "gltfName": "acted",
+      "durationSec": 0.35,
+      "loop": false,
+      "hold": true,
+      "notes": "Crouch depth 1.0; held while actedUnitIds contains unit."
+    }
+  },
+  "manifestClips": {
+    "idle": "idle",
+    "walk": "walk",
+    "attackMelee": "attack_melee",
+    "spawn": "spawn_drop",
+    "acted": "acted"
+  },
+  "workflow": [
+    "Import reference GLB (baked mesh) into Blender 4.x.",
+    "Add armature using required bones; parent meshes or re-skin to single mesh.",
+    "Rename pose bones / empties to ooxx: node names (see hierarchy).",
+    "Keyframe clips at 30 fps; name exactly as gltfName above.",
+    "Bake blue-team materials; export GLB per blender-export.json.",
+    "Replace public/units/swordsman.glb; verify in game with ?debug3d=1."
+  ]
+}

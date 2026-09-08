@@ -8,6 +8,7 @@ import {
   findShadowNode,
   findRingNode,
 } from './rigNames.js';
+import { UnitAnimationController } from './UnitAnimationController.js';
 
 const gltfLoader = new GLTFLoader();
 const templateCache = new Map();
@@ -76,6 +77,7 @@ class UnitAssetLoader {
     const shadow = findShadowNode(root);
     const ring = findRingNode(root);
     const rig = resolveRigFromScene(root, classId, spec.legSegments ?? null);
+    const animation = new UnitAnimationController(root, gltf.animations ?? [], spec.clips ?? {});
 
     const bounds = new THREE.Box3().setFromObject(body ?? root);
 
@@ -88,6 +90,7 @@ class UnitAssetLoader {
       height: bounds.max.y,
       materials,
       spawnStyle: spec.spawnStyle ?? 'drop',
+      animation,
     };
   }
 }

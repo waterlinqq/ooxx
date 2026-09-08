@@ -220,6 +220,7 @@ export class UnitMeshManager {
       shadow: model.shadow,
       ring: model.ring,
       materials: model.materials,
+      animation: model.animation ?? null,
       label,
       wrap,
       targetPos: new THREE.Vector3(),
@@ -283,6 +284,7 @@ export class UnitMeshManager {
       type,
       heading,
     };
+    entry.animation?.play(type === 'melee' ? 'attackMelee' : 'attackRanged', { loop: false });
   }
 
   impactUnit(row, col) {
@@ -294,6 +296,11 @@ export class UnitMeshManager {
   applyActedLook(entry, acted) {
     if (entry.actedLook === acted) return;
     entry.actedLook = acted;
+    if (acted) {
+      entry.animation?.play('acted', { loop: false, fade: 0.12 });
+    } else if (entry.animation?.drivesPose) {
+      entry.animation.play('idle', { loop: true, fade: 0.12 });
+    }
     for (const material of entry.materials) {
       if (material.userData.globalShared) continue;
       if (material.userData.skipTint) {
@@ -611,6 +618,8 @@ export class UnitMeshManager {
   }
 
   poseUnit(entry, time) {
+    if (entry.animation?.drivesPose) return;
+
     const { rig, rest } = entry;
     const t = time + entry.seed;
     const crouch = entry.crouch * entry.crouchDepth * (1 - entry.walk) * (1 - entry.airborne);
@@ -809,6 +818,8 @@ export class UnitMeshManager {
       this.updateMotion(entry, delta, now);
       this.updateAction(entry, now);
       this.updateSpawn(entry, now);
+      entry.animation?.setLocomotion(entry.walk);
+      entry.animation?.update(delta);
 
       entry.root.position.copy(entry.displayPos).add(entry.fxOffset);
 
@@ -864,6 +875,7 @@ export class UnitMeshManager {
   }
 
   disposeEntry(entry) {
+    entry.animation?.dispose();
     entry.root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });

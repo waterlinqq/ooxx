@@ -72,7 +72,8 @@
         "attackMelee": "attack_melee",
         "spawn": "spawn_drop",
         "acted": "acted"
-      }
+      },
+      "blenderSpec": "blender/swordsman.json"
     },
     "mage": {
       "file": "mage.glb",

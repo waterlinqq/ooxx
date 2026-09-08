@@ -27,10 +27,6 @@ export function applyTeamTintToMaterials(materials, team, tintSlots = []) {
     if (!slot || GLOBAL_MATERIAL_NAMES.has(slot) || skipTint(material)) continue;
     if (tintSet.size > 0 && !tintSet.has(slot)) continue;
 
-    material.userData.baseColor = material.color.clone();
-    material.userData.baseOpacity = material.opacity;
-    material.userData.baseEmissive = material.emissiveIntensity;
-
     switch (slot) {
       case 'armor':
         material.color.copy(base);
@@ -66,6 +62,11 @@ export function applyTeamTintToMaterials(materials, team, tintSlots = []) {
         material.color.copy(base);
         break;
     }
+
+    // Capture team-tinted values so acted/selection fades restore the right colour.
+    material.userData.baseColor = material.color.clone();
+    material.userData.baseOpacity = material.opacity;
+    material.userData.baseEmissive = material.emissiveIntensity;
   }
 }
 

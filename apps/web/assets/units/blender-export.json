@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "description": "Shared Blender → GLB export settings for all ooxx units.",
+  "coordinateSystem": {
+    "up": "Y",
+    "forward": "-Z",
+    "unit": "meter"
+  },
+  "scale": {
+    "globalScale": 0.88,
+    "note": "Apply globalScale on ooxx:Body child rig group; matches UnitModels.js GLOBAL_SCALE."
+  },
+  "materials": {
+    "authoringTeam": "blue",
+    "slotNames": [
+      "armor", "armorDeep", "cloth", "trim", "eye", "ring", "shadow",
+      "steel", "gold", "leather", "wood", "skin", "charcoal",
+      "ember", "arcane"
+    ],
+    "teamTintSlots": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+    "textureAtlas": "units_atlas.png",
+    "targetMaterialsPerUnit": 1
+  },
+  "compression": {
+    "mesh": "meshopt",
+    "textures": "webp-or-png",
+    "avoid": ["draco"]
+  },
+  "gltfExtras": {
+    "ooxx:manifestVersion": 1,
+    "anchorHeight": "bounds.max.y of ooxx:Body contents",
+    "shadowRadius": 0.3
+  },
+  "animation": {
+    "naming": "snake_case",
+    "fps": 30,
+    "sampling": "always"
+  },
+  "exporter": {
+    "format": "GLB",
+    "include": ["mesh", "materials", "animations", "extras"],
+    "applyModifiers": true,
+    "exportVertexColors": false,
+    "exportTangents": true
+  }
+}
