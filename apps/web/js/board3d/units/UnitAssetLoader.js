@@ -3,6 +3,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../../assets/units/manifest.json';
 import { applyTeamTintToMaterials, collectMeshMaterials, normalizeGltfMaterials, finalizeGltfMeshes } from './teamTint.js';
 import {
+  poolSharedMaterials,
+  collectUniqueMaterials,
+} from './materialPool.js';
+import {
   resolveRigFromScene,
   findBodyNode,
   findShadowNode,
@@ -81,6 +85,7 @@ class UnitAssetLoader {
     const materials = collectMeshMaterials(root);
     normalizeGltfMaterials(materials);
     applyTeamTintToMaterials(materials, team, spec.teamTintMaterials);
+    poolSharedMaterials(root, team);
     finalizeGltfMeshes(root);
 
     const body = findBodyNode(root);
@@ -99,7 +104,7 @@ class UnitAssetLoader {
       shadow,
       ring,
       height: bounds.max.y,
-      materials,
+      materials: collectUniqueMaterials(root),
       spawnStyle: spec.spawnStyle ?? 'drop',
       animation,
     };

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { playerFacingYaw } from './CameraFacing.js';
 import { tileWorldPosition } from './TileGrid.js';
-import { disposeUnitMaterials } from './UnitModels.js';
+import { disposeMaterialsSafe } from './units/materialPool.js';
 import { resolveUnitModel } from './units/resolveUnitModel.js';
 import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
 import { applyStatBadge } from '../statIcons.js';
@@ -888,7 +888,7 @@ export class UnitMeshManager {
     entry.root.traverse((obj) => {
       if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
     });
-    disposeUnitMaterials(entry.materials);
+    disposeMaterialsSafe(entry.materials);
     if (entry.label.element?.parentNode) {
       entry.label.element.parentNode.removeChild(entry.label.element);
     }

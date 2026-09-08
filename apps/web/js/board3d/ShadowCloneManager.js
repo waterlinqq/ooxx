@@ -1,5 +1,5 @@
 import { Group } from 'three';
-import { disposeUnitMaterials } from './UnitModels.js';
+import { disposeMaterialsSafe } from './units/materialPool.js';
 import { resolveUnitModel } from './units/resolveUnitModel.js';
 import { playerFacingYaw } from './CameraFacing.js';
 
@@ -82,7 +82,7 @@ export class ShadowCloneManager {
     marker.root.traverse((child) => {
       if (child.geometry && !child.geometry.userData?.shared) child.geometry.dispose();
     });
-    if (marker.materials) disposeUnitMaterials(marker.materials);
+    if (marker.materials) disposeMaterialsSafe(marker.materials);
   }
 
   clear() {

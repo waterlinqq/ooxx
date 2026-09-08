@@ -5,6 +5,8 @@ import { CLASS_IDS } from '@ooxx/shared/units.js';
 import manifest from '../assets/units/manifest.json';
 import { buildUnitModel, disposeUnitMaterials } from '../js/board3d/UnitModels.js';
 import { getUnitAssetLoader } from '../js/board3d/units/UnitAssetLoader.js';
+import { countMeshes } from '../js/board3d/units/glbBakeMerge.js';
+import { disposeMaterialsSafe } from '../js/board3d/units/materialPool.js';
 import {
   webglRendererOptions,
   webglPixelRatio,
@@ -25,6 +27,7 @@ const sourceSelect = document.getElementById('source');
 const teamSelect = document.getElementById('team');
 const clipSelect = document.getElementById('clip');
 const materialsEl = document.getElementById('materials');
+const statsEl = document.getElementById('stats');
 const classLabel = document.getElementById('classLabel');
 
 for (const classId of CLASS_IDS) {
@@ -155,9 +158,9 @@ function disposeEntry(entry) {
     for (const mat of mats) {
       if (!mat || disposedMats.has(mat.uuid)) continue;
       disposedMats.add(mat.uuid);
-      mat.dispose?.();
     }
   });
+  disposeMaterialsSafe(entry.materials);
 }
 
 function clearStage() {
@@ -223,7 +226,24 @@ function addEntry(entry, position, labelText) {
   }
 }
 
+function computeSceneStats() {
+  let meshes = 0;
+  const materials = new Set();
+  for (const entry of state.entries) {
+    meshes += countMeshes(entry.root);
+    for (const material of entry.materials) materials.add(material.uuid);
+  }
+  return { meshes, materials: materials.size };
+}
+
+function updateStatsPanel(drawCalls = null) {
+  const { meshes, materials } = computeSceneStats();
+  const dcText = drawCalls == null ? '—' : String(drawCalls);
+  statsEl.textContent = `Draw calls ≈ ${dcText} · Meshes ${meshes} · 材質 ${materials}`;
+}
+
 function updateMaterialPanel() {
+  updateStatsPanel();
   materialsEl.innerHTML = '';
   const seen = new Set();
   for (const material of state.materials) {
@@ -325,7 +345,9 @@ async function rebuild() {
 
   const glbCount = state.entries.filter((e) => e.source === 'glb').length;
   const procCount = state.entries.filter((e) => e.source === 'procedural').length;
-  setStatus(`${state.entries.length} 個模型 · GLB ${glbCount} · Procedural ${procCount}`);
+  const { meshes } = computeSceneStats();
+  setStatus(`${state.entries.length} 個模型 · GLB ${glbCount} · Procedural ${procCount} · Meshes ${meshes}`);
+  updateStatsPanel();
   state.loading = false;
 }
 
@@ -399,6 +421,7 @@ window.addEventListener('resize', onResize);
 new ResizeObserver(onResize).observe(host);
 
 const clock = new THREE.Clock();
+let statsFrame = 0;
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -409,7 +432,13 @@ function animate() {
     entry.animation?.update(delta);
   }
   controls.update();
+  renderer.info.autoReset = false;
+  renderer.info.reset();
   renderer.render(scene, camera);
+  statsFrame++;
+  if (statsFrame % 12 === 0) {
+    updateStatsPanel(renderer.info.render.calls);
+  }
 }
 
 rebuild().then(() => {

@@ -20,6 +20,9 @@ for (const classId of CLASS_IDS) {
     file: spec.file,
     base64: btoa(binary),
     bytes: bytes.length,
+    meshes: model.bakeStats?.meshCount ?? null,
+    mergedGroups: model.bakeStats?.mergedGroups ?? 0,
+    meshesBefore: model.bakeStats?.beforeMeshes ?? null,
   };
 }
 

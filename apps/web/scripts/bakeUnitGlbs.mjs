@@ -52,7 +52,7 @@ async function main() {
     await fs.writeFile(outPath, buffer);
     count++;
     totalBytes += buffer.length;
-    console.log(`${classId.padEnd(14)} → ${entry.file} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    console.log(`${classId.padEnd(14)} → ${entry.file} (${(buffer.length / 1024).toFixed(1)} KB)  meshes ${entry.meshesBefore}→${entry.meshes}`);
   }
 
   console.log(`\nBaked ${count} unit GLBs (${(totalBytes / 1024).toFixed(1)} KB total) in ${Date.now() - started}ms`);
