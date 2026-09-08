@@ -11,6 +11,7 @@ export class UnitAnimationController {
     this.actions = new Map();
     this.current = null;
     this.currentName = null;
+    this.walkWeight = 0;
 
     for (const [logicalName, gltfName] of Object.entries(clipMap)) {
       const clip = animations.find((entry) => entry.name === gltfName);
@@ -20,6 +21,11 @@ export class UnitAnimationController {
 
     this.hasClips = this.actions.size > 0;
     if (this.hasClips) {
+      this.mixer.addEventListener('finished', (event) => {
+        if (!event.action || event.action.getLoop() === THREE.LoopRepeat) return;
+        if (this.currentName === 'acted') return;
+        this.resumeLocomotion();
+      });
       this.play('idle', { loop: true, fade: 0 });
     }
   }
@@ -28,10 +34,18 @@ export class UnitAnimationController {
     return this.hasClips;
   }
 
+  resumeLocomotion() {
+    this.setLocomotion(this.walkWeight);
+  }
+
   play(name, { loop = false, fade = 0.15 } = {}) {
     const next = this.actions.get(name);
     if (!next || !this.mixer) return false;
-    if (this.currentName === name && next.isRunning()) return true;
+    if (this.currentName === name && next.isRunning() && (loop || !next.paused)) return true;
+
+    for (const action of this.actions.values()) {
+      action.enabled = true;
+    }
 
     next.reset();
     next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce);
@@ -48,11 +62,15 @@ export class UnitAnimationController {
 
   setLocomotion(walkWeight) {
     if (!this.hasClips) return;
+    this.walkWeight = THREE.MathUtils.clamp(walkWeight, 0, 1);
+    if (this.currentName === 'attackMelee' || this.currentName === 'attackRanged' || this.currentName === 'acted') {
+      return;
+    }
     const walk = this.actions.get('walk');
     const idle = this.actions.get('idle');
     if (!walk || !idle) return;
 
-    const weight = THREE.MathUtils.clamp(walkWeight, 0, 1);
+    const weight = this.walkWeight;
     idle.enabled = true;
     walk.enabled = true;
     idle.setEffectiveWeight(1 - weight);

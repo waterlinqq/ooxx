@@ -30,8 +30,13 @@ export const NODE = {
   RING: 'ooxx:TeamRing',
 };
 
+/** glTF/Three.js node names omit ':' (loader sanitizes on import). */
+export function gltfNodeName(logicalName) {
+  return logicalName.replace(/:/g, '');
+}
+
 function tag(node, name) {
-  if (node) node.name = name;
+  if (node) node.name = gltfNodeName(name);
 }
 
 function tagPivot(pivot, name) {
@@ -77,8 +82,20 @@ export function tagRigNodes(model) {
   }
 }
 
+export function findRigNode(root, name) {
+  const stripped = gltfNodeName(name);
+  const direct = root.getObjectByName(stripped) ?? root.getObjectByName(name);
+  if (direct) return direct;
+
+  let match = null;
+  root.traverse((obj) => {
+    if (obj.name === stripped || obj.name === name) match = obj;
+  });
+  return match;
+}
+
 function findNode(root, name) {
-  return root.getObjectByName(name) ?? null;
+  return findRigNode(root, name);
 }
 
 /**
