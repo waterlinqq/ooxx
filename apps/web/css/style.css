@@ -2653,12 +2653,14 @@ body {
 
 .mode-buttons {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
-.mode-buttons--lobby {
-  margin-bottom: 2px;
+@media (max-width: 420px) {
+  .mode-buttons {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mode-btn {
@@ -2673,17 +2675,6 @@ body {
   color: rgba(226, 232, 240, 0.9);
 }
 
-.mode-btn--lobby {
-  background: transparent;
-  min-height: 96px;
-  padding: 6px 4px 8px;
-  gap: 4px;
-}
-
-.mode-btn--lobby:hover:not(:disabled) {
-  transform: none;
-}
-
 .mode-btn-label {
   font-size: 0.72rem;
   font-weight: 600;
@@ -2695,50 +2686,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 0;
-}
-
-.mode-btn:not(.mode-btn--lobby) .mode-btn-icon {
-  width: 48px;
-  height: 48px;
-}
-
-.mode-btn--lobby .mode-btn-icon {
-  width: 64px;
-  height: 64px;
-}
-
-.mode-btn-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  pointer-events: none;
-  user-select: none;
-  opacity: 0.88;
-  filter: saturate(0.92);
-  transform: scale(0.92);
-  transform-origin: center bottom;
-  transition:
-    opacity var(--transition-fast),
-    filter var(--transition-fast),
-    transform 180ms ease;
-}
-
-.mode-btn:not(.mode-btn--lobby) .mode-btn-thumb {
-  transform: scale(0.94);
-}
-
-.mode-btn--lobby:hover:not(:disabled):not(.active) .mode-btn-thumb {
-  opacity: 0.95;
-  filter: saturate(1);
-  transform: scale(1);
-}
-
-.mode-btn:hover:not(:disabled):not(.active):not(.mode-btn--lobby) .mode-btn-thumb {
-  opacity: 0.95;
-  filter: saturate(1);
-  transform: scale(1);
 }
 
 .mode-grid {
@@ -2756,27 +2703,8 @@ body {
 }
 
 .mode-btn.active {
-  color: var(--accent);
-}
-
-.mode-btn--lobby.active {
-  outline: none;
-}
-
-.mode-btn--lobby.active .mode-btn-thumb {
-  opacity: 1;
-  filter: saturate(1.12) drop-shadow(0 0 8px rgba(251, 191, 36, 0.5));
-  transform: scale(1.15);
-}
-
-.mode-btn.active:not(.mode-btn--lobby) {
   outline: 2px solid var(--accent);
-}
-
-.mode-btn.active:not(.mode-btn--lobby) .mode-btn-thumb {
-  opacity: 1;
-  filter: saturate(1.08);
-  transform: scale(1.02);
+  color: var(--accent);
 }
 
 .mode-btn.active .mode-grid-cell {

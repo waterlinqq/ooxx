@@ -14,8 +14,6 @@ import { bakeUnitThumbnail, UNIT_THUMB_SIZE } from '../js/board3d/UnitThumbnails
 import { bakeItemThumbnail, bakeMapPropThumbnail, ITEM_THUMB_SIZE } from '../js/board3d/ItemThumbnails.js';
 import { bakeNavThumbnail, NAV_THUMB_SIZE } from '../js/board3d/NavThumbnails.js';
 import { bakeSideThumbnail, SIDE_THUMB_SIZE } from '../js/board3d/SideIconThumbnails.js';
-import { MODE_ICON_IDS } from '../js/board3d/ModeIconModels.js';
-import { bakeModeThumbnail, MODE_THUMB_SIZE } from '../js/board3d/ModeIconThumbnails.js';
 
 await getUnitAssetLoader().init();
 
@@ -65,12 +63,6 @@ const thumbs = {
     size: SIDE_THUMB_SIZE,
     lookAtY: 0.12,
     bakeOne: bakeSideThumbnail,
-  }),
-  modes: await bakeCategory({
-    ids: MODE_ICON_IDS,
-    size: MODE_THUMB_SIZE,
-    lookAtY: 0.12,
-    bakeOne: bakeModeThumbnail,
   }),
 };
 

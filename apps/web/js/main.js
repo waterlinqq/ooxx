@@ -4,8 +4,6 @@ import { CharacterPreviewScene } from './board3d/CharacterPreviewScene.js';
 import { fillUnitIcon, fillCopyCardIcon, fillFragmentCardIcon } from './board3d/UnitThumbnails.js';
 import { applyNavIcons } from './board3d/NavThumbnails.js';
 import { NAV_ICON_IDS } from './board3d/NavIconModels.js';
-import { MODE_ICON_IDS } from './board3d/ModeIconModels.js';
-import { createModeThumbIcon } from './board3d/ModeIconThumbnails.js';
 import { applySideIcons } from './board3d/SideIconThumbnails.js';
 import { SIDE_ICON_IDS } from './board3d/SideIconModels.js';
 import { NavIconAnimator } from './board3d/NavIconAnimator.js';
@@ -738,7 +736,6 @@ const unitThumbnails = createThumbnailMap(Object.keys(CLASSES), 'units');
 const itemThumbnails = createThumbnailMap(ITEM_IDS, 'items');
 const mapPropThumbnails = createThumbnailMap(MAP_PROP_KINDS, 'map-props');
 const navThumbnails = createThumbnailMap(NAV_ICON_IDS, 'nav');
-const modeThumbnails = createThumbnailMap(MODE_ICON_IDS, 'modes');
 applyNavIcons(bottomNavEl, navThumbnails);
 const sideThumbnails = createThumbnailMap(SIDE_ICON_IDS, 'side');
 applySideIcons(lobbyContentEl, sideThumbnails);
@@ -1772,7 +1769,7 @@ function syncOnlineTimers(state) {
 
 function createModeGridIcon(size) {
   const wrap = document.createElement('span');
-  wrap.className = 'mode-btn-icon mode-btn-icon--fallback';
+  wrap.className = 'mode-btn-icon';
   wrap.setAttribute('aria-hidden', 'true');
 
   const grid = document.createElement('span');
@@ -1789,16 +1786,13 @@ function createModeGridIcon(size) {
   return wrap;
 }
 
-function createModeButton(mode, isActive, canPick, onSelect, { lobby = false } = {}) {
+function createModeButton(mode, isActive, canPick, onSelect) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'btn mode-btn' + (isActive ? ' active' : '') + (lobby ? ' mode-btn--lobby' : '');
+  btn.className = 'btn mode-btn' + (isActive ? ' active' : '');
   btn.dataset.mode = mode.id;
   btn.setAttribute('aria-label', mode.label);
-
-  const thumbSrc = modeThumbnails.get(mode.id);
-  btn.appendChild(thumbSrc ? createModeThumbIcon(mode.id, thumbSrc) : createModeGridIcon(mode.size));
-
+  btn.appendChild(createModeGridIcon(mode.size));
   const label = document.createElement('span');
   label.className = 'mode-btn-label';
   label.textContent = mode.label;
@@ -1870,7 +1864,6 @@ function renderModePicker(state) {
         game.syncFormationMode(mode.id);
         render(getAppState());
       },
-      { lobby: true },
     ));
   }
 }
