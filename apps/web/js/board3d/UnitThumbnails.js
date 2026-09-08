@@ -1,4 +1,5 @@
 import { buildUnitModel, disposeUnitMaterials } from './UnitModels.js';
+import { getUnitAssetLoader } from './units/UnitAssetLoader.js';
 import {
   PREVIEW_ROTATION_Y,
   setupBakeScene,
@@ -13,6 +14,7 @@ const UNIT_BASE_Y = 0.072;
 const FRAME_PADDING = 1.06;
 
 function disposeModel(model) {
+  model.animation?.dispose?.();
   model.root.traverse((obj) => {
     if (obj.geometry && !obj.geometry.userData?.shared) {
       obj.geometry.dispose();
@@ -22,9 +24,13 @@ function disposeModel(model) {
 }
 
 export function bakeUnitThumbnail(renderer, scene, camera, classId) {
-  const model = buildUnitModel(classId, 'blue');
+  const loader = getUnitAssetLoader();
+  const model = loader.canInstantiate(classId)
+    ? loader.instantiate(classId, 'blue')
+    : buildUnitModel(classId, 'blue');
   if (model.ring) model.ring.visible = false;
   if (model.shadow) model.shadow.visible = false;
+  model.animation?.dispose?.();
 
   model.root.position.set(0, UNIT_BASE_Y, 0);
   model.body.rotation.y = PREVIEW_ROTATION_Y;

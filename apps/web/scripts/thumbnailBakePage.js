@@ -1,4 +1,5 @@
 import { CLASS_IDS } from '@ooxx/shared/units.js';
+import { getUnitAssetLoader } from '../js/board3d/units/UnitAssetLoader.js';
 import { ITEM_IDS } from '../js/items.js';
 import { MAP_PROP_KINDS } from '../js/mapProps.js';
 import { NAV_ICON_IDS } from '../js/board3d/NavIconModels.js';
@@ -13,6 +14,8 @@ import { bakeUnitThumbnail, UNIT_THUMB_SIZE } from '../js/board3d/UnitThumbnails
 import { bakeItemThumbnail, bakeMapPropThumbnail, ITEM_THUMB_SIZE } from '../js/board3d/ItemThumbnails.js';
 import { bakeNavThumbnail, NAV_THUMB_SIZE } from '../js/board3d/NavThumbnails.js';
 import { bakeSideThumbnail, SIDE_THUMB_SIZE } from '../js/board3d/SideIconThumbnails.js';
+
+await getUnitAssetLoader().init();
 
 async function bakeCategory({ ids, size, lookAtY, bakeOne }) {
   const renderer = createBakeRenderer(size, size);

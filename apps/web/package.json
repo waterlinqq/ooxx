@@ -5,7 +5,9 @@
   "scripts": {
     "thumbnails": "node scripts/generateThumbnails.mjs",
     "bake-units": "node scripts/bakeUnitGlbs.mjs",
-    "rig-swordsman": "node scripts/rigSwordsman.mjs",
+    "rig-units": "node scripts/rigUnits.mjs",
+    "bake-all": "npm run bake-units && npm run rig-units && npm run thumbnails",
+    "unit-preview": "vite --open /scripts/unitPreviewPage.html",
     "dev": "vite",
     "prebuild": "npm run thumbnails",
     "build": "vite build",

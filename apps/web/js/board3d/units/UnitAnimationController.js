@@ -7,19 +7,21 @@ export class UnitAnimationController {
   constructor(root, animations = [], clipMap = {}) {
     this.root = root;
     this.clipMap = clipMap;
-    this.mixer = animations.length ? new THREE.AnimationMixer(root) : null;
+    this.mixer = null;
     this.actions = new Map();
     this.current = null;
     this.currentName = null;
     this.walkWeight = 0;
+    this.hasClips = false;
 
     for (const [logicalName, gltfName] of Object.entries(clipMap)) {
       const clip = animations.find((entry) => entry.name === gltfName);
-      if (!clip || !this.mixer) continue;
+      if (!clip?.tracks?.length) continue;
+      if (!this.mixer) this.mixer = new THREE.AnimationMixer(root);
       this.actions.set(logicalName, this.mixer.clipAction(clip));
     }
 
-    this.hasClips = this.actions.size > 0;
+    this.hasClips = this._clipsArePlayable();
     if (this.hasClips) {
       this.mixer.addEventListener('finished', (event) => {
         if (!event.action || event.action.getLoop() === THREE.LoopRepeat) return;
@@ -34,6 +36,13 @@ export class UnitAnimationController {
     return this.hasClips;
   }
 
+  _clipsArePlayable() {
+    const idle = this.actions.get('idle')?.getClip();
+    const walk = this.actions.get('walk')?.getClip();
+    const attack = this.actions.get('attackMelee')?.getClip() ?? this.actions.get('attackRanged')?.getClip();
+    return Boolean(idle?.tracks?.length && walk?.tracks?.length && attack?.tracks?.length);
+  }
+
   resumeLocomotion() {
     this.setLocomotion(this.walkWeight);
   }
@@ -43,8 +52,8 @@ export class UnitAnimationController {
     if (!next || !this.mixer) return false;
     if (this.currentName === name && next.isRunning() && (loop || !next.paused)) return true;
 
-    for (const action of this.actions.values()) {
-      action.enabled = true;
+    for (const [clipName, action] of this.actions) {
+      action.enabled = clipName === name;
     }
 
     next.reset();
@@ -69,6 +78,10 @@ export class UnitAnimationController {
     const walk = this.actions.get('walk');
     const idle = this.actions.get('idle');
     if (!walk || !idle) return;
+
+    for (const [name, action] of this.actions) {
+      action.enabled = name === 'idle' || name === 'walk';
+    }
 
     const weight = this.walkWeight;
     idle.enabled = true;

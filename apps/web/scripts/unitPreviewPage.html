@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unit GLB Preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1220;
+        --panel: #111827;
+        --border: #1f2937;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, sans-serif;
+      }
+
+      #app {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        height: 100%;
+      }
+
+      #canvas-host {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      #canvas-host canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #status {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.82);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+        pointer-events: none;
+      }
+
+      #panel {
+        border-left: 1px solid var(--border);
+        background: var(--panel);
+        overflow: auto;
+        padding: 16px;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .subtitle {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      fieldset {
+        margin: 0 0 14px;
+        padding: 10px 12px 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+
+      legend {
+        padding: 0 4px;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      select, button {
+        width: 100%;
+        margin-top: 4px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #0f172a;
+        color: var(--text);
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+        background: #1e293b;
+      }
+
+      button:hover { background: #334155; }
+      button.primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: #fff;
+      }
+      button.primary:hover { background: var(--accent-hover); }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .checks {
+        display: grid;
+        gap: 6px;
+      }
+
+      .checks label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        color: var(--text);
+      }
+
+      .checks input { margin: 0; }
+
+      #materials {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 11px;
+        color: var(--muted);
+        max-height: 220px;
+        overflow: auto;
+      }
+
+      #materials li { margin-bottom: 4px; }
+
+      .swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: middle;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      @media (max-width: 860px) {
+        #app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+        #panel { border-left: none; border-top: 1px solid var(--border); max-height: 42vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="canvas-host">
+        <div id="status">載入中…</div>
+      </div>
+      <aside id="panel">
+        <h1>Unit GLB Preview</h1>
+        <p class="subtitle">與棋盤相同的 GLB 載入管線，可單獨或一次渲染全部職業。</p>
+
+        <fieldset>
+          <legend>顯示</legend>
+          <label>
+            模式
+            <select id="viewMode">
+              <option value="single">單一職業</option>
+              <option value="all">全部職業</option>
+            </select>
+          </label>
+          <label id="classLabel">
+            職業
+            <select id="classId"></select>
+          </label>
+          <label>
+            來源
+            <select id="source">
+              <option value="glb">GLB（遊戲管線）</option>
+              <option value="procedural">Procedural（圖鑑管線）</option>
+              <option value="split">並排對照</option>
+            </select>
+          </label>
+          <label>
+            隊伍色
+            <select id="team">
+              <option value="blue">藍隊</option>
+              <option value="red">紅隊</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>動畫</legend>
+          <label>
+            Clip
+            <select id="clip">
+              <option value="idle">idle</option>
+              <option value="walk">walk</option>
+              <option value="attackMelee">attackMelee</option>
+              <option value="attackRanged">attackRanged</option>
+              <option value="acted">acted</option>
+              <option value="spawn">spawn</option>
+            </select>
+          </label>
+          <div class="row">
+            <button type="button" id="playClip">播放</button>
+            <button type="button" id="stopClip">停止</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>檢視</legend>
+          <div class="checks">
+            <label><input type="checkbox" id="autoRotate" checked /> 自動旋轉</label>
+            <label><input type="checkbox" id="wireframe" /> 線框</label>
+            <label><input type="checkbox" id="showGround" checked /> 地面</label>
+            <label><input type="checkbox" id="showShadow" checked /> 影子</label>
+            <label><input type="checkbox" id="showRing" checked /> 隊伍光圈</label>
+          </div>
+          <button type="button" id="resetCamera" style="margin-top:10px">重置鏡頭</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>材質</legend>
+          <ul id="materials"></ul>
+        </fieldset>
+      </aside>
+    </div>
+    <script type="module" src="./unitPreviewPage.js"></script>
+  </body>
+</html>

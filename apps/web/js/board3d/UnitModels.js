@@ -1227,13 +1227,17 @@ function buildViper(mats) {
     emissive: 0x0b3319,
     emissiveIntensity: 0.28,
   });
+  scaleMat.name = 'viperBody';
   const scaleDeepMat = standard(0x15602f, { roughness: 0.58, metalness: 0.1 });
+  scaleDeepMat.name = 'viperBodyDeep';
   const bellyMat = standard(0xe8dfa2, { roughness: 0.72, metalness: 0.04 });
+  bellyMat.name = 'belly';
   const poisonMat = standard(0x86efac, {
     roughness: 0.3,
     emissive: 0x22c55e,
     emissiveIntensity: 1.1,
   });
+  poisonMat.name = 'poison';
   const extraMaterials = [scaleMat, scaleDeepMat, bellyMat, poisonMat];
 
   part(group, viperCoilGeometry(), scaleMat);
@@ -1953,6 +1957,8 @@ function buildGhost(mats) {
     opacity: 0.78,
     side: THREE.DoubleSide,
   });
+  gauze.name = 'cloth';
+  gauze.userData.preserveTransparent = true;
   const gauzeDeep = standard(base.clone().lerp(new THREE.Color(0x0b1220), 0.42), {
     roughness: 0.92,
     metalness: 0,
@@ -1960,10 +1966,13 @@ function buildGhost(mats) {
     opacity: 0.7,
     side: THREE.DoubleSide,
   });
+  gauzeDeep.name = 'armorDeep';
+  gauzeDeep.userData.preserveTransparent = true;
   const voidMat = standard(0x050a14, {
     roughness: 0.98,
     metalness: 0,
   });
+  voidMat.name = 'charcoal';
   const extraMaterials = [gauze, gauzeDeep, voidMat];
 
   // The wraith floats, so the shroud starts well clear of the tile and the
@@ -2179,26 +2188,33 @@ function buildCrabGeneral(mats) {
     emissive: teamBase.clone().lerp(shadowTone, 0.45),
     emissiveIntensity: 0.34,
   });
+  shellMat.name = 'armor';
   const shellDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.5), {
     roughness: 0.52,
     metalness: 0.26,
   });
+  shellDeepMat.name = 'armorDeep';
   const clawMat = standard(teamBase.clone().lerp(warm, 0.14), {
     roughness: 0.4,
     metalness: 0.16,
     emissive: teamBase.clone().lerp(shadowTone, 0.5),
     emissiveIntensity: 0.2,
   });
+  clawMat.name = 'armor';
   const clawDeepMat = standard(teamBase.clone().lerp(shadowTone, 0.36), {
     roughness: 0.46,
     metalness: 0.24,
   });
+  clawDeepMat.name = 'armorDeep';
   const legMat = standard(teamBase.clone().lerp(shadowTone, 0.62), {
     roughness: 0.66,
     metalness: 0.18,
   });
+  legMat.name = 'armorDeep';
   const jointMat = standard(0x2b2233, { roughness: 0.6, metalness: 0.24 });
+  jointMat.name = 'charcoal';
   const bellyMat = standard(0xf6dcb8, { roughness: 0.8, metalness: 0.04 });
+  bellyMat.name = 'belly';
   const extraMaterials = [shellMat, shellDeepMat, clawMat, clawDeepMat, legMat, jointMat, bellyMat];
 
   const body = new THREE.Group();

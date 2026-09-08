@@ -71,13 +71,23 @@ function captureRest(node) {
   };
 }
 
+function legPivot(pivot) {
+  return pivot?.node ?? pivot ?? null;
+}
+
 function captureLegs(legs) {
   if (!legs) return null;
   return {
     thigh: legs.thigh,
     shin: legs.shin,
-    left: { hip: captureRest(legs.left.hip), knee: captureRest(legs.left.knee) },
-    right: { hip: captureRest(legs.right.hip), knee: captureRest(legs.right.knee) },
+    left: {
+      hip: captureRest(legPivot(legs.left?.hip)),
+      knee: captureRest(legPivot(legs.left?.knee)),
+    },
+    right: {
+      hip: captureRest(legPivot(legs.right?.hip)),
+      knee: captureRest(legPivot(legs.right?.knee)),
+    },
   };
 }
 
@@ -527,7 +537,7 @@ export class UnitMeshManager {
       if (material.userData.skipTint) continue;
       const base = material.userData.baseOpacity ?? 1;
       material.opacity = base * fade;
-      material.transparent = material.opacity < 1;
+      material.transparent = material.opacity < 0.999;
     }
   }
 

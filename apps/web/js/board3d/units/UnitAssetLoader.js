@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../../assets/units/manifest.json';
-import { applyTeamTintToMaterials, collectMeshMaterials } from './teamTint.js';
+import { applyTeamTintToMaterials, collectMeshMaterials, normalizeGltfMaterials, finalizeGltfMeshes } from './teamTint.js';
 import {
   resolveRigFromScene,
   findBodyNode,
@@ -14,13 +14,21 @@ const gltfLoader = new GLTFLoader();
 const templateCache = new Map();
 
 function cloneMeshMaterials(root) {
+  const bySlot = new Map();
   root.traverse((child) => {
     if (!child.isMesh) return;
+    const share = (material) => {
+      if (!material) return material;
+      const slot = material.name ?? '';
+      const key = slot || material.uuid;
+      if (!bySlot.has(key)) bySlot.set(key, material.clone());
+      return bySlot.get(key);
+    };
     if (Array.isArray(child.material)) {
-      child.material = child.material.map((material) => material.clone());
+      child.material = child.material.map(share);
       return;
     }
-    child.material = child.material.clone();
+    child.material = share(child.material);
   });
 }
 
@@ -71,11 +79,14 @@ class UnitAssetLoader {
     cloneMeshMaterials(root);
 
     const materials = collectMeshMaterials(root);
+    normalizeGltfMaterials(materials);
     applyTeamTintToMaterials(materials, team, spec.teamTintMaterials);
+    finalizeGltfMeshes(root);
 
     const body = findBodyNode(root);
     const shadow = findShadowNode(root);
     const ring = findRingNode(root);
+    if (shadow) shadow.renderOrder = 1;
     const rig = resolveRigFromScene(root, classId, spec.legSegments ?? null);
     const animation = new UnitAnimationController(root, gltf.animations ?? [], spec.clips ?? {});
 
