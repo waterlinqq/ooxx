@@ -358,7 +358,28 @@ export class LimitedOrbitControls {
     this.onChange?.();
   }
 
+  releasePointers() {
+    for (const pointerId of [...this.pointers.keys()]) {
+      try {
+        if (this.domElement.hasPointerCapture?.(pointerId)) {
+          this.domElement.releasePointerCapture(pointerId);
+        }
+      } catch {
+        // The element may already be detached or the capture expired.
+      }
+    }
+    this.pointers.clear();
+    this.orbitDrag = null;
+    this.pinch = null;
+  }
+
+  setEnabled(enabled) {
+    this.enabled = Boolean(enabled);
+    if (!this.enabled) this.releasePointers();
+  }
+
   reset() {
+    this.releasePointers();
     this.azimuth = 0;
     this.polar = 0;
     this.zoom = 1;

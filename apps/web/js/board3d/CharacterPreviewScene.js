@@ -45,12 +45,12 @@ const COMPACT_ORBIT = {
 };
 const EXPANDED_ORBIT = {
   primaryOrbit: true,
-  minAzimuth: -Infinity,
-  maxAzimuth: Infinity,
-  minPolar: -0.7,
-  maxPolar: 0.9,
-  minZoom: 0.5,
-  maxZoom: 2.4,
+  minAzimuth: -0.38,
+  maxAzimuth: 0.38,
+  minPolar: -0.16,
+  maxPolar: 0.18,
+  minZoom: 0.78,
+  maxZoom: 1.22,
 };
 const RANGE_Y = 0.047;
 const PREVIEW_BOX = new THREE.Box3();
@@ -176,7 +176,7 @@ export class CharacterPreviewScene {
       onChange: () => this.applyOrbitZoom(),
     });
     this.orbitControls.applySettings(COMPACT_ORBIT);
-    this.orbitControls.enabled = false;
+    this.orbitControls.setEnabled(false);
 
     this.layoutFrustum = null;
     this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'codex') : null;
@@ -610,7 +610,7 @@ export class CharacterPreviewScene {
 
   syncOrbitEnabled() {
     if (!this.orbitControls) return;
-    this.orbitControls.enabled = this.visible && this.expanded;
+    this.orbitControls.setEnabled(this.visible && this.expanded);
   }
 
   setExpanded(expanded) {

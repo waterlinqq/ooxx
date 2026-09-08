@@ -785,12 +785,16 @@ function setCodexPreviewExpanded(expanded) {
 }
 
 function syncCodexPreviewChrome() {
-  const showUnit3d = activeNav === 'codex' && activeCodexTab === 'units';
+  const onCodex = activeNav === 'codex';
+  const showUnit3d = onCodex && activeCodexTab === 'units';
   codexPreviewHostEl?.classList.toggle('preview-expanded', codexPreviewExpanded);
   codexPreviewHostEl?.classList.toggle('codex-preview-interactive', showUnit3d && !codexPreviewExpanded);
   document.body.classList.toggle('codex-preview-expanded', codexPreviewExpanded);
   codexPreviewCloseEl?.classList.toggle('hidden', !codexPreviewExpanded);
   codexPreviewHintEl?.classList.toggle('hidden', !codexPreviewExpanded);
+  if (codexPreviewHostEl) {
+    codexPreviewHostEl.style.pointerEvents = onCodex ? '' : 'none';
+  }
 }
 
 function updateCodexPreviewVisibility() {
@@ -1103,6 +1107,7 @@ function createClassInspectBtn(classId, className) {
   btn.setAttribute('aria-label', `查看 ${className} 圖鑑`);
   btn.innerHTML = uiIconSvg('inspect');
   btn.addEventListener('click', (event) => {
+    event.preventDefault();
     event.stopPropagation();
     openCodexForClass(classId);
   });
