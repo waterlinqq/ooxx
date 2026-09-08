@@ -17,11 +17,8 @@ import { attachDevRendererStats } from './DevRendererStats.js';
 import {
   LimitedOrbitControls,
   isTouchDevice,
-  isValidLayoutBounds,
-  fitLayoutBoundsToAspect,
-  projectBoxToCameraBounds,
-  applyOrbitFrustumZoom,
 } from './LimitedOrbitControls.js';
+import { BOARD_CAM } from './CameraFacing.js';
 import {
   isScene3dDebugEnabled,
   Scene3dDebugHud,
@@ -48,8 +45,75 @@ const SURVIVAL_BORDER_MARGIN = 1;
 const TILE_HALF_HEIGHT = 0.07;
 const CONTENT_BOX = new THREE.Box3();
 const TMP_VIEW = new THREE.Vector3();
+const TMP_LOOK = new THREE.Vector3();
+const TMP_DIR = new THREE.Vector3();
 
 let grassTexture = null;
+
+function createSkyDome() {
+  const geometry = new THREE.SphereGeometry(48, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.58);
+  const pos = geometry.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const zenith = new THREE.Color(0x5a7e90);
+  const horizon = new THREE.Color(0x6a7a70);
+  const groundHaze = new THREE.Color(0x3a4540);
+
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const t = THREE.MathUtils.clamp(y / 18, 0, 1);
+    const color = horizon.clone().lerp(zenith, t * t);
+    if (y < 3) {
+      color.lerp(groundHaze, THREE.MathUtils.clamp(1 - (y + 2) / 5, 0, 1));
+    }
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.BackSide,
+      fog: false,
+      depthWrite: false,
+    }),
+  );
+  mesh.name = 'skyDome';
+  mesh.position.y = -0.5;
+  mesh.renderOrder = -10;
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+function createRollingLawnGeometry() {
+  const geometry = new THREE.PlaneGeometry(40, 40, 32, 32);
+  const pos = geometry.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const inner = 3.4;
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const radius = Math.hypot(x, y);
+    let rise = 0;
+    if (radius > inner) {
+      const t = Math.min(1, (radius - inner) / 8);
+      rise = Math.sin(x * 0.42) * Math.cos(y * 0.36) * 0.2 * t
+        + Math.sin(x * 0.9 + y * 0.35) * 0.06 * t;
+      pos.setZ(i, rise);
+    }
+    const shade = 0.86 + rise * 0.9 + ((Math.sin(x * 2.1) + Math.cos(y * 1.7)) * 0.03);
+    colors[i * 3] = shade * 0.96;
+    colors[i * 3 + 1] = shade;
+    colors[i * 3 + 2] = shade * 0.88;
+  }
+
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
 function createGrassTexture() {
   if (grassTexture) return grassTexture;
@@ -59,18 +123,22 @@ function createGrassTexture() {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#3f7040';
+  ctx.fillStyle = '#6a7048';
   ctx.fillRect(0, 0, size, size);
 
-  // Broad mown patches first, then fine blades on top, so the lawn has large
-  // scale variation instead of uniform noise that vanishes at this camera range.
+  // Earth / sand patches first so the lawn is not a single green slab.
   for (let i = 0; i < 70; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
     const r = 14 + Math.random() * 40;
-    const light = Math.random() > 0.5;
+    const kind = Math.random();
     const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, light ? 'rgba(96,140,84,0.3)' : 'rgba(38,74,44,0.32)');
+    const fill = kind > 0.62
+      ? 'rgba(196,180,130,0.38)'
+      : kind > 0.32
+        ? 'rgba(110,120,72,0.3)'
+        : 'rgba(58,70,44,0.28)';
+    grad.addColorStop(0, fill);
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
@@ -99,25 +167,17 @@ export class BoardScene {
     this.callbacks = callbacks;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x101820);
-    this.scene.fog = new THREE.Fog(0x121c18, 14, 30);
+    this.scene.background = new THREE.Color(0x3a4a48);
+    this.scene.fog = new THREE.Fog(0x3a4a48, 16, 46);
 
     const width = containerEl.clientWidth || 480;
     const height = containerEl.clientHeight || 480;
     const aspect = width / height;
-    this.frustumBase = 4.2;
+    this.frustumBase = BOARD_CAM.pos.length();
 
-    this.camera = new THREE.OrthographicCamera(
-      (-this.frustumBase * aspect) / 2,
-      (this.frustumBase * aspect) / 2,
-      this.frustumBase / 2,
-      -this.frustumBase / 2,
-      0.1,
-      100
-    );
-    // Front-facing tilt (Z axis) so square tiles read upright on screen, not as diamonds.
-    this.camera.position.set(0, 8.5, 8);
-    this.camera.lookAt(0, 0, 0);
+    this.camera = new THREE.PerspectiveCamera(BOARD_CAM.fov, aspect, 0.4, 100);
+    this.camera.position.copy(BOARD_CAM.pos);
+    this.camera.lookAt(BOARD_CAM.lookAt);
 
     this.renderer = new THREE.WebGLRenderer(webglRendererOptions());
     this.renderer.setPixelRatio(webglPixelRatio());
@@ -140,7 +200,7 @@ export class BoardScene {
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
     this.scene.add(this.ambientLight);
 
-    this.skyLight = new THREE.HemisphereLight(0xc8dcc8, 0x243828, 0.65);
+    this.skyLight = new THREE.HemisphereLight(0xc8d4dc, 0x3a3428, 0.65);
     this.scene.add(this.skyLight);
 
     this.keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
@@ -171,13 +231,18 @@ export class BoardScene {
     this.rimLight.position.set(-6, 4, 7);
     this.scene.add(this.rimLight);
 
+    this.skyDome = createSkyDome();
+    this.scene.add(this.skyDome);
+
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(24, 24),
+      createRollingLawnGeometry(),
       new THREE.MeshStandardMaterial({
-        color: 0x40733f,
+        color: 0x6a7048,
         map: createGrassTexture(),
         roughness: 1,
         metalness: 0,
+        vertexColors: true,
+        flatShading: false,
       })
     );
     ground.rotation.x = -Math.PI / 2;
@@ -324,34 +389,15 @@ export class BoardScene {
     ];
   }
 
-  fallbackContentBounds() {
+  fallbackContentBox() {
+    CONTENT_BOX.makeEmpty();
     this.boardPivot.updateMatrixWorld(true);
-    this.camera.updateMatrixWorld();
-    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
     for (const point of this.contentGroundPoints()) {
       for (const y of [-TILE_HALF_HEIGHT, CONTENT_HEIGHT]) {
-        TMP_VIEW.set(point.x, y, point.z)
-          .applyMatrix4(this.boardPivot.matrixWorld)
-          .applyMatrix4(this.camera.matrixWorldInverse);
-        minX = Math.min(minX, TMP_VIEW.x);
-        maxX = Math.max(maxX, TMP_VIEW.x);
-        minY = Math.min(minY, TMP_VIEW.y);
-        maxY = Math.max(maxY, TMP_VIEW.y);
+        TMP_VIEW.set(point.x, y, point.z).applyMatrix4(this.boardPivot.matrixWorld);
+        CONTENT_BOX.expandByPoint(TMP_VIEW);
       }
     }
-
-    return {
-      centerX: (minX + maxX) / 2,
-      centerY: (minY + maxY) / 2,
-      halfW: ((maxX - minX) / 2 + FRAME_PADDING) * this.framingHeadroom(),
-      halfH: ((maxY - minY) / 2 + FRAME_PADDING) * this.framingHeadroom(),
-    };
   }
 
   framingHeadroom() {
@@ -371,69 +417,85 @@ export class BoardScene {
     );
   }
 
-  // Fit the board in camera view; includes current pivot orbit rotation/scale.
-  // Use tile geometry only — unit hover/selection animation shifts bounding boxes
-  // and would jitter the frame if included here.
-  contentBounds() {
+  refreshContentBox() {
     this.boardPivot.updateMatrixWorld(true);
 
     if (this.survivalMode && this.boardSize > 2) {
       this.survivalInnerBox();
-    } else {
-      CONTENT_BOX.makeEmpty();
-      if (this.tileGrid.group.children.length) {
-        CONTENT_BOX.expandByObject(this.tileGrid.group);
-      }
+      return;
     }
 
-    const headroom = this.framingHeadroom();
-    let bounds = CONTENT_BOX.isEmpty()
-      ? this.fallbackContentBounds()
-      : projectBoxToCameraBounds(CONTENT_BOX, this.camera, FRAME_PADDING, headroom);
-
-    return bounds ?? this.fallbackContentBounds();
+    CONTENT_BOX.makeEmpty();
+    if (this.tileGrid.group.children.length) {
+      CONTENT_BOX.expandByObject(this.tileGrid.group);
+    }
+    if (CONTENT_BOX.isEmpty()) this.fallbackContentBox();
   }
 
-  updateLayoutFrustum() {
-    const width = this.container.clientWidth || this.lastValidWidth;
-    const height = this.container.clientHeight || this.lastValidHeight;
-    if (!width || !height) return false;
-
-    const bounds = this.orbitControls.withNeutralOrbit(() => this.contentBounds());
-    if (!isValidLayoutBounds(bounds)) return false;
-
-    const aspect = width / height;
-    let layout = fitLayoutBoundsToAspect(bounds, aspect);
-
-    // Portrait: expand-fit leaves empty bands above/below. Shrink the frustum
-    // toward the grid until the sides would clip — decor may crop, tiles must not.
-    if (aspect < 0.85) {
-      for (let t = 0.72; t <= 1.001; t += 0.02) {
-        const halfH = Math.max(bounds.halfH, layout.halfH * t);
-        const halfW = halfH * aspect;
-        if (halfW + 1e-4 >= bounds.halfW) {
-          layout = { ...layout, halfH, halfW };
-          break;
+  ndcOverflow(box) {
+    if (!box || box.isEmpty()) return 1;
+    const { min, max } = box;
+    let peak = 0;
+    for (const x of [min.x, max.x]) {
+      for (const y of [min.y, max.y]) {
+        for (const z of [min.z, max.z]) {
+          TMP_VIEW.set(x, y, z).project(this.camera);
+          if (!Number.isFinite(TMP_VIEW.x) || !Number.isFinite(TMP_VIEW.y)) continue;
+          peak = Math.max(peak, Math.abs(TMP_VIEW.x), Math.abs(TMP_VIEW.y));
         }
       }
     }
-
-    if (this.orbitControls && !this.orbitControls.zoomViaScale) {
-      const zoom = Math.min(
-        Math.max(this.orbitControls.zoom, this.orbitControls.minZoom),
-        this.orbitControls.maxZoom,
-      );
-      layout = { ...layout, halfW: layout.halfW * zoom, halfH: layout.halfH * zoom };
-    }
-
-    this.frustumBase = layout.halfH * 2;
-    this.layoutFrustum = layout;
-    return true;
+    return Math.max(peak, 1e-4);
   }
 
   applyOrbitZoom() {
-    this.updateLayoutFrustum();
-    applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
+    const width = this.container.clientWidth || this.lastValidWidth;
+    const height = this.container.clientHeight || this.lastValidHeight;
+    if (!width || !height) return;
+
+    const aspect = width / height;
+    const lookAt = TMP_LOOK.copy(BOARD_CAM.lookAt);
+    const dir = TMP_DIR.copy(BOARD_CAM.pos).sub(lookAt).normalize();
+    const authoredDist = BOARD_CAM.pos.distanceTo(lookAt);
+    let dist = authoredDist;
+    let fov = BOARD_CAM.fov;
+
+    this.orbitControls.withNeutralOrbit(() => this.refreshContentBox());
+    const headroom = this.framingHeadroom() * (1 + FRAME_PADDING);
+    const portraitPad = aspect < 0.85 ? 1.04 : 1;
+    const minFov = 16;
+    const maxFov = 34;
+
+    for (let i = 0; i < 3; i++) {
+      this.camera.aspect = aspect;
+      this.camera.fov = fov;
+      this.camera.position.copy(lookAt).addScaledVector(dir, dist);
+      this.camera.up.set(0, 1, 0);
+      this.camera.lookAt(lookAt);
+      this.camera.updateMatrixWorld(true);
+      this.camera.updateProjectionMatrix();
+
+      const overflow = this.ndcOverflow(CONTENT_BOX) * headroom * portraitPad;
+      if (overflow > 1.001) {
+        const nextFov = fov * overflow;
+        if (nextFov <= maxFov) {
+          fov = nextFov;
+        } else {
+          fov = maxFov;
+          dist = THREE.MathUtils.clamp(dist * (nextFov / maxFov), authoredDist, 40);
+        }
+      } else if (overflow < 0.995) {
+        fov = THREE.MathUtils.clamp(fov * overflow, minFov, maxFov);
+      }
+    }
+
+    this.camera.aspect = aspect;
+    this.camera.fov = fov;
+    this.camera.position.copy(lookAt).addScaledVector(dir, dist);
+    this.camera.lookAt(lookAt);
+    this.camera.updateProjectionMatrix();
+    this.frustumBase = dist;
+    this.layoutFrustum = { centerX: 0, centerY: 0, halfW: dist, halfH: dist };
   }
 
   onResize() {
@@ -461,7 +523,7 @@ export class BoardScene {
     const redTurn = state.phase === 'battle' && state.currentPlayer === 'red';
     this.fillLight.color.setHex(blueTurn ? 0x93c5fd : redTurn ? 0xfca5a5 : 0x64748b);
     this.ambientLight.intensity = blueTurn || redTurn ? 0.46 : 0.42;
-    this.skyLight.color.setHex(blueTurn ? 0xb8d8f0 : redTurn ? 0xf0d0d4 : 0xc8dcc8);
+    this.skyLight.color.setHex(blueTurn ? 0xb8d8f0 : redTurn ? 0xf0d0d4 : 0xc8d4dc);
   }
 
   syncTutorialPointer(state) {
@@ -583,6 +645,7 @@ export class BoardScene {
     const delta = this.clock.getDelta();
     const elapsed = this.clock.elapsedTime;
     this.unitManager.tick(delta, elapsed);
+    this.scenery.tick(elapsed);
     this.mapPropManager.tick();
     this.landmineMarkers.tick(elapsed);
     this.devStats?.begin();
@@ -617,6 +680,12 @@ export class BoardScene {
     this.scenery.clear();
     this.tutorialPointer.dispose();
     this.tileGrid.clear();
+    if (this.skyDome) {
+      this.scene.remove(this.skyDome);
+      this.skyDome.geometry.dispose();
+      this.skyDome.material.dispose();
+      this.skyDome = null;
+    }
     this.highlightSystem.clear();
     this.devStats?.dispose();
     this.renderer.dispose();

@@ -4,7 +4,7 @@ const BUCKET_SPECS = {
   foliage: {
     roughness: 0.95,
     metalness: 0,
-    flatShading: true,
+    flatShading: false,
     vertexColors: true,
   },
   stone: {
@@ -14,9 +14,9 @@ const BUCKET_SPECS = {
     vertexColors: true,
   },
   water: {
-    roughness: 0.18,
-    metalness: 0.13,
-    flatShading: true,
+    roughness: 0.16,
+    metalness: 0.14,
+    flatShading: false,
     vertexColors: true,
   },
   accent: {

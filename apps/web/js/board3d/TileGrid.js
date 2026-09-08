@@ -91,12 +91,6 @@ export function tileWorldPosition(row, col, boardSize) {
   };
 }
 
-function translatedGeometry(geometry, x, y, z) {
-  const copy = geometry.clone();
-  copy.translate(x, y, z);
-  return copy;
-}
-
 // Stable per-cell value in 0..1, so a flagstone keeps its shade across resyncs.
 function cellNoise(row, col) {
   const h = Math.imul(row + 1, 73856093) ^ Math.imul(col + 1, 19349663);
@@ -113,11 +107,25 @@ function tileGeometryAt(row, col) {
   const noise = cellNoise(row, col);
   const colors = geometry.attributes.color;
   const uv = geometry.attributes.uv;
+  const cool = noise > 0.58;
 
-  const shade = 0.88 + noise * 0.22;
-  const warm = 0.97 + noise * 0.06;
+  const shade = 0.84 + noise * 0.26;
+  const warm = cool ? 0.94 : 1.06;
+  const green = cool ? 1.08 : 0.98;
+  const blue = cool ? 1.05 : 0.92;
   for (let i = TOP_VERTEX_START; i < TOP_VERTEX_END; i++) {
-    colors.setXYZ(i, colors.getX(i) * shade * warm, colors.getY(i) * shade, colors.getZ(i) * shade * (1.04 - noise * 0.08));
+    colors.setXYZ(
+      i,
+      colors.getX(i) * shade * warm,
+      colors.getY(i) * shade * green,
+      colors.getZ(i) * shade * blue,
+    );
+  }
+
+  // Sides already read as soil; deepen them so tiles sit in the planter.
+  for (let i = 0; i < colors.count; i++) {
+    if (i >= TOP_VERTEX_START && i < TOP_VERTEX_END) continue;
+    colors.setXYZ(i, colors.getX(i) * 0.78, colors.getY(i) * 0.82, colors.getZ(i) * 0.7);
   }
 
   const flipU = noise > 0.5;
@@ -125,6 +133,9 @@ function tileGeometryAt(row, col) {
   for (let i = TOP_VERTEX_START; i < TOP_VERTEX_END; i++) {
     uv.setXY(i, flipU ? 1 - uv.getX(i) : uv.getX(i), flipV ? 1 - uv.getY(i) : uv.getY(i));
   }
+
+  geometry.rotateY((noise - 0.5) * 0.04);
+  geometry.translate(0, (noise - 0.5) * 0.014, 0);
 
   colors.needsUpdate = true;
   uv.needsUpdate = true;
@@ -134,19 +145,18 @@ function tileGeometryAt(row, col) {
 function buildMergedTileMesh(boardSize) {
   const tilePieces = [];
   const edgePieces = [];
-  const edgeSource = new THREE.EdgesGeometry(TILE_BOX);
 
   for (let r = 0; r < boardSize; r++) {
     for (let c = 0; c < boardSize; c++) {
       const pos = tileWorldPosition(r, c, boardSize);
       const tile = tileGeometryAt(r, c);
+      const edges = new THREE.EdgesGeometry(tile);
       tile.translate(pos.x, pos.y, pos.z);
+      edges.translate(pos.x, pos.y, pos.z);
       tilePieces.push(tile);
-      edgePieces.push(translatedGeometry(edgeSource, pos.x, pos.y, pos.z));
+      edgePieces.push(edges);
     }
   }
-
-  edgeSource.dispose();
 
   const mergedTiles = mergeGeometries(tilePieces, false);
   for (const piece of tilePieces) piece.dispose();

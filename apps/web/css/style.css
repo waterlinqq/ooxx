@@ -39,7 +39,7 @@ body {
 body {
   margin: 0;
   font-family: "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
-  background: radial-gradient(circle at top, #1e3a5f, var(--bg));
+  background: radial-gradient(circle at top, #2a3d36, #152018 55%, var(--bg));
   color: var(--text);
 }
 
@@ -1389,7 +1389,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel);
+  background: #1a2a1e;
   border-radius: 16px;
   padding: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
@@ -3306,6 +3306,9 @@ body {
   gap: 8px;
   padding: 10px 6px 14px;
   overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% 8%, rgba(90, 122, 86, 0.2), transparent 58%),
+    linear-gradient(180deg, #1a261c 0%, #121a16 62%, #0f1720 100%);
 }
 
 .lobby-side {

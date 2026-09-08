@@ -26,6 +26,7 @@ export const NODE = {
   LEG_R_KNEE: 'ooxx:LegR_Knee',
   EYE_STALK_L: 'ooxx:EyeStalkL',
   EYE_STALK_R: 'ooxx:EyeStalkR',
+  BANNER: 'ooxx:Banner',
   SHADOW: 'ooxx:Shadow',
   RING: 'ooxx:TeamRing',
 };
@@ -73,6 +74,7 @@ export function tagRigNodes(model) {
   tag(rig.bowString, NODE.BOW_STRING);
   tag(rig.eyeStalkL, NODE.EYE_STALK_L);
   tag(rig.eyeStalkR, NODE.EYE_STALK_R);
+  tag(rig.banner, NODE.BANNER);
 
   if (rig.legs) {
     tagPivot(rig.legs.left?.hip, NODE.LEG_L_HIP);
@@ -125,6 +127,7 @@ export function resolveRigFromScene(root, classId, legSegments = null) {
     bowString: findNode(root, NODE.BOW_STRING),
     eyeStalkL: findNode(root, NODE.EYE_STALK_L),
     eyeStalkR: findNode(root, NODE.EYE_STALK_R),
+    banner: findNode(root, NODE.BANNER),
   };
 
   const hipL = findNode(root, NODE.LEG_L_HIP);

@@ -1,5 +1,5 @@
 import { Group } from 'three';
-import { buildBoardBorder } from './SceneryModels.js';
+import { buildBoardBorder, buildHorizonHills } from './SceneryModels.js';
 import { SceneryInstancePool } from './scenery/SceneryInstancePool.js';
 import {
   isSceneryInstanceKind,
@@ -67,6 +67,27 @@ function buildInstanceDecor(pool, boardSize, slots) {
   }
 }
 
+function tickLiveScenery(root, elapsed) {
+  root.traverse((obj) => {
+    const anim = obj.userData?.sceneryAnim;
+    if (!anim) return;
+    if (anim.type === 'spin') {
+      obj.rotation.y = (anim.baseY ?? 0) + elapsed * anim.speed;
+    } else if (anim.type === 'sway') {
+      const wave = Math.sin(elapsed * anim.speed + (anim.phase ?? 0)) * anim.amount;
+      obj.rotation.z = (anim.baseZ ?? 0) + wave;
+      if (anim.baseX != null) obj.rotation.x = anim.baseX + wave * 0.45;
+    } else if (anim.type === 'water' && obj.material?.color) {
+      const pulse = 0.5 + Math.sin(elapsed * 0.55) * 0.08;
+      obj.material.color.setRGB(
+        anim.baseR * (0.9 + pulse * 0.18),
+        anim.baseG * (0.92 + pulse * 0.12),
+        anim.baseB * (0.94 + pulse * 0.1),
+      );
+    }
+  });
+}
+
 function buildBakedDecor(group, boardSize, slots) {
   const slotRoots = [];
   for (let i = 0; i < slots.length; i++) {
@@ -76,15 +97,18 @@ function buildBakedDecor(group, boardSize, slots) {
 
   const halfExtent = boardHalfExtent(boardSize);
   const border = buildBoardBorder(halfExtent);
+  const horizon = buildHorizonHills();
+
   const baked = buildBakedSceneryGroup({
     borderRoot: border?.root ?? null,
-    slotRoots,
+    slotRoots: [...slotRoots, horizon.root],
   });
 
   group.add(baked);
 
   for (const root of slotRoots) disposeBakedSource(root);
   if (border?.root) disposeBakedSource(border.root);
+  disposeBakedSource(horizon.root);
 
   return baked;
 }
@@ -120,6 +144,8 @@ export class BoardSceneryManager {
 
     const border = buildBoardBorder(halfExtent);
     if (border?.root) this.group.add(border.root);
+    const horizon = buildHorizonHills();
+    if (horizon?.root) this.group.add(horizon.root);
 
     buildInstanceDecor(this.instancePool, boardSize, slots);
 
@@ -156,5 +182,9 @@ export class BoardSceneryManager {
       });
     }
     this.boardSize = 0;
+  }
+
+  tick(elapsed) {
+    tickLiveScenery(this.group, elapsed);
   }
 }

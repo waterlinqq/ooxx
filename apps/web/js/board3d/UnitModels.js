@@ -328,15 +328,15 @@ function eagleFeatherGeometry(length, width, thickness = 0.012) {
 function shieldGeometry() {
   return cached('tower-shield', () => {
     const shape = new THREE.Shape();
-    shape.moveTo(-0.15, 0.16);
-    shape.quadraticCurveTo(-0.15, 0.23, -0.06, 0.23);
-    shape.lineTo(0.06, 0.23);
-    shape.quadraticCurveTo(0.15, 0.23, 0.15, 0.16);
-    shape.lineTo(0.15, -0.08);
-    shape.quadraticCurveTo(0.15, -0.16, 0, -0.24);
-    shape.quadraticCurveTo(-0.15, -0.16, -0.15, -0.08);
-    shape.lineTo(-0.15, 0.16);
-    return extrude(shape, 0.045, 0.01);
+    shape.moveTo(-0.18, 0.2);
+    shape.quadraticCurveTo(-0.18, 0.28, -0.08, 0.28);
+    shape.lineTo(0.08, 0.28);
+    shape.quadraticCurveTo(0.18, 0.28, 0.18, 0.2);
+    shape.lineTo(0.18, -0.08);
+    shape.quadraticCurveTo(0.18, -0.2, 0, -0.3);
+    shape.quadraticCurveTo(-0.18, -0.2, -0.18, -0.08);
+    shape.lineTo(-0.18, 0.2);
+    return extrude(shape, 0.055, 0.01);
   });
 }
 
@@ -850,24 +850,47 @@ function addSwordsmanScabbard(parent, mats) {
 // edge-on, as it was, the bow vanished into a single vertical line.
 function buildBow(mats) {
   const bow = new THREE.Group();
-  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.185, 0.015, 5, 14, Math.PI * 1.12)), mats.wood, {
-    rot: [0, 0, Math.PI * 0.44],
+  part(bow, cached('bow-limb', () => new THREE.TorusGeometry(0.205, 0.014, 5, 12, Math.PI * 1.18)), mats.wood, {
+    rot: [0, 0, Math.PI * 0.41],
   });
-  part(bow, cached('bow-grip', () => new THREE.CylinderGeometry(0.022, 0.022, 0.075, 6)), mats.leather, {
-    pos: [-0.183, 0, 0],
-  });
-  const string = part(bow, cached('bow-string', () => new THREE.CylinderGeometry(0.004, 0.004, 0.362, 4)), mats.trim, {
-    pos: [0.035, 0, 0],
+  part(bow, cached('bow-limb-inner', () => new THREE.TorusGeometry(0.198, 0.007, 5, 10, Math.PI * 1.12)), mats.charcoal, {
+    rot: [0, 0, Math.PI * 0.41],
     shadow: false,
   });
-  part(bow, cached('bow-arrow', () => new THREE.CylinderGeometry(0.006, 0.006, 0.3, 6)), mats.wood, {
-    pos: [-0.05, 0.012, 0.012],
+  part(bow, cached('bow-grip', () => new THREE.CylinderGeometry(0.02, 0.022, 0.078, 6)), mats.leather, {
+    pos: [-0.2, 0, 0],
+  });
+  const gripRing = cached('bow-grip-ring', () => new THREE.TorusGeometry(0.022, 0.004, 5, 8));
+  part(bow, gripRing, mats.gold, {
+    pos: [-0.2, 0.03, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(bow, gripRing, mats.gold, {
+    pos: [-0.2, -0.03, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  const tipGeo = cached('bow-tip', () => new THREE.ConeGeometry(0.014, 0.038, 6));
+  part(bow, tipGeo, mats.gold, { pos: [-0.062, 0.188, 0], rot: [0, 0, 0.35] });
+  part(bow, tipGeo, mats.gold, { pos: [-0.062, -0.188, 0], rot: [0, 0, Math.PI - 0.35] });
+  const string = part(bow, cached('bow-string', () => new THREE.CylinderGeometry(0.0035, 0.0035, 0.39, 4)), mats.trim, {
+    pos: [0.042, 0, 0],
+    shadow: false,
+  });
+  part(bow, cached('bow-arrow', () => new THREE.CylinderGeometry(0.0055, 0.0055, 0.32, 5)), mats.wood, {
+    pos: [-0.055, 0.01, 0.012],
     rot: [0, 0, Math.PI / 2],
     shadow: false,
   });
-  part(bow, cached('bow-arrow-head', () => new THREE.ConeGeometry(0.019, 0.055, 7)), mats.steel, {
-    pos: [-0.222, 0.012, 0.012],
+  part(bow, cached('bow-arrow-head', () => new THREE.ConeGeometry(0.018, 0.052, 6)), mats.steel, {
+    pos: [-0.232, 0.01, 0.012],
     rot: [0, 0, -Math.PI / 2],
+    shadow: false,
+  });
+  part(bow, cached('bow-arrow-fletch', () => new THREE.ConeGeometry(0.018, 0.044, 4)), mats.trim, {
+    pos: [0.1, 0.01, 0.012],
+    rot: [0, 0, Math.PI / 2],
     shadow: false,
   });
   return { group: bow, string };
@@ -875,44 +898,255 @@ function buildBow(mats) {
 
 function buildQuiver(mats) {
   const quiver = new THREE.Group();
-  part(quiver, cached('quiver-body', () => new THREE.CylinderGeometry(0.048, 0.042, 0.22, 8)), mats.leather);
-  part(quiver, cached('quiver-band', () => new THREE.TorusGeometry(0.05, 0.008, 5, 12)), mats.gold, {
-    pos: [0, 0.06, 0],
+  part(quiver, cached('quiver-body', () => new THREE.CylinderGeometry(0.046, 0.034, 0.26, 8)), mats.leather);
+  part(quiver, cached('quiver-mouth', () => new THREE.TorusGeometry(0.048, 0.008, 5, 10)), mats.gold, {
+    pos: [0, 0.128, 0],
     rot: [-Math.PI / 2, 0, 0],
   });
-  const shaft = cached('arrow-shaft', () => new THREE.CylinderGeometry(0.005, 0.005, 0.2, 5));
-  const fletch = cached('arrow-fletch', () => new THREE.ConeGeometry(0.02, 0.05, 4));
+  part(quiver, cached('quiver-band', () => new THREE.TorusGeometry(0.042, 0.006, 5, 10)), mats.gold, {
+    pos: [0, 0.02, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(quiver, cached('quiver-base', () => new THREE.CylinderGeometry(0.036, 0.03, 0.02, 8)), mats.charcoal, {
+    pos: [0, -0.134, 0],
+  });
+  part(quiver, trapezoidPlateGeometry(0.05, 0.036, 0.07, 0.012), mats.leather, {
+    pos: [0.04, 0.1, 0],
+    rot: [0, 0, -0.35],
+  });
+  const shaft = cached('arrow-shaft', () => new THREE.CylinderGeometry(0.005, 0.005, 0.19, 5));
+  const fletch = cached('arrow-fletch', () => new THREE.ConeGeometry(0.016, 0.042, 4));
   const spots = [
-    [0, 0.19, 0],
-    [0.026, 0.175, 0.018],
+    [0, 0.214, 0],
+    [0.02, 0.2, 0.016],
+    [-0.016, 0.196, -0.012],
   ];
   spots.forEach(([x, y, z], i) => {
-    part(quiver, shaft, mats.wood, { pos: [x, y, z], rot: [0, 0, i * 0.06 - 0.06] });
-    part(quiver, fletch, mats.trim, { pos: [x, y + 0.11, z] });
+    part(quiver, shaft, mats.wood, { pos: [x, y, z], rot: [0, 0, i * 0.04 - 0.04] });
+    part(quiver, fletch, mats.trim, { pos: [x, y + 0.104, z], shadow: false });
   });
   return quiver;
 }
 
+function addArcherHood(parent, mats) {
+  const hood = new THREE.Group();
+  hood.position.set(0, 0.73, 0);
+  part(hood, cached('archer-hood-shell', () =>
+    new THREE.SphereGeometry(0.132, 12, 8, Math.PI / 2 + 0.88, Math.PI * 2 - 1.76, 0, Math.PI * 0.66)
+  ), mats.cloth, {
+    pos: [0, 0.012, -0.016],
+    scale: [1.02, 0.98, 1.12],
+  });
+  part(hood, cached('archer-hood-drape', () =>
+    new THREE.SphereGeometry(0.114, 10, 7, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.44)
+  ), mats.cloth, {
+    pos: [0, -0.018, -0.072],
+    rot: [0.4, 0, 0],
+    scale: [1.04, 1.65, 0.84],
+  });
+  part(hood, wrapBandGeometry(0.112, 0.11, 0.03, 2.05, 8), mats.leather, {
+    pos: [0, 0.014, 0.008],
+  });
+  part(hood, cached('archer-hood-clasp', () => new THREE.CylinderGeometry(0.012, 0.012, 0.01, 6)), mats.gold, {
+    pos: [0.042, -0.02, 0.1],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(hood, cached('archer-hood-collar', () => new THREE.TorusGeometry(0.1, 0.022, 5, 12)), mats.cloth, {
+    pos: [0, -0.086, -0.008],
+    rot: [-Math.PI / 2 + 0.14, 0, 0],
+    scale: [1.02, 1.06, 1],
+  });
+  part(hood, featherGeometry(0.11, 0.03, 0.008), mats.trim, {
+    pos: [0.04, 0.078, -0.05],
+    rot: [-0.35, 0.85, 0.55],
+  });
+  parent.add(hood);
+  return hood;
+}
+
+function addArcherCloak(parent, mats) {
+  const cloak = new THREE.Group();
+  cloak.position.set(0, 0.5, -0.04);
+  part(cloak, cached('archer-cloak', () =>
+    new THREE.CylinderGeometry(0.145, 0.2, 0.3, 12, 2, true, Math.PI * 0.7, Math.PI * 0.6)
+  ), mats.cloth, {
+    pos: [0, -0.08, -0.01],
+  });
+  part(cloak, cached('archer-cloak-collar', () => new THREE.TorusGeometry(0.098, 0.016, 5, 12, Math.PI * 1.1)), mats.leather, {
+    pos: [0, 0.058, 0.01],
+    rot: [-Math.PI / 2 + 0.18, 0, 0],
+    scale: [1.04, 0.88, 1],
+  });
+  parent.add(cloak);
+}
+
+function addArcherKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.152, 0.136, 0.168, 2.25, 10), mats.cloth, {
+    pos: [0, 0.01, 0],
+    scale: [0.98, 1, 0.8],
+  });
+  part(torso, wrapBandGeometry(0.154, 0.142, 0.108, 1.9, 8), mats.leather, {
+    pos: [0, 0.032, 0],
+    scale: [0.96, 1, 0.82],
+  });
+  part(torso, wrapBandGeometry(0.15, 0.14, 0.034, 2.0, 8), mats.armorDeep, {
+    pos: [0, 0.05, 0],
+    scale: [0.94, 1, 0.82],
+  });
+  part(torso, trapezoidPlateGeometry(0.036, 0.07, 0.055, 0.012), mats.trim, {
+    pos: [0, 0.038, 0.122],
+  });
+  part(torso, cached('archer-sash', () => new THREE.CylinderGeometry(0.013, 0.013, 0.26, 6)), mats.leather, {
+    pos: [0.02, 0.016, 0.102],
+    rot: [0, 0, 0.52],
+  });
+  part(torso, cached('archer-sash-buckle', () => new THREE.CylinderGeometry(0.012, 0.012, 0.01, 6)), mats.gold, {
+    pos: [0.07, 0.07, 0.1],
+    rot: [Math.PI / 2, 0, 0.4],
+    shadow: false,
+  });
+  part(torso, cached('archer-belt', () => new THREE.CylinderGeometry(0.122, 0.122, 0.034, 12)), mats.leather, {
+    pos: [0, -0.09, 0],
+    scale: [0.98, 1, 0.82],
+  });
+  part(torso, cached('archer-buckle', () => new THREE.CylinderGeometry(0.018, 0.018, 0.012, 6)), mats.gold, {
+    pos: [0, -0.09, 0.104],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(torso, cached('archer-pouch', () => new THREE.CylinderGeometry(0.026, 0.022, 0.052, 8)), mats.leather, {
+    pos: [0.108, -0.114, 0.04],
+    rot: [0.15, 0.35, 0.12],
+  });
+  part(torso, cached('archer-pouch-flap', () => new THREE.CylinderGeometry(0.024, 0.02, 0.016, 8)), mats.charcoal, {
+    pos: [0.108, -0.086, 0.04],
+    rot: [0.15, 0.35, 0.12],
+    shadow: false,
+  });
+}
+
+function addArcherLegKit(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.052, 0.048, 0.078, 2.0, 8);
+  const kneeGeo = cached('archer-knee', () =>
+    new THREE.SphereGeometry(0.03, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const bootShaft = wrapBandGeometry(0.048, 0.044, 0.09, 2.35, 8);
+  const bootCuff = wrapBandGeometry(0.05, 0.048, 0.022, 2.2, 8);
+  const bootFoot = trapezoidPlateGeometry(0.082, 0.06, 0.108, 0.028);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.leather, { pos: [0, -legs.thigh * 0.46, 0.004] });
+    part(knee, kneeGeo, mats.leather, {
+      pos: [0, 0.002, 0.028],
+      scale: [1.12, 0.58, 1],
+    });
+    part(knee, bootShaft, mats.leather, { pos: [0, -legs.shin * 0.56, 0.002] });
+    part(knee, bootCuff, mats.armorDeep, { pos: [0, -legs.shin * 0.28, 0.004] });
+    part(knee, bootFoot, mats.charcoal, {
+      pos: [0, -legs.shin - 0.014, 0.028],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addArcherShoulders(parent, mats) {
+  const capGeo = cached('archer-shoulder', () =>
+    new THREE.SphereGeometry(0.07, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.52)
+  );
+  const lameGeo = cached('archer-shoulder-lame', () =>
+    new THREE.SphereGeometry(0.066, 8, 6, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.22)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.156, 0.578, 0.008);
+    pad.rotation.z = side * -0.3;
+    part(pad, capGeo, mats.leather, { scale: [1.1, 0.5, 1.04] });
+    part(pad, lameGeo, mats.armorDeep, {
+      pos: [0, -0.01, 0],
+      scale: [1.12, 0.68, 1.06],
+    });
+    parent.add(pad);
+  }
+}
+
+function addArcherBracers(armL, armR, mats) {
+  part(armL.pivot, wrapBandGeometry(0.044, 0.04, 0.1, 2.25, 8), mats.leather, {
+    pos: [0, -0.152, 0.004],
+  });
+  part(armL.pivot, wrapBandGeometry(0.046, 0.044, 0.02, 2.1, 8), mats.gold, {
+    pos: [0, -0.118, 0.005],
+    shadow: false,
+  });
+  part(armR.pivot, wrapBandGeometry(0.042, 0.038, 0.07, 2.1, 8), mats.leather, {
+    pos: [0, -0.148, 0.004],
+  });
+  part(armR.hand, wrapBandGeometry(0.04, 0.038, 0.04, 2.25, 8), mats.leather, {
+    pos: [0, -0.002, 0.004],
+  });
+}
+
 function buildStaff(mats) {
   const staff = new THREE.Group();
-  part(staff, cached('staff-shaft', () => new THREE.CylinderGeometry(0.016, 0.021, 0.62, 9)), mats.wood, {
+  part(staff, cached('staff-shaft', () => new THREE.CylinderGeometry(0.012, 0.016, 0.64, 6)), mats.charcoal, {
     pos: [0, 0.08, 0],
   });
-  part(staff, cached('staff-collar', () => new THREE.CylinderGeometry(0.028, 0.028, 0.04, 10)), mats.gold, {
-    pos: [0, 0.36, 0],
+  const wrapGeo = cached('staff-wrap', () => new THREE.CylinderGeometry(0.017, 0.017, 0.048, 6));
+  part(staff, wrapGeo, mats.leather, { pos: [0, 0.012, 0] });
+  part(staff, wrapGeo, mats.leather, { pos: [0, 0.18, 0] });
+  const ringGeo = cached('staff-ring', () => new THREE.TorusGeometry(0.018, 0.004, 5, 8));
+  part(staff, ringGeo, mats.gold, {
+    pos: [0, -0.04, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
   });
-  part(staff, cached('staff-claw', () => new THREE.TorusGeometry(0.056, 0.013, 6, 16, Math.PI * 1.5)), mats.gold, {
+  part(staff, ringGeo, mats.gold, {
+    pos: [0, 0.28, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(staff, cached('staff-collar', () => new THREE.CylinderGeometry(0.022, 0.018, 0.02, 6)), mats.gold, {
+    pos: [0, 0.355, 0],
+  });
+  part(staff, cached('staff-cup', () => new THREE.CylinderGeometry(0.024, 0.016, 0.016, 6)), mats.gold, {
+    pos: [0, 0.392, 0],
+  });
+  const prongGeo = cached('staff-prong', () => new THREE.BoxGeometry(0.007, 0.068, 0.007));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    part(staff, prongGeo, mats.gold, {
+      pos: [Math.cos(a) * 0.026, 0.428, Math.sin(a) * 0.026],
+    });
+  }
+  const orb = part(staff, cached('staff-orb', () => new THREE.OctahedronGeometry(0.046, 0)), mats.arcane, {
     pos: [0, 0.44, 0],
-    rot: [0, 0, Math.PI * 0.25],
-  });
-  const orb = part(staff, cached('staff-orb', () => new THREE.SphereGeometry(0.048, 12, 10)), mats.arcane, {
-    pos: [0, 0.445, 0],
     shadow: false,
   });
-  const runeRing = part(staff, cached('rune-ring', () => new THREE.TorusGeometry(0.082, 0.006, 5, 14)), mats.arcane, {
-    pos: [0, 0.445, 0],
-    rot: [Math.PI / 2.4, 0, 0],
+  part(orb, cached('staff-orb-core', () => new THREE.OctahedronGeometry(0.016, 0)), mats.ember, {
     shadow: false,
+  });
+  const runeRing = part(staff, cached('rune-ring', () => new THREE.TorusGeometry(0.078, 0.006, 5, 12)), mats.arcane, {
+    pos: [0, 0.44, 0],
+    rot: [Math.PI / 2.2, 0, 0],
+    shadow: false,
+  });
+  part(staff, cached('staff-charm-cord', () => new THREE.CylinderGeometry(0.003, 0.003, 0.046, 4)), mats.leather, {
+    pos: [0.028, 0.328, 0],
+    rot: [0, 0, 0.35],
+    shadow: false,
+  });
+  part(staff, cached('staff-charm', () => new THREE.OctahedronGeometry(0.012, 0)), mats.gold, {
+    pos: [0.042, 0.304, 0],
+    shadow: false,
+  });
+  part(staff, cached('staff-ferrule', () => new THREE.CylinderGeometry(0.015, 0.01, 0.028, 6)), mats.gold, {
+    pos: [0, -0.24, 0],
+  });
+  part(staff, cached('staff-spike', () => new THREE.ConeGeometry(0.01, 0.028, 6)), mats.steel, {
+    pos: [0, -0.266, 0],
+    rot: [Math.PI, 0, 0],
   });
   return { group: staff, orb, runeRing };
 }
@@ -1119,30 +1353,39 @@ function buildSwordsman(mats) {
 
 function buildArcher(mats) {
   const group = new THREE.Group();
-  const legs = addLegs(group, mats, { spread: 0.072, legLength: 0.17 });
-  const torso = addTorso(group, mats, { width: 0.94, height: 0.25, y: 0.47 });
-  part(torso, cached('archer-strap', () => new THREE.BoxGeometry(0.05, 0.28, 0.02)), mats.leather, {
-    pos: [0.02, 0.01, 0.1],
-    rot: [0, 0, 0.42],
+  const legs = addLegs(group, mats, { spread: 0.078, legLength: 0.17, boots: false });
+  addArcherLegKit(legs, mats);
+  const torso = addTorso(group, mats, { width: 0.98, height: 0.255, y: 0.468, fittings: false });
+  addArcherKit(torso, mats);
+  addArcherShoulders(group, mats);
+  addArcherCloak(group, mats);
+  const armL = addArm(group, mats, -1, { shoulderX: 0.16, sleeveMat: mats.cloth });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.16, sleeveMat: mats.cloth });
+  addArcherBracers(armL, armR, mats);
+  const head = addHead(group, mats, { y: 0.718, radius: 0.102 });
+  const eyes = addEyes(head, mats, { y: 0.008, z: 0.096, size: 0.017 });
+  part(head, wrapBandGeometry(0.1, 0.096, 0.034, 2.15, 8), mats.charcoal, {
+    pos: [0, -0.03, 0.008],
   });
-  addPauldrons(group, mats, { radius: 0.07, x: 0.155, material: mats.leather });
-  const armL = addArm(group, mats, -1, { shoulderX: 0.155, sleeveMat: mats.cloth });
-  const armR = addArm(group, mats, 1, { shoulderX: 0.155, sleeveMat: mats.cloth });
-  const head = addHead(group, mats, { y: 0.715 });
-  const eyes = addEyes(head, mats, { y: 0.004, socket: false });
-  const hood = addHood(group, mats, { y: 0.735 });
+  const hood = addArcherHood(group, mats);
 
   const quiver = buildQuiver(mats);
-  quiver.position.set(-0.11, 0.44, -0.11);
-  quiver.rotation.set(0.18, 0, 0.42);
+  quiver.position.set(-0.112, 0.442, -0.1);
+  quiver.rotation.set(0.14, 0.1, 0.38);
   group.add(quiver);
 
+  const knife = buildDagger(mats);
+  knife.scale.setScalar(0.78);
+  knife.position.set(-0.11, -0.02, 0.06);
+  knife.rotation.set(0.15, 0.4, 0.55);
+  torso.add(knife);
+
   const bow = buildBow(mats);
-  bow.group.position.set(-0.02, -0.02, 0.075);
-  bow.group.rotation.set(0.2, -0.34, 0.1);
+  bow.group.position.set(-0.018, -0.016, 0.078);
+  bow.group.rotation.set(0.18, -0.32, 0.08);
   armL.hand.add(bow.group);
-  armL.pivot.rotation.set(-1.12, 0, -0.24);
-  armR.pivot.rotation.set(-0.72, 0, 0.42);
+  armL.pivot.rotation.set(-1.18, 0, -0.28);
+  armR.pivot.rotation.set(-0.82, 0, 0.48);
 
   return {
     group,
@@ -1157,96 +1400,255 @@ function buildArcher(mats) {
   };
 }
 
-function buildShield(mats) {
-  const group = new THREE.Group();
-  const legs = addLegs(group, mats, { spread: 0.095, legLength: 0.13 });
-  const torso = addTorso(group, mats, { width: 1.16, height: 0.27, y: 0.44 });
-  part(torso, cached('shield-plate', () => new THREE.BoxGeometry(0.2, 0.14, 0.035)), mats.steel, {
-    pos: [0, 0.02, 0.1],
-  });
-  addPauldrons(group, mats, { radius: 0.088, x: 0.182, y: 0.565, material: mats.armor, rimMaterial: mats.steel });
-  addGorget(group, mats, 0.6);
-  const armL = addArm(group, mats, -1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
-  const armR = addArm(group, mats, 1, { shoulderX: 0.19, shoulderY: 0.54, sleeveMat: mats.armorDeep });
-  const head = addHead(group, mats, { y: 0.7, radius: 0.105 });
-  const eyes = addEyes(head, mats, { z: 0.102, y: 0.008, size: 0.014, socket: false });
-  // Flat-topped great helm: a sphere just read as a shiny bald head under the
-  // shoulder plates.
-  part(head, cached('great-helm', () => new THREE.CylinderGeometry(0.114, 0.126, 0.19, 10)), mats.steel, {
-    pos: [0, 0.026, 0],
+function addShieldHelm(head, mats) {
+  part(head, cached('great-helm', () => new THREE.CylinderGeometry(0.118, 0.13, 0.2, 8)), mats.steel, {
+    pos: [0, 0.02, 0],
     scale: [1, 1, 0.94],
   });
-  part(head, cached('great-helm-crown', () => new THREE.SphereGeometry(0.114, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5)), mats.steel, {
-    pos: [0, 0.12, 0],
-    scale: [1, 0.5, 0.94],
+  part(head, cached('great-helm-crown', () => new THREE.CylinderGeometry(0.118, 0.118, 0.04, 8)), mats.steel, {
+    pos: [0, 0.13, 0],
+    scale: [1, 1, 0.94],
   });
-  part(head, cached('great-helm-visor', () => new THREE.BoxGeometry(0.17, 0.028, 0.03)), mats.charcoal, {
-    pos: [0, 0.012, 0.102],
+  part(head, wrapBandGeometry(0.124, 0.12, 0.07, 2.2, 8), mats.charcoal, {
+    pos: [0, 0.0, 0.006],
   });
-  part(head, cached('great-helm-nasal', () => new THREE.BoxGeometry(0.028, 0.12, 0.03)), mats.charcoal, {
-    pos: [0, -0.028, 0.104],
+  part(head, cached('great-helm-visor', () => new THREE.BoxGeometry(0.1, 0.016, 0.012)), mats.eye, {
+    pos: [0, 0.018, 0.118],
+    shadow: false,
   });
-  part(head, cached('great-helm-band', () => new THREE.TorusGeometry(0.118, 0.014, 6, 14)), mats.gold, {
-    pos: [0, 0.084, 0],
+  part(head, cached('great-helm-nasal', () => new THREE.BoxGeometry(0.018, 0.08, 0.012)), mats.charcoal, {
+    pos: [0, -0.028, 0.116],
+  });
+  part(head, cached('great-helm-band', () => new THREE.TorusGeometry(0.122, 0.012, 5, 10)), mats.gold, {
+    pos: [0, 0.08, 0],
     rot: [-Math.PI / 2, 0, 0],
-    scale: [1, 0.94, 1],
+    scale: [1, 0.92, 1],
+    shadow: false,
   });
-  const hornGeo = cached('great-helm-horn', () => new THREE.ConeGeometry(0.03, 0.11, 8));
+  const hornGeo = cached('great-helm-horn', () => new THREE.ConeGeometry(0.026, 0.1, 6));
+  const hornRing = cached('great-helm-horn-ring', () => new THREE.TorusGeometry(0.02, 0.005, 5, 8));
   for (const side of [-1, 1]) {
     part(head, hornGeo, mats.gold, {
-      pos: [side * 0.11, 0.14, -0.01],
-      rot: [0, 0, side * 0.9],
+      pos: [side * 0.118, 0.15, -0.01],
+      rot: [0.15, 0, side * 0.85],
+    });
+    part(head, hornRing, mats.steel, {
+      pos: [side * 0.108, 0.118, -0.008],
+      rot: [0.15, 0, side * 0.85],
+      shadow: false,
     });
   }
+  part(head, wrapBandGeometry(0.12, 0.116, 0.028, 2.0, 8), mats.steel, {
+    pos: [0, -0.055, 0.01],
+  });
+}
 
+function addShieldKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.172, 0.154, 0.18, 2.2, 10), mats.armor, {
+    pos: [0, 0.02, 0],
+    scale: [1.06, 1, 0.82],
+  });
+  part(torso, wrapBandGeometry(0.168, 0.156, 0.09, 1.9, 8), mats.steel, {
+    pos: [0, 0.04, 0],
+    scale: [1.04, 1, 0.84],
+  });
+  part(torso, cached('shield-keel', () => new THREE.BoxGeometry(0.022, 0.12, 0.02)), mats.trim, {
+    pos: [0, 0.036, 0.14],
+    shadow: false,
+  });
+  part(torso, cached('shield-belt', () => new THREE.CylinderGeometry(0.138, 0.138, 0.042, 12)), mats.leather, {
+    pos: [0, -0.1, 0],
+    scale: [1.06, 1, 0.82],
+  });
+  part(torso, cached('shield-buckle', () => new THREE.CylinderGeometry(0.02, 0.02, 0.014, 6)), mats.gold, {
+    pos: [0, -0.1, 0.118],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(torso, wrapBandGeometry(0.16, 0.148, 0.036, 2.1, 8), mats.armorDeep, {
+    pos: [0, -0.055, 0],
+    scale: [1.04, 1, 0.84],
+    rot: [0.1, 0, 0],
+  });
+  part(torso, tabardPlateGeometry(), mats.cloth, {
+    pos: [0, -0.02, 0.128],
+  });
+  part(torso, cached('shield-tabard-cross-v', () => new THREE.BoxGeometry(0.016, 0.1, 0.006)), mats.trim, {
+    pos: [0, -0.01, 0.138],
+    shadow: false,
+  });
+  part(torso, cached('shield-tabard-cross-h', () => new THREE.BoxGeometry(0.06, 0.016, 0.006)), mats.trim, {
+    pos: [0, 0.02, 0.138],
+    shadow: false,
+  });
+  part(torso, cached('shield-clasp', () => new THREE.CylinderGeometry(0.014, 0.014, 0.01, 6)), mats.gold, {
+    pos: [0, 0.1, 0.12],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+}
+
+function addShieldLegKit(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.058, 0.052, 0.088, 2.1, 8);
+  const kneeGeo = cached('shield-knee', () =>
+    new THREE.SphereGeometry(0.034, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const greaveGeo = wrapBandGeometry(0.052, 0.046, 0.11, 2.3, 8);
+  const bootFoot = trapezoidPlateGeometry(0.1, 0.074, 0.128, 0.034);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.armor, { pos: [0, -legs.thigh * 0.46, 0.006] });
+    part(knee, kneeGeo, mats.steel, {
+      pos: [0, 0.002, 0.03],
+      scale: [1.16, 0.6, 1],
+    });
+    part(knee, greaveGeo, mats.armorDeep, { pos: [0, -legs.shin * 0.52, 0.004] });
+    part(knee, bootFoot, mats.armor, {
+      pos: [0, -legs.shin - 0.014, 0.032],
+      rot: [Math.PI / 2, 0, 0],
+    });
+    part(knee, wrapBandGeometry(0.05, 0.048, 0.02, 2.2, 8), mats.gold, {
+      pos: [0, -legs.shin * 0.28, 0.004],
+      shadow: false,
+    });
+  }
+}
+
+function addShieldPauldrons(parent, mats) {
+  const capGeo = cached('shield-pauldron-cap', () =>
+    new THREE.SphereGeometry(0.094, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const lameGeo = cached('shield-pauldron-lame', () =>
+    new THREE.SphereGeometry(0.09, 8, 6, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.24)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.188, 0.56, 0.01);
+    pad.rotation.z = side * -0.26;
+    part(pad, capGeo, mats.armor, { scale: [1.18, 0.58, 1.08] });
+    part(pad, lameGeo, mats.steel, {
+      pos: [0, -0.014, 0],
+      scale: [1.2, 0.72, 1.1],
+    });
+    part(pad, wrapBandGeometry(0.078, 0.074, 0.02, 2.0, 8), mats.gold, {
+      pos: [0, -0.028, 0.004],
+      shadow: false,
+    });
+    parent.add(pad);
+  }
+}
+
+function buildTowerShield(mats) {
   const shield = new THREE.Group();
   part(shield, shieldGeometry(), mats.armor);
-  part(shield, cached('shield-boss', () => new THREE.SphereGeometry(0.052, 10, 8)), mats.gold, {
-    pos: [0, 0, 0.032],
-    scale: [1, 1, 0.6],
+  part(shield, cached('shield-boss', () => new THREE.SphereGeometry(0.058, 8, 6)), mats.gold, {
+    pos: [0, 0.02, 0.038],
+    scale: [1, 1, 0.55],
   });
-  part(shield, cached('shield-cross-v', () => new THREE.BoxGeometry(0.045, 0.44, 0.014)), mats.trim, {
-    pos: [0, -0.005, 0.028],
+  part(shield, cached('shield-cross-v', () => new THREE.BoxGeometry(0.04, 0.5, 0.014)), mats.trim, {
+    pos: [0, -0.01, 0.034],
   });
-  part(shield, cached('shield-cross-h', () => new THREE.BoxGeometry(0.28, 0.045, 0.014)), mats.trim, {
-    pos: [0, 0.06, 0.028],
+  part(shield, cached('shield-cross-h', () => new THREE.BoxGeometry(0.32, 0.04, 0.014)), mats.trim, {
+    pos: [0, 0.07, 0.034],
   });
-  shield.position.set(-0.02, -0.05, 0.08);
-  shield.rotation.set(0, -0.2, 0.05);
-  armL.hand.add(shield);
-  armL.pivot.rotation.set(-0.5, 0, -0.18);
+  part(shield, cached('shield-rim-top', () => new THREE.BoxGeometry(0.2, 0.022, 0.02)), mats.steel, {
+    pos: [0, 0.26, 0.02],
+  });
+  part(shield, cached('shield-boss-ring', () => new THREE.TorusGeometry(0.042, 0.007, 5, 10)), mats.steel, {
+    pos: [0, 0.02, 0.04],
+    shadow: false,
+  });
+  const rivetGeo = cached('shield-rivet', () => new THREE.CylinderGeometry(0.01, 0.01, 0.012, 6));
+  for (const [x, y] of [[-0.12, 0.16], [0.12, 0.16], [-0.12, -0.08], [0.12, -0.08]]) {
+    part(shield, rivetGeo, mats.gold, {
+      pos: [x, y, 0.03],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+  }
+  return shield;
+}
 
+function buildFlangedMace(mats) {
   const mace = new THREE.Group();
-  part(mace, cached('mace-shaft', () => new THREE.CylinderGeometry(0.018, 0.021, 0.26, 8)), mats.wood, {
+  part(mace, cached('mace-shaft', () => new THREE.CylinderGeometry(0.016, 0.02, 0.26, 8)), mats.wood, {
     pos: [0, -0.02, 0],
   });
-  part(mace, cached('mace-pommel', () => new THREE.SphereGeometry(0.026, 10, 8)), mats.gold, {
+  const maceRing = cached('mace-grip-ring', () => new THREE.TorusGeometry(0.02, 0.004, 5, 8));
+  part(mace, maceRing, mats.gold, {
+    pos: [0, -0.05, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(mace, maceRing, mats.gold, {
+    pos: [0, -0.11, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(mace, cached('mace-pommel', () => new THREE.CylinderGeometry(0.026, 0.022, 0.02, 8)), mats.gold, {
     pos: [0, -0.155, 0],
   });
-  part(mace, cached('mace-collar', () => new THREE.CylinderGeometry(0.032, 0.028, 0.03, 10)), mats.gold, {
+  part(mace, cached('mace-collar', () => new THREE.CylinderGeometry(0.03, 0.026, 0.028, 8)), mats.gold, {
     pos: [0, 0.098, 0],
   });
-  part(mace, cached('mace-core', () => new THREE.CylinderGeometry(0.038, 0.038, 0.1, 10)), mats.steel, {
-    pos: [0, 0.155, 0],
+  part(mace, cached('mace-core', () => new THREE.CylinderGeometry(0.042, 0.042, 0.1, 8)), mats.steel, {
+    pos: [0, 0.16, 0],
   });
-  // Flanges instead of a single lump: the profile has to survive being 40px tall.
-  const flangeGeo = cached('mace-flange', () => new THREE.BoxGeometry(0.026, 0.098, 0.06));
-  for (let i = 0; i < 2; i++) {
-    const angle = i * Math.PI;
+  const flangeGeo = cached('mace-flange', () => new THREE.BoxGeometry(0.024, 0.1, 0.058));
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2;
     part(mace, flangeGeo, mats.steel, {
-      pos: [Math.sin(angle) * 0.05, 0.155, Math.cos(angle) * 0.05],
+      pos: [Math.sin(angle) * 0.052, 0.16, Math.cos(angle) * 0.052],
       rot: [0, angle, 0],
     });
   }
-  part(mace, cached('mace-cap', () => new THREE.ConeGeometry(0.03, 0.055, 8)), mats.gold, {
-    pos: [0, 0.228, 0],
+  part(mace, cached('mace-cap', () => new THREE.ConeGeometry(0.032, 0.05, 6)), mats.gold, {
+    pos: [0, 0.232, 0],
   });
+  return mace;
+}
+
+function buildShield(mats) {
+  const group = new THREE.Group();
+  const legs = addLegs(group, mats, { spread: 0.1, legLength: 0.13, boots: false });
+  addShieldLegKit(legs, mats);
+  const torso = addTorso(group, mats, { width: 1.2, height: 0.28, y: 0.438, fittings: false });
+  addShieldKit(torso, mats);
+  addShieldPauldrons(group, mats);
+  addGorget(group, mats, 0.6);
+  addCape(group, mats, { y: 0.44, length: 0.32 });
+  const armL = addArm(group, mats, -1, { shoulderX: 0.195, shoulderY: 0.538, sleeveMat: mats.armorDeep });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.195, shoulderY: 0.538, sleeveMat: mats.armorDeep });
+  part(armL.pivot, wrapBandGeometry(0.048, 0.042, 0.1, 2.2, 8), mats.steel, {
+    pos: [0, -0.15, 0.004],
+  });
+  part(armR.pivot, wrapBandGeometry(0.048, 0.042, 0.1, 2.2, 8), mats.armorDeep, {
+    pos: [0, -0.15, 0.004],
+  });
+  part(armL.hand, wrapBandGeometry(0.042, 0.04, 0.038, 2.2, 8), mats.steel, {
+    pos: [0, -0.002, 0.004],
+  });
+  part(armR.hand, wrapBandGeometry(0.042, 0.04, 0.038, 2.2, 8), mats.steel, {
+    pos: [0, -0.002, 0.004],
+  });
+  const head = addHead(group, mats, { y: 0.698, radius: 0.096 });
+  const eyes = addEyes(head, mats, { z: 0.1, y: 0.01, size: 0.012 });
+  addShieldHelm(head, mats);
+
+  const shield = buildTowerShield(mats);
+  shield.position.set(-0.02, -0.04, 0.1);
+  shield.rotation.set(0.08, -0.12, 0.04);
+  armL.hand.add(shield);
+  armL.pivot.rotation.set(-0.42, 0.08, -0.28);
+
+  const mace = buildFlangedMace(mats);
   mace.position.set(0, 0.03, 0.035);
   mace.rotation.set(-0.28, 0, 0.34);
   armR.hand.add(mace);
-  armR.pivot.rotation.set(-0.34, 0, 0.24);
+  armR.pivot.rotation.set(-0.32, 0, 0.22);
 
-  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, shield };
+  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, shield, weapon: mace };
 }
 
 // Boot tips under the hem: without them a robe cone reads as a chess pawn.
@@ -1257,75 +1659,273 @@ function addRobeFeet(parent, mats, { y = 0.032, x = 0.072, z = 0.185 } = {}) {
   }
 }
 
+function mageStoleGeometry() {
+  return cached('mage-stole-shape', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.026, 0.15);
+    shape.lineTo(0.026, 0.15);
+    shape.lineTo(0.04, -0.12);
+    shape.lineTo(0, -0.16);
+    shape.lineTo(-0.04, -0.12);
+    shape.lineTo(-0.026, 0.15);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.01,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -0.005);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function addMageCowl(parent, mats) {
+  const cowl = new THREE.Group();
+  cowl.position.set(0, 0.73, 0);
+  part(cowl, cached('mage-cowl-shell', () =>
+    new THREE.SphereGeometry(0.13, 12, 8, Math.PI / 2 + 1.05, Math.PI * 2 - 2.1, 0, Math.PI * 0.66)
+  ), mats.cloth, {
+    pos: [0, 0.012, -0.018],
+    scale: [1.04, 0.98, 1.14],
+  });
+  part(cowl, cached('mage-cowl-lining', () =>
+    new THREE.SphereGeometry(0.116, 10, 7, Math.PI / 2 + 0.9, Math.PI * 2 - 1.8, 0, Math.PI * 0.58)
+  ), mats.charcoal, {
+    pos: [0, 0.006, -0.01],
+    scale: [0.96, 0.92, 1.02],
+  });
+  part(cowl, cached('mage-cowl-drape', () =>
+    new THREE.SphereGeometry(0.11, 10, 7, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.42)
+  ), mats.cloth, {
+    pos: [0, -0.018, -0.072],
+    rot: [0.4, 0, 0],
+    scale: [1.04, 1.55, 0.82],
+  });
+  part(cowl, wrapBandGeometry(0.11, 0.108, 0.024, 2.05, 8), mats.trim, {
+    pos: [0, 0.014, 0.008],
+  });
+  part(cowl, cached('mage-cowl-collar', () => new THREE.TorusGeometry(0.098, 0.02, 5, 12)), mats.cloth, {
+    pos: [0, -0.084, -0.008],
+    rot: [-Math.PI / 2 + 0.16, 0, 0],
+    scale: [1.04, 1.06, 1],
+  });
+  part(cowl, cached('mage-cowl-clasp', () => new THREE.CylinderGeometry(0.012, 0.012, 0.01, 6)), mats.gold, {
+    pos: [0.04, -0.018, 0.098],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  parent.add(cowl);
+  return cowl;
+}
+
+function addMageRobe(parent, mats) {
+  const robe = new THREE.Group();
+  part(robe, cached('robe', () =>
+    new THREE.CylinderGeometry(0.118, 0.188, 0.4, 12, 2, true, 0.2, Math.PI * 2 - 0.4)
+  ), mats.cloth, {
+    pos: [0, 0.2, 0],
+  });
+  part(robe, cached('mage-robe-lining', () =>
+    new THREE.CylinderGeometry(0.108, 0.172, 0.37, 10, 1, true, 0.22, Math.PI * 2 - 0.44)
+  ), mats.charcoal, {
+    pos: [0, 0.198, 0],
+  });
+  part(robe, mageStoleGeometry(), mats.charcoal, {
+    pos: [0, 0.26, 0.128],
+  });
+  part(robe, cached('mage-stole-seam', () => new THREE.BoxGeometry(0.012, 0.22, 0.006)), mats.arcane, {
+    pos: [0, 0.272, 0.136],
+    shadow: false,
+  });
+  part(robe, wrapBandGeometry(0.186, 0.184, 0.022, 2.4, 10), mats.leather, {
+    pos: [0, 0.014, 0],
+  });
+  part(robe, cached('mage-robe-hem', () => new THREE.TorusGeometry(0.182, 0.01, 5, 12, Math.PI * 1.7)), mats.trim, {
+    pos: [0, 0.01, 0],
+    rot: [-Math.PI / 2, 0, 0.2],
+    shadow: false,
+  });
+  part(robe, cached('mage-cloak', () =>
+    new THREE.CylinderGeometry(0.14, 0.2, 0.32, 12, 2, true, Math.PI * 0.7, Math.PI * 0.6)
+  ), mats.cloth, {
+    pos: [0, 0.26, -0.052],
+  });
+  part(robe, cached('mage-capelet', () =>
+    new THREE.CylinderGeometry(0.13, 0.16, 0.1, 10, 1, true, Math.PI * 0.66, Math.PI * 0.68)
+  ), mats.cloth, {
+    pos: [0, 0.4, -0.036],
+  });
+  parent.add(robe);
+  return robe;
+}
+
+function addMageKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.138, 0.124, 0.152, 2.15, 8), mats.cloth, {
+    pos: [0, 0.01, 0],
+    scale: [0.92, 1, 0.78],
+  });
+  part(torso, wrapBandGeometry(0.136, 0.128, 0.07, 1.9, 8), mats.leather, {
+    pos: [0, 0.036, 0],
+    scale: [0.9, 1, 0.8],
+  });
+  part(torso, trapezoidPlateGeometry(0.032, 0.056, 0.05, 0.01), mats.trim, {
+    pos: [0, 0.04, 0.118],
+  });
+  part(torso, cached('mage-chest-gem', () => new THREE.OctahedronGeometry(0.012, 0)), mats.arcane, {
+    pos: [0, 0.042, 0.126],
+    shadow: false,
+  });
+  part(torso, cached('mage-sash', () => new THREE.CylinderGeometry(0.012, 0.012, 0.22, 6)), mats.trim, {
+    pos: [0.018, 0.008, 0.1],
+    rot: [0, 0, 0.55],
+  });
+  part(torso, cached('mage-belt', () => new THREE.CylinderGeometry(0.116, 0.116, 0.03, 10)), mats.leather, {
+    pos: [0, -0.082, 0],
+    scale: [0.92, 1, 0.78],
+  });
+  part(torso, cached('mage-buckle', () => new THREE.CylinderGeometry(0.016, 0.016, 0.01, 6)), mats.gold, {
+    pos: [0, -0.082, 0.098],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+
+  const bookRot = [0.12, 0.38, 0.16];
+  part(torso, cached('mage-book', () => new THREE.BoxGeometry(0.05, 0.068, 0.018)), mats.leather, {
+    pos: [0.102, -0.102, 0.034],
+    rot: bookRot,
+  });
+  part(torso, cached('mage-book-pages', () => new THREE.BoxGeometry(0.044, 0.06, 0.012)), mats.trim, {
+    pos: [0.104, -0.102, 0.038],
+    rot: bookRot,
+    shadow: false,
+  });
+  part(torso, cached('mage-book-clasp', () => new THREE.BoxGeometry(0.01, 0.018, 0.006)), mats.gold, {
+    pos: [0.11, -0.102, 0.048],
+    rot: bookRot,
+    shadow: false,
+  });
+
+  part(torso, cached('mage-vial', () => new THREE.CylinderGeometry(0.012, 0.014, 0.036, 6)), mats.charcoal, {
+    pos: [-0.1, -0.108, 0.04],
+    rot: [0.1, -0.3, -0.08],
+  });
+  part(torso, cached('mage-vial-glow', () => new THREE.CylinderGeometry(0.008, 0.009, 0.02, 6)), mats.arcane, {
+    pos: [-0.1, -0.11, 0.042],
+    rot: [0.1, -0.3, -0.08],
+    shadow: false,
+  });
+  part(torso, cached('mage-pouch', () => new THREE.CylinderGeometry(0.022, 0.018, 0.04, 8)), mats.leather, {
+    pos: [-0.092, -0.118, -0.03],
+    rot: [0.2, -0.4, 0.1],
+  });
+  part(torso, cached('mage-pouch-flap', () => new THREE.CylinderGeometry(0.02, 0.016, 0.012, 8)), mats.charcoal, {
+    pos: [-0.09, -0.098, -0.028],
+    rot: [0.2, -0.4, 0.1],
+    shadow: false,
+  });
+}
+
+function addMageShoulders(parent, mats) {
+  const capGeo = cached('mage-shoulder', () =>
+    new THREE.SphereGeometry(0.068, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.52)
+  );
+  const lameGeo = cached('mage-shoulder-lame', () =>
+    new THREE.SphereGeometry(0.064, 8, 6, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.22)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.15, 0.57, 0.006);
+    pad.rotation.z = side * -0.28;
+    part(pad, capGeo, mats.cloth, { scale: [1.08, 0.5, 1.02] });
+    part(pad, lameGeo, mats.charcoal, {
+      pos: [0, -0.01, 0],
+      scale: [1.1, 0.66, 1.04],
+    });
+    part(pad, wrapBandGeometry(0.056, 0.054, 0.016, 2.0, 8), mats.gold, {
+      pos: [0, -0.024, 0.004],
+      shadow: false,
+    });
+    parent.add(pad);
+  }
+}
+
+function addMageSleeves(armL, armR, mats) {
+  const sleeveGeo = wrapBandGeometry(0.042, 0.038, 0.09, 2.15, 8);
+  const cuffGeo = wrapBandGeometry(0.044, 0.042, 0.02, 2.1, 8);
+  const gloveGeo = wrapBandGeometry(0.04, 0.038, 0.036, 2.2, 8);
+  part(armL.pivot, sleeveGeo, mats.leather, { pos: [0, -0.15, 0.003] });
+  part(armR.pivot, sleeveGeo, mats.leather, { pos: [0, -0.15, 0.003] });
+  part(armL.pivot, cuffGeo, mats.gold, { pos: [0, -0.116, 0.004], shadow: false });
+  part(armR.pivot, cuffGeo, mats.gold, { pos: [0, -0.116, 0.004], shadow: false });
+  part(armL.hand, gloveGeo, mats.leather, { pos: [0, -0.002, 0.003] });
+  part(armR.hand, gloveGeo, mats.leather, { pos: [0, -0.002, 0.003] });
+}
+
+function addMageFeet(parent, mats) {
+  const shaft = wrapBandGeometry(0.046, 0.042, 0.068, 2.2, 8);
+  const foot = trapezoidPlateGeometry(0.076, 0.054, 0.096, 0.026);
+  for (const side of [-1, 1]) {
+    const boot = new THREE.Group();
+    boot.position.set(side * 0.056, 0.034, 0.138);
+    boot.rotation.y = side * -0.12;
+    part(boot, shaft, mats.leather, { pos: [0, 0.026, 0] });
+    part(boot, foot, mats.charcoal, {
+      pos: [0, 0, 0.028],
+      rot: [Math.PI / 2, 0, 0],
+    });
+    parent.add(boot);
+  }
+}
+
 function buildMage(mats) {
   const group = new THREE.Group();
-  const robe = part(group, cached('robe', () => new THREE.CylinderGeometry(0.14, 0.28, 0.38, 12, 2, true)), mats.cloth, {
-    pos: [0, 0.19, 0],
+  const robe = addMageRobe(group, mats);
+  addMageFeet(group, mats);
+
+  const torso = addTorso(group, mats, { width: 0.88, height: 0.22, y: 0.47, material: mats.cloth, fittings: false });
+  addMageKit(torso, mats);
+  addMageShoulders(group, mats);
+
+  const armL = addArm(group, mats, -1, { shoulderX: 0.142, shoulderY: 0.555, sleeveMat: mats.cloth });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.142, shoulderY: 0.555, sleeveMat: mats.cloth });
+  addMageSleeves(armL, armR, mats);
+  part(armL.hand, cached('mage-scroll', () => new THREE.CylinderGeometry(0.012, 0.012, 0.07, 8)), mats.trim, {
+    pos: [0.008, -0.012, 0.03],
+    rot: [0.2, 0.4, 1.2],
   });
-  addRobeFeet(group, mats, { z: 0.2 });
-  part(group, cached('robe-hem', () => new THREE.TorusGeometry(0.275, 0.016, 6, 14)), mats.trim, {
-    pos: [0, 0.014, 0],
-    rot: [-Math.PI / 2, 0, 0],
+  part(armL.hand, cached('mage-scroll-cap', () => new THREE.CylinderGeometry(0.014, 0.014, 0.008, 8)), mats.leather, {
+    pos: [0.03, 0.016, 0.046],
+    rot: [0.2, 0.4, 1.2],
+    shadow: false,
   });
-  part(group, cached('robe-hem-trim', () => new THREE.TorusGeometry(0.243, 0.012, 6, 14)), mats.gold, {
-    pos: [0, 0.075, 0],
+
+  const head = addHead(group, mats, { y: 0.718, radius: 0.1 });
+  const eyes = addEyes(head, mats, { y: 0.002, z: 0.094, size: 0.015 });
+  part(head, wrapBandGeometry(0.1, 0.096, 0.042, 2.25, 8), mats.charcoal, {
+    pos: [0, -0.024, 0.01],
+  });
+  part(head, cached('mage-circlet', () => new THREE.TorusGeometry(0.1, 0.007, 5, 12)), mats.gold, {
+    pos: [0, 0.042, 0],
     rot: [-Math.PI / 2, 0, 0],
     shadow: false,
   });
-  const torso = addTorso(group, mats, { width: 0.92, height: 0.22, y: 0.47, material: mats.cloth });
-  part(torso, cached('mage-sash', () => new THREE.BoxGeometry(0.06, 0.26, 0.02)), mats.trim, {
-    pos: [0.01, 0.0, 0.095],
-    rot: [0, 0, 0.36],
-  });
-  part(torso, cached('mage-brooch', () => new THREE.SphereGeometry(0.026, 10, 8)), mats.arcane, {
-    pos: [0, 0.09, 0.1],
+  part(head, cached('mage-circlet-bezel', () => new THREE.CylinderGeometry(0.016, 0.014, 0.01, 6)), mats.gold, {
+    pos: [0, 0.046, 0.096],
+    rot: [Math.PI / 2, 0, 0],
     shadow: false,
   });
-  part(torso, cached('mage-collar', () => new THREE.TorusGeometry(0.09, 0.018, 5, 14)), mats.trim, {
-    pos: [0, 0.11, 0.02],
-    rot: [-Math.PI / 2 + 0.2, 0, 0],
-    scale: [1, 1, 0.82],
-  });
-  for (const side of [-1, 1]) {
-    part(group, cached('mage-mantle', () => new THREE.BoxGeometry(0.11, 0.05, 0.14)), mats.cloth, {
-      pos: [side * 0.16, 0.56, -0.02],
-      rot: [0.12, 0, side * -0.28],
-    });
-  }
-  const armL = addArm(group, mats, -1, { shoulderX: 0.15, shoulderY: 0.56, sleeveMat: mats.cloth });
-  const armR = addArm(group, mats, 1, { shoulderX: 0.15, shoulderY: 0.56, sleeveMat: mats.cloth });
-  const head = addHead(group, mats, { y: 0.72, radius: 0.107 });
-  const eyes = addEyes(head, mats, { y: -0.005, z: 0.096, size: 0.015, socket: false });
-  part(head, cached('beard', () => new THREE.ConeGeometry(0.06, 0.14, 8)), mats.trim, {
-    pos: [0, -0.09, 0.055],
-    rot: [0.24, 0, 0],
-  });
-  const hat = new THREE.Group();
-  hat.position.set(0, 0.075, 0);
-  part(hat, cached('hat-brim', () => new THREE.TorusGeometry(0.13, 0.024, 6, 14)), mats.cloth, {
-    rot: [-Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.7],
-  });
-  part(hat, cached('hat-cone', () => new THREE.ConeGeometry(0.125, 0.24, 10, 2)), mats.cloth, {
-    pos: [0, 0.13, -0.012],
-    rot: [-0.14, 0, 0.05],
-  });
-  part(hat, cached('hat-band', () => new THREE.TorusGeometry(0.104, 0.016, 6, 14)), mats.trim, {
-    pos: [0, 0.038, -0.004],
-    rot: [-Math.PI / 2, 0, 0],
-  });
-  const hatGem = part(hat, cached('hat-gem', () => new THREE.OctahedronGeometry(0.032, 0)), mats.arcane, {
-    pos: [0.026, 0.245, -0.028],
+  const hatGem = part(head, cached('hat-gem', () => new THREE.OctahedronGeometry(0.018, 0)), mats.arcane, {
+    pos: [0, 0.048, 0.104],
     shadow: false,
   });
-  head.add(hat);
+  addMageCowl(group, mats);
 
   const staff = buildStaff(mats);
-  staff.group.position.set(0.02, -0.13, 0.05);
-  staff.group.rotation.set(-0.12, 0, -0.34);
+  staff.group.position.set(0.016, -0.1, 0.04);
+  staff.group.rotation.set(-0.08, 0, -0.18);
   armR.hand.add(staff.group);
-  armR.pivot.rotation.set(-0.16, 0, 0.06);
-  armL.pivot.rotation.set(0.18, 0, -0.2);
+  armR.pivot.rotation.set(-0.2, 0, 0.06);
+  armL.pivot.rotation.set(0.12, 0.08, -0.22);
 
   return {
     group,
@@ -1341,56 +1941,278 @@ function buildMage(mats) {
   };
 }
 
+function priestStoleGeometry() {
+  return cached('priest-stole-shape', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.03, 0.16);
+    shape.lineTo(0.03, 0.16);
+    shape.lineTo(0.046, -0.14);
+    shape.lineTo(0, -0.18);
+    shape.lineTo(-0.046, -0.14);
+    shape.lineTo(-0.03, 0.16);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.01,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -0.005);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function buildPriestStaff(mats) {
+  const staff = new THREE.Group();
+  part(staff, cached('priest-staff-shaft', () => new THREE.CylinderGeometry(0.012, 0.016, 0.62, 6)), mats.wood, {
+    pos: [0, 0.08, 0],
+  });
+  const wrapGeo = cached('priest-staff-wrap', () => new THREE.CylinderGeometry(0.017, 0.017, 0.042, 6));
+  part(staff, wrapGeo, mats.leather, { pos: [0, 0.01, 0] });
+  part(staff, wrapGeo, mats.leather, { pos: [0, 0.16, 0] });
+  const ringGeo = cached('priest-staff-ring', () => new THREE.TorusGeometry(0.018, 0.004, 5, 8));
+  part(staff, ringGeo, mats.gold, {
+    pos: [0, -0.04, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(staff, ringGeo, mats.gold, {
+    pos: [0, 0.3, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(staff, cached('priest-staff-collar', () => new THREE.CylinderGeometry(0.02, 0.016, 0.018, 6)), mats.gold, {
+    pos: [0, 0.36, 0],
+  });
+  part(staff, cached('priest-staff-cross-v', () => new THREE.BoxGeometry(0.022, 0.2, 0.02)), mats.gold, {
+    pos: [0, 0.48, 0],
+  });
+  part(staff, cached('priest-staff-cross-h', () => new THREE.BoxGeometry(0.2, 0.022, 0.02)), mats.gold, {
+    pos: [0, 0.5, 0],
+  });
+  const capGeo = cached('priest-staff-arm-cap', () => new THREE.CylinderGeometry(0.014, 0.012, 0.016, 6));
+  part(staff, capGeo, mats.gold, { pos: [-0.104, 0.5, 0], rot: [0, 0, Math.PI / 2] });
+  part(staff, capGeo, mats.gold, { pos: [0.104, 0.5, 0], rot: [0, 0, Math.PI / 2] });
+  part(staff, capGeo, mats.gold, { pos: [0, 0.582, 0] });
+  const orb = part(staff, cached('priest-halo-orb', () => new THREE.SphereGeometry(0.02, 8, 6)), mats.gold, {
+    pos: [0, 0.5, 0.016],
+    shadow: false,
+  });
+  part(staff, cached('priest-staff-ferrule', () => new THREE.CylinderGeometry(0.014, 0.01, 0.026, 6)), mats.gold, {
+    pos: [0, -0.23, 0],
+  });
+  return { group: staff, orb };
+}
+
+function addPriestHalo(parent, mats) {
+  const hood = new THREE.Group();
+  hood.position.set(0, 0.76, -0.02);
+  part(hood, cached('priest-halo', () => new THREE.TorusGeometry(0.13, 0.014, 6, 16)), mats.gold, {
+    rot: [0.18, 0, 0],
+  });
+  part(hood, cached('priest-halo-inner', () => new THREE.TorusGeometry(0.11, 0.006, 5, 14)), mats.trim, {
+    rot: [0.18, 0, 0],
+    shadow: false,
+  });
+  parent.add(hood);
+  return hood;
+}
+
+function addPriestRobe(parent, mats) {
+  const robe = new THREE.Group();
+  part(robe, cached('priest-robe', () =>
+    new THREE.CylinderGeometry(0.124, 0.205, 0.4, 12, 2, true, 0.22, Math.PI * 2 - 0.44)
+  ), mats.cloth, {
+    pos: [0, 0.2, 0],
+  });
+  part(robe, cached('priest-robe-lining', () =>
+    new THREE.CylinderGeometry(0.112, 0.188, 0.37, 10, 1, true, 0.24, Math.PI * 2 - 0.48)
+  ), mats.trim, {
+    pos: [0, 0.198, 0],
+  });
+  part(robe, priestStoleGeometry(), mats.gold, {
+    pos: [0, 0.255, 0.13],
+  });
+  part(robe, cached('priest-stole-cross-v', () => new THREE.BoxGeometry(0.012, 0.07, 0.006)), mats.gold, {
+    pos: [0, 0.2, 0.138],
+    shadow: false,
+  });
+  part(robe, cached('priest-stole-cross-h', () => new THREE.BoxGeometry(0.042, 0.012, 0.006)), mats.gold, {
+    pos: [0, 0.218, 0.138],
+    shadow: false,
+  });
+  part(robe, wrapBandGeometry(0.202, 0.2, 0.028, 2.4, 10), mats.leather, {
+    pos: [0, 0.016, 0],
+  });
+  part(robe, wrapBandGeometry(0.2, 0.198, 0.016, 2.3, 10), mats.gold, {
+    pos: [0, 0.01, 0],
+  });
+  part(robe, cached('priest-capelet', () =>
+    new THREE.CylinderGeometry(0.132, 0.16, 0.1, 10, 1, true, Math.PI * 0.66, Math.PI * 0.68)
+  ), mats.trim, {
+    pos: [0, 0.4, -0.034],
+  });
+  part(robe, cached('priest-capelet-trim', () => new THREE.TorusGeometry(0.118, 0.012, 5, 12, Math.PI * 1.1)), mats.gold, {
+    pos: [0, 0.44, -0.01],
+    rot: [-Math.PI / 2 + 0.2, 0, 0],
+    scale: [1.04, 0.88, 1],
+    shadow: false,
+  });
+  parent.add(robe);
+  return robe;
+}
+
+function addPriestKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.136, 0.122, 0.148, 2.1, 8), mats.cloth, {
+    pos: [0, 0.008, 0],
+    scale: [0.9, 1, 0.78],
+  });
+  part(torso, wrapBandGeometry(0.134, 0.126, 0.048, 1.85, 8), mats.trim, {
+    pos: [0, 0.04, 0],
+    scale: [0.88, 1, 0.8],
+  });
+  part(torso, cached('priest-cross-v', () => new THREE.BoxGeometry(0.022, 0.11, 0.012)), mats.gold, {
+    pos: [0, 0.028, 0.118],
+  });
+  part(torso, cached('priest-cross-h', () => new THREE.BoxGeometry(0.08, 0.022, 0.012)), mats.gold, {
+    pos: [0, 0.046, 0.118],
+  });
+  part(torso, cached('priest-sash', () => new THREE.CylinderGeometry(0.011, 0.011, 0.2, 6)), mats.gold, {
+    pos: [0.016, 0.004, 0.098],
+    rot: [0, 0, 0.5],
+  });
+  part(torso, cached('priest-belt', () => new THREE.CylinderGeometry(0.114, 0.114, 0.028, 10)), mats.leather, {
+    pos: [0, -0.082, 0],
+    scale: [0.9, 1, 0.78],
+  });
+  part(torso, cached('priest-buckle', () => new THREE.CylinderGeometry(0.014, 0.014, 0.01, 6)), mats.gold, {
+    pos: [0, -0.082, 0.096],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+
+  const bookRot = [0.1, -0.38, -0.14];
+  part(torso, cached('priest-book', () => new THREE.BoxGeometry(0.048, 0.064, 0.016)), mats.leather, {
+    pos: [-0.1, -0.1, 0.032],
+    rot: bookRot,
+  });
+  part(torso, cached('priest-book-pages', () => new THREE.BoxGeometry(0.042, 0.056, 0.01)), mats.trim, {
+    pos: [-0.102, -0.1, 0.036],
+    rot: bookRot,
+    shadow: false,
+  });
+  part(torso, cached('priest-book-cross-v', () => new THREE.BoxGeometry(0.008, 0.03, 0.004)), mats.gold, {
+    pos: [-0.104, -0.1, 0.042],
+    rot: bookRot,
+    shadow: false,
+  });
+  part(torso, cached('priest-book-cross-h', () => new THREE.BoxGeometry(0.022, 0.008, 0.004)), mats.gold, {
+    pos: [-0.104, -0.094, 0.042],
+    rot: bookRot,
+    shadow: false,
+  });
+
+  part(torso, cached('priest-rosary', () => new THREE.CylinderGeometry(0.004, 0.004, 0.07, 4)), mats.gold, {
+    pos: [0.092, -0.12, 0.03],
+    rot: [0.25, 0.3, 0.15],
+    shadow: false,
+  });
+  part(torso, cached('priest-rosary-cross-v', () => new THREE.BoxGeometry(0.008, 0.028, 0.006)), mats.gold, {
+    pos: [0.1, -0.16, 0.04],
+    rot: [0.2, 0.25, 0.1],
+    shadow: false,
+  });
+  part(torso, cached('priest-rosary-cross-h', () => new THREE.BoxGeometry(0.02, 0.008, 0.006)), mats.gold, {
+    pos: [0.1, -0.154, 0.04],
+    rot: [0.2, 0.25, 0.1],
+    shadow: false,
+  });
+  const beadGeo = cached('priest-rosary-bead', () => new THREE.SphereGeometry(0.008, 6, 5));
+  for (const [x, y, z] of [[0.094, -0.108, 0.032], [0.096, -0.124, 0.036], [0.098, -0.14, 0.038]]) {
+    part(torso, beadGeo, mats.gold, { pos: [x, y, z], shadow: false });
+  }
+}
+
+function addPriestShoulders(parent, mats) {
+  const capGeo = cached('priest-shoulder', () =>
+    new THREE.SphereGeometry(0.066, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5)
+  );
+  const lameGeo = cached('priest-shoulder-lame', () =>
+    new THREE.SphereGeometry(0.062, 8, 6, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.2)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.148, 0.568, 0.006);
+    pad.rotation.z = side * -0.26;
+    part(pad, capGeo, mats.cloth, { scale: [1.06, 0.48, 1.02] });
+    part(pad, lameGeo, mats.trim, {
+      pos: [0, -0.01, 0],
+      scale: [1.08, 0.64, 1.04],
+    });
+    part(pad, wrapBandGeometry(0.054, 0.052, 0.016, 2.0, 8), mats.gold, {
+      pos: [0, -0.022, 0.004],
+      shadow: false,
+    });
+    parent.add(pad);
+  }
+}
+
+function addPriestSleeves(armL, armR, mats) {
+  const sleeveGeo = wrapBandGeometry(0.042, 0.038, 0.086, 2.1, 8);
+  const cuffGeo = wrapBandGeometry(0.044, 0.042, 0.018, 2.0, 8);
+  part(armL.pivot, sleeveGeo, mats.trim, { pos: [0, -0.15, 0.003] });
+  part(armR.pivot, sleeveGeo, mats.trim, { pos: [0, -0.15, 0.003] });
+  part(armL.pivot, cuffGeo, mats.gold, { pos: [0, -0.118, 0.004], shadow: false });
+  part(armR.pivot, cuffGeo, mats.gold, { pos: [0, -0.118, 0.004], shadow: false });
+  const gloveGeo = wrapBandGeometry(0.04, 0.038, 0.03, 2.15, 8);
+  part(armL.hand, gloveGeo, mats.leather, { pos: [0, -0.002, 0.003] });
+  part(armR.hand, gloveGeo, mats.leather, { pos: [0, -0.002, 0.003] });
+}
+
+function addPriestFeet(parent, mats) {
+  const shaft = wrapBandGeometry(0.046, 0.042, 0.064, 2.2, 8);
+  const foot = trapezoidPlateGeometry(0.074, 0.052, 0.092, 0.024);
+  for (const side of [-1, 1]) {
+    const boot = new THREE.Group();
+    boot.position.set(side * 0.058, 0.034, 0.15);
+    boot.rotation.y = side * -0.12;
+    part(boot, shaft, mats.leather, { pos: [0, 0.024, 0] });
+    part(boot, foot, mats.charcoal, {
+      pos: [0, 0, 0.026],
+      rot: [Math.PI / 2, 0, 0],
+    });
+    parent.add(boot);
+  }
+}
+
 function buildPriest(mats) {
   const group = new THREE.Group();
-  const robe = part(
-    group,
-    cached('priest-robe', () => new THREE.CylinderGeometry(0.13, 0.25, 0.38, 16, 2, true)),
-    mats.cloth,
-    { pos: [0, 0.19, 0] }
-  );
-  addRobeFeet(group, mats, { x: 0.066, z: 0.172 });
-  part(group, cached('priest-robe-hem', () => new THREE.TorusGeometry(0.245, 0.014, 8, 26)), mats.gold, {
-    pos: [0, 0.014, 0],
-    rot: [-Math.PI / 2, 0, 0],
-  });
-  part(group, cached('priest-robe-seam', () => new THREE.BoxGeometry(0.046, 0.36, 0.03)), mats.gold, {
-    pos: [0, 0.19, 0.196],
-    rot: [-0.16, 0, 0],
-  });
-  const torso = addTorso(group, mats, { width: 0.86, height: 0.22, y: 0.47, material: mats.cloth });
-  part(torso, cached('priest-cross-v', () => new THREE.BoxGeometry(0.025, 0.17, 0.018)), mats.gold, {
-    pos: [0, 0, 0.1],
-  });
-  part(torso, cached('priest-cross-h', () => new THREE.BoxGeometry(0.1, 0.024, 0.018)), mats.gold, {
-    pos: [0, 0.025, 0.102],
-  });
+  const robe = addPriestRobe(group, mats);
+  addPriestFeet(group, mats);
+
+  const torso = addTorso(group, mats, { width: 0.86, height: 0.22, y: 0.47, material: mats.cloth, fittings: false });
+  addPriestKit(torso, mats);
+  addPriestShoulders(group, mats);
 
   const armL = addArm(group, mats, -1, { shoulderX: 0.145, shoulderY: 0.56, sleeveMat: mats.cloth });
   const armR = addArm(group, mats, 1, { shoulderX: 0.145, shoulderY: 0.56, sleeveMat: mats.cloth });
-  const head = addHead(group, mats, { y: 0.72, radius: 0.105 });
-  const eyes = addEyes(head, mats, { y: -0.004, z: 0.095, size: 0.015 });
-  const hood = addHood(group, mats, { y: 0.72 });
+  addPriestSleeves(armL, armR, mats);
 
-  const staff = new THREE.Group();
-  part(staff, cached('priest-staff-shaft', () => new THREE.CylinderGeometry(0.015, 0.02, 0.62, 9)), mats.wood, {
-    pos: [0, 0.08, 0],
+  const head = addHead(group, mats, { y: 0.718, radius: 0.102 });
+  const eyes = addEyes(head, mats, { y: -0.002, z: 0.094, size: 0.015 });
+  part(head, cached('priest-brow-cross-v', () => new THREE.BoxGeometry(0.012, 0.038, 0.008)), mats.gold, {
+    pos: [0, 0.024, 0.1],
   });
-  part(staff, cached('priest-staff-cross-v', () => new THREE.BoxGeometry(0.025, 0.2, 0.025)), mats.gold, {
-    pos: [0, 0.43, 0],
+  part(head, cached('priest-brow-cross-h', () => new THREE.BoxGeometry(0.032, 0.012, 0.008)), mats.gold, {
+    pos: [0, 0.032, 0.1],
   });
-  part(staff, cached('priest-staff-cross-h', () => new THREE.BoxGeometry(0.14, 0.026, 0.026)), mats.gold, {
-    pos: [0, 0.46, 0],
-  });
-  const orb = part(staff, cached('priest-halo-orb', () => new THREE.SphereGeometry(0.035, 14, 12)), mats.arcane, {
-    pos: [0, 0.5, 0],
-    shadow: false,
-  });
-  staff.position.set(0.02, -0.13, 0.04);
-  staff.rotation.set(-0.1, 0, -0.28);
-  armR.hand.add(staff);
-  armR.pivot.rotation.set(-0.14, 0, 0.05);
-  armL.pivot.rotation.set(0.12, 0, -0.28);
+  const hood = addPriestHalo(group, mats);
+
+  const staff = buildPriestStaff(mats);
+  staff.group.position.set(0.018, -0.12, 0.038);
+  staff.group.rotation.set(-0.08, 0, -0.2);
+  armR.hand.add(staff.group);
+  armR.pivot.rotation.set(-0.16, 0, 0.06);
+  armL.pivot.rotation.set(0.18, 0.06, -0.2);
 
   return {
     group,
@@ -1401,69 +2223,291 @@ function buildPriest(mats) {
     eyes,
     robe,
     hood,
-    orb,
+    orb: staff.orb,
   };
+}
+
+function buildAssassinDagger(mats) {
+  const dagger = new THREE.Group();
+  part(dagger, cached('assassin-grip', () => new THREE.CylinderGeometry(0.011, 0.013, 0.068, 6)), mats.charcoal, {
+    pos: [0, -0.032, 0],
+  });
+  part(dagger, cached('assassin-grip-ring', () => new THREE.TorusGeometry(0.014, 0.003, 5, 8)), mats.gold, {
+    pos: [0, -0.008, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(dagger, cached('assassin-pommel', () => new THREE.CylinderGeometry(0.014, 0.01, 0.014, 6)), mats.steel, {
+    pos: [0, -0.07, 0],
+  });
+  part(dagger, trapezoidPlateGeometry(0.05, 0.018, 0.016, 0.02), mats.steel, {
+    pos: [0, 0.004, 0],
+  });
+  part(dagger, bladeGeometry(0.2, 0.028, 0.01), mats.steel, { pos: [0, 0.012, 0] });
+  part(dagger, cached('assassin-fuller', () => new THREE.BoxGeometry(0.006, 0.13, 0.012)), mats.charcoal, {
+    pos: [0, 0.09, 0],
+    shadow: false,
+  });
+  return dagger;
+}
+
+function addAssassinHood(parent, mats) {
+  const hood = new THREE.Group();
+  hood.position.set(0, 0.738, 0);
+  part(hood, cached('assassin-hood-shell', () =>
+    new THREE.SphereGeometry(0.13, 12, 8, Math.PI / 2 + 0.82, Math.PI * 2 - 1.64, 0, Math.PI * 0.64)
+  ), mats.charcoal, {
+    pos: [0, 0.012, -0.016],
+    scale: [1.02, 0.96, 1.12],
+  });
+  part(hood, cached('assassin-hood-lining', () =>
+    new THREE.SphereGeometry(0.116, 10, 7, Math.PI / 2 + 0.88, Math.PI * 2 - 1.76, 0, Math.PI * 0.56)
+  ), mats.cloth, {
+    pos: [0, 0.008, -0.01],
+    scale: [0.96, 0.9, 1.02],
+  });
+  part(hood, cached('assassin-hood-drape', () =>
+    new THREE.SphereGeometry(0.11, 10, 7, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.44)
+  ), mats.charcoal, {
+    pos: [0, -0.02, -0.074],
+    rot: [0.42, 0, 0],
+    scale: [1.04, 1.62, 0.82],
+  });
+  part(hood, wrapBandGeometry(0.112, 0.11, 0.026, 2.0, 8), mats.leather, {
+    pos: [0, 0.014, 0.008],
+  });
+  part(hood, cached('assassin-hood-collar', () => new THREE.TorusGeometry(0.098, 0.02, 5, 12)), mats.charcoal, {
+    pos: [0, -0.086, -0.01],
+    rot: [-Math.PI / 2 + 0.16, 0, 0],
+    scale: [1.04, 1.06, 1],
+  });
+  part(hood, cached('assassin-hood-clasp', () => new THREE.CylinderGeometry(0.011, 0.011, 0.01, 6)), mats.gold, {
+    pos: [0.038, -0.016, 0.096],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  parent.add(hood);
+  return hood;
+}
+
+function addAssassinScarf(parent, mats) {
+  const scarf = new THREE.Group();
+  scarf.position.set(0.018, 0.58, -0.036);
+  part(scarf, cached('assassin-scarf-knot', () => new THREE.CylinderGeometry(0.02, 0.016, 0.028, 8)), mats.cloth, {
+    pos: [0, 0.01, 0],
+    rot: [0.4, 0.2, 0.15],
+  });
+  part(scarf, trapezoidPlateGeometry(0.034, 0.058, 0.24, 0.012), mats.cloth, {
+    pos: [0.012, -0.12, -0.008],
+    rot: [0.28, 0.18, 0.16],
+  });
+  part(scarf, trapezoidPlateGeometry(0.028, 0.048, 0.2, 0.01), mats.cloth, {
+    pos: [-0.016, -0.1, 0.004],
+    rot: [0.22, -0.12, -0.2],
+  });
+  parent.add(scarf);
+  return scarf;
+}
+
+function addAssassinCloak(parent, mats) {
+  const cloak = new THREE.Group();
+  cloak.position.set(0, 0.5, -0.038);
+  part(cloak, cached('assassin-cloak', () =>
+    new THREE.CylinderGeometry(0.138, 0.178, 0.26, 12, 2, true, Math.PI * 0.72, Math.PI * 0.56)
+  ), mats.charcoal, {
+    pos: [0, -0.06, -0.012],
+  });
+  part(cloak, cached('assassin-cloak-collar', () => new THREE.TorusGeometry(0.094, 0.014, 5, 12, Math.PI * 1.1)), mats.leather, {
+    pos: [0, 0.056, 0.01],
+    rot: [-Math.PI / 2 + 0.18, 0, 0],
+    scale: [1.04, 0.88, 1],
+  });
+  parent.add(cloak);
+}
+
+function addAssassinKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.144, 0.128, 0.16, 2.2, 8), mats.charcoal, {
+    pos: [0, 0.012, 0],
+    scale: [0.94, 1, 0.8],
+  });
+  part(torso, wrapBandGeometry(0.142, 0.132, 0.072, 1.95, 8), mats.leather, {
+    pos: [0, 0.038, 0],
+    scale: [0.92, 1, 0.82],
+  });
+  part(torso, cached('assassin-sash-a', () => new THREE.CylinderGeometry(0.012, 0.012, 0.24, 6)), mats.leather, {
+    pos: [0.01, 0.012, 0.1],
+    rot: [0, 0, 0.52],
+  });
+  part(torso, cached('assassin-sash-b', () => new THREE.CylinderGeometry(0.011, 0.011, 0.22, 6)), mats.cloth, {
+    pos: [-0.006, 0.008, 0.096],
+    rot: [0, 0, -0.48],
+  });
+  const buckleGeo = cached('assassin-buckle', () => new THREE.CylinderGeometry(0.012, 0.012, 0.01, 6));
+  part(torso, buckleGeo, mats.gold, {
+    pos: [0.062, 0.068, 0.098],
+    rot: [Math.PI / 2, 0, 0.4],
+    shadow: false,
+  });
+  part(torso, buckleGeo, mats.gold, {
+    pos: [-0.058, 0.062, 0.096],
+    rot: [Math.PI / 2, 0, -0.35],
+    shadow: false,
+  });
+  part(torso, cached('assassin-belt', () => new THREE.CylinderGeometry(0.12, 0.12, 0.03, 10)), mats.leather, {
+    pos: [0, -0.092, 0],
+    scale: [0.94, 1, 0.8],
+  });
+  part(torso, cached('assassin-belt-buckle', () => new THREE.CylinderGeometry(0.015, 0.015, 0.01, 6)), mats.gold, {
+    pos: [0, -0.092, 0.1],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+
+  const sheath = new THREE.Group();
+  sheath.position.set(-0.1, -0.1, 0.04);
+  sheath.rotation.set(0.15, 0.45, 0.35);
+  part(sheath, trapezoidPlateGeometry(0.028, 0.02, 0.11, 0.02), mats.leather);
+  part(sheath, cached('assassin-sheath-throat', () => new THREE.BoxGeometry(0.032, 0.014, 0.022)), mats.steel, {
+    pos: [0, 0.052, 0],
+    shadow: false,
+  });
+  torso.add(sheath);
+
+  const knifeGeo = cached('assassin-throw-knife', () => new THREE.BoxGeometry(0.008, 0.07, 0.01));
+  part(torso, knifeGeo, mats.steel, {
+    pos: [0.088, 0.02, 0.07],
+    rot: [0.15, 0.35, 0.55],
+    shadow: false,
+  });
+  part(torso, knifeGeo, mats.steel, {
+    pos: [0.078, -0.012, 0.074],
+    rot: [0.18, 0.32, 0.5],
+    shadow: false,
+  });
+  part(torso, cached('assassin-pouch', () => new THREE.CylinderGeometry(0.022, 0.018, 0.04, 8)), mats.leather, {
+    pos: [0.1, -0.118, -0.02],
+    rot: [0.2, 0.5, 0.12],
+  });
+  part(torso, cached('assassin-pouch-flap', () => new THREE.CylinderGeometry(0.02, 0.016, 0.012, 8)), mats.charcoal, {
+    pos: [0.098, -0.098, -0.018],
+    rot: [0.2, 0.5, 0.12],
+    shadow: false,
+  });
+}
+
+function addAssassinShoulders(parent, mats) {
+  const capGeo = cached('assassin-shoulder', () =>
+    new THREE.SphereGeometry(0.064, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5)
+  );
+  const lameGeo = cached('assassin-shoulder-lame', () =>
+    new THREE.SphereGeometry(0.06, 8, 6, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.2)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.152, 0.575, 0.006);
+    pad.rotation.z = side * -0.3;
+    part(pad, capGeo, mats.leather, { scale: [1.08, 0.48, 1.02] });
+    part(pad, lameGeo, mats.charcoal, {
+      pos: [0, -0.01, 0],
+      scale: [1.1, 0.64, 1.04],
+    });
+    parent.add(pad);
+  }
+}
+
+function addAssassinLegKit(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.05, 0.046, 0.076, 2.05, 8);
+  const kneeGeo = cached('assassin-knee', () =>
+    new THREE.SphereGeometry(0.028, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const shinGeo = wrapBandGeometry(0.046, 0.042, 0.088, 2.3, 8);
+  const bootFoot = trapezoidPlateGeometry(0.078, 0.056, 0.1, 0.026);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.leather, { pos: [0, -legs.thigh * 0.46, 0.004] });
+    part(knee, kneeGeo, mats.charcoal, {
+      pos: [0, 0.002, 0.026],
+      scale: [1.1, 0.56, 1],
+    });
+    part(knee, shinGeo, mats.charcoal, { pos: [0, -legs.shin * 0.54, 0.002] });
+    part(knee, wrapBandGeometry(0.048, 0.046, 0.018, 2.15, 8), mats.leather, {
+      pos: [0, -legs.shin * 0.28, 0.004],
+    });
+    part(knee, bootFoot, mats.charcoal, {
+      pos: [0, -legs.shin - 0.012, 0.026],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addAssassinBracers(armL, armR, mats) {
+  const bracerGeo = wrapBandGeometry(0.042, 0.038, 0.086, 2.2, 8);
+  const cuffGeo = wrapBandGeometry(0.044, 0.042, 0.018, 2.1, 8);
+  const gloveGeo = wrapBandGeometry(0.04, 0.038, 0.034, 2.2, 8);
+  part(armL.pivot, bracerGeo, mats.leather, { pos: [0, -0.15, 0.003] });
+  part(armR.pivot, bracerGeo, mats.leather, { pos: [0, -0.15, 0.003] });
+  part(armL.pivot, cuffGeo, mats.steel, { pos: [0, -0.118, 0.004], shadow: false });
+  part(armR.pivot, cuffGeo, mats.steel, { pos: [0, -0.118, 0.004], shadow: false });
+  part(armL.hand, gloveGeo, mats.charcoal, { pos: [0, -0.002, 0.003] });
+  part(armR.hand, gloveGeo, mats.charcoal, { pos: [0, -0.002, 0.003] });
 }
 
 function buildAssassin(mats) {
   const group = new THREE.Group();
-  const legs = addLegs(group, mats, { spread: 0.07, legLength: 0.18, bootMat: mats.charcoal });
-  const torso = addTorso(group, mats, { width: 0.9, height: 0.25, y: 0.48, material: mats.charcoal });
-  part(torso, cached('assassin-harness', () => new THREE.BoxGeometry(0.055, 0.28, 0.02)), mats.armor, {
-    pos: [0, 0, 0.093],
-    rot: [0, 0, -0.4],
-  });
-  part(torso, cached('assassin-buckles', () => new THREE.BoxGeometry(0.032, 0.032, 0.026)), mats.gold, {
-    pos: [-0.05, 0.06, 0.098],
-  });
+  const legs = addLegs(group, mats, { spread: 0.07, legLength: 0.18, boots: false });
+  addAssassinLegKit(legs, mats);
+  const torso = addTorso(group, mats, { width: 0.9, height: 0.25, y: 0.48, material: mats.charcoal, fittings: false });
+  addAssassinKit(torso, mats);
+  addAssassinShoulders(group, mats);
+  addAssassinCloak(group, mats);
+
   const armL = addArm(group, mats, -1, { shoulderX: 0.148, shoulderY: 0.57, sleeveMat: mats.charcoal });
   const armR = addArm(group, mats, 1, { shoulderX: 0.148, shoulderY: 0.57, sleeveMat: mats.charcoal });
-  const head = addHead(group, mats, { y: 0.73, radius: 0.104 });
-  const eyes = addEyes(head, mats, { y: 0.004, z: 0.094, size: 0.018 });
-  part(head, cached('mask', () => new THREE.SphereGeometry(0.108, 16, 12, 0, Math.PI * 2, Math.PI * 0.42, Math.PI * 0.42)), mats.charcoal, {
-    pos: [0, 0, 0.004],
-    scale: [1, 1.05, 1],
-  });
-  const hood = addHood(group, mats, { y: 0.75 });
-  const scarf = new THREE.Group();
-  scarf.position.set(0.02, 0.6, -0.04);
-  part(scarf, cached('scarf', () => new THREE.BoxGeometry(0.05, 0.3, 0.014)), mats.cloth, {
-    pos: [0, -0.13, 0],
-    rot: [0.3, 0.2, 0.18],
-  });
-  group.add(scarf);
+  addAssassinBracers(armL, armR, mats);
 
-  const daggerR = buildDagger(mats);
-  daggerR.position.set(0, 0.0, 0.05);
-  daggerR.rotation.set(-0.3, 0, -1.5);
+  const head = addHead(group, mats, { y: 0.728, radius: 0.1 });
+  const eyes = addEyes(head, mats, { y: 0.006, z: 0.094, size: 0.016 });
+  part(head, wrapBandGeometry(0.1, 0.096, 0.04, 2.2, 8), mats.charcoal, {
+    pos: [0, -0.022, 0.008],
+  });
+  part(head, trapezoidPlateGeometry(0.036, 0.05, 0.042, 0.012), mats.steel, {
+    pos: [0, -0.02, 0.102],
+  });
+  const hood = addAssassinHood(group, mats);
+  const scarf = addAssassinScarf(group, mats);
+
+  const daggerR = buildAssassinDagger(mats);
+  daggerR.position.set(0.006, 0.008, 0.042);
+  daggerR.rotation.set(-0.18, 0.12, -1.35);
   armR.hand.add(daggerR);
-  const daggerL = buildDagger(mats);
-  daggerL.position.set(0, 0.0, 0.05);
-  daggerL.rotation.set(-0.2, 0, 0.4);
+  const daggerL = buildAssassinDagger(mats);
+  daggerL.position.set(-0.006, 0.008, 0.042);
+  daggerL.rotation.set(-0.16, -0.1, 1.35);
   armL.hand.add(daggerL);
-  armR.pivot.rotation.set(-0.55, 0, 0.3);
-  armL.pivot.rotation.set(-0.25, 0, -0.34);
+  armR.pivot.rotation.set(-0.62, 0.08, 0.28);
+  armL.pivot.rotation.set(-0.48, -0.08, -0.3);
 
-  return { group, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, hood, scarf };
+  return { group, legs, torso, head, armL: armL.pivot, armR: armR.pivot, eyes, hood, scarf };
 }
 
 function viperCoilGeometry() {
-  return cached('viper-coil', () => {
+  return cached('viper-coil-48', () => {
     const points = [];
     const turns = 2.15;
-    const steps = 64;
+    const steps = 48;
     for (let i = 0; i <= steps; i++) {
       const p = i / steps;
       const angle = p * Math.PI * 2 * turns;
       const radius = 0.215 - p * 0.09;
       points.push(new THREE.Vector3(Math.cos(angle) * radius, 0.054 + p * 0.096, Math.sin(angle) * radius));
     }
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 76, 0.055, 10, false);
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, 0.055, 8, false);
   });
 }
 
 function viperNeckGeometry() {
-  return cached('viper-neck', () => {
+  return cached('viper-neck-32', () => {
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(0.073, 0, 0.101),
       new THREE.Vector3(0.045, 0.1, 0.055),
@@ -1472,7 +2516,7 @@ function viperNeckGeometry() {
       new THREE.Vector3(0, 0.44, 0.028),
       new THREE.Vector3(0, 0.5, 0.08),
     ]);
-    return new THREE.TubeGeometry(curve, 56, 0.047, 10, false);
+    return new THREE.TubeGeometry(curve, 32, 0.047, 8, false);
   });
 }
 
@@ -1484,6 +2528,26 @@ function viperHoodGeometry() {
     shape.bezierCurveTo(0.07, 0.185, -0.07, 0.185, -0.115, 0.125);
     shape.bezierCurveTo(-0.185, 0.02, -0.13, -0.12, 0, -0.14);
     return extrude(shape, 0.026, 0.012);
+  });
+}
+
+function viperSnoutGeometry() {
+  return cached('viper-snout-profile', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.022);
+    shape.lineTo(0.092, 0.01);
+    shape.lineTo(0.108, -0.008);
+    shape.lineTo(0.02, -0.02);
+    shape.lineTo(0, -0.012);
+    shape.lineTo(0, 0.022);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.062,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -0.031);
+    geometry.computeVertexNormals();
+    return geometry;
   });
 }
 
@@ -1513,24 +2577,62 @@ function buildViper(mats) {
   const extraMaterials = [scaleMat, scaleDeepMat, bellyMat, poisonMat];
 
   part(group, viperCoilGeometry(), scaleMat);
-  // Dorsal saddle: a flat team-coloured patch on the coil, visible from above.
-  part(group, cached('viper-saddle', () => new THREE.BoxGeometry(0.14, 0.022, 0.18)), mats.armorDeep, {
-    pos: [0.04, 0.175, 0.02],
-    rot: [0, 0.45, 0],
+
+  const scuteGeo = trapezoidPlateGeometry(0.07, 0.09, 0.08, 0.016);
+  const scutes = [
+    [0.06, 0.168, 0.04, 0.45],
+    [-0.04, 0.132, -0.08, 1.2],
+    [0.12, 0.1, -0.04, 2.1],
+  ];
+  for (const [x, y, z, yaw] of scutes) {
+    part(group, scuteGeo, mats.armorDeep, {
+      pos: [x, y, z],
+      rot: [0.15, yaw, 0],
+    });
+  }
+
+  const ringGeo = cached('viper-coil-ring', () => new THREE.TorusGeometry(0.058, 0.008, 5, 10));
+  for (const [x, y, z, yaw] of [
+    [0.16, 0.08, 0.12, 0.4],
+    [-0.12, 0.12, 0.06, 1.8],
+    [0.02, 0.16, -0.14, 2.6],
+  ]) {
+    part(group, ringGeo, mats.gold, {
+      pos: [x, y, z],
+      rot: [1.2, yaw, 0.2],
+      shadow: false,
+    });
+  }
+
+  const rattle = new THREE.Group();
+  rattle.position.set(0.255, 0.06, -0.055);
+  rattle.rotation.set(Math.PI / 2, 0, -0.9);
+  const beadGeo = cached('viper-rattle', () => new THREE.CylinderGeometry(0.028, 0.032, 0.028, 8));
+  for (let i = 0; i < 3; i++) {
+    part(rattle, beadGeo, mats.gold, { pos: [0, i * 0.03, 0] });
+  }
+  part(rattle, cached('viper-tail-tip', () => new THREE.ConeGeometry(0.026, 0.07, 6)), scaleDeepMat, {
+    pos: [0, 0.1, 0],
   });
-  part(group, cached('viper-tail', () => new THREE.ConeGeometry(0.052, 0.16, 10)), scaleDeepMat, {
-    pos: [0.255, 0.06, -0.055],
-    rot: [Math.PI / 2, 0, -0.9],
-  });
+  group.add(rattle);
 
   const torso = new THREE.Group();
   torso.position.set(0, 0.15, 0);
   group.add(torso);
   part(torso, viperNeckGeometry(), scaleMat);
-  // Collar ring at the neck base — readable from every camera angle.
-  part(torso, cached('viper-collar', () => new THREE.TorusGeometry(0.058, 0.013, 8, 20)), mats.armor, {
+  part(torso, cached('viper-collar', () => new THREE.TorusGeometry(0.058, 0.012, 6, 12)), mats.armor, {
     pos: [0, 0.02, 0.04],
     rot: [0.4, 0, 0],
+    shadow: false,
+  });
+  part(torso, cached('viper-collar-gold', () => new THREE.TorusGeometry(0.05, 0.007, 5, 10)), mats.gold, {
+    pos: [0, 0.036, 0.048],
+    rot: [0.4, 0, 0],
+    shadow: false,
+  });
+  part(torso, wrapBandGeometry(0.05, 0.046, 0.06, 2.0, 8), bellyMat, {
+    pos: [0, 0.22, 0.03],
+    rot: [0.35, 0, 0],
     shadow: false,
   });
 
@@ -1539,8 +2641,6 @@ function buildViper(mats) {
   head.rotation.x = 0.2;
   torso.add(head);
 
-  // Flared cobra hood: the single silhouette cue that sells "snake" at tile size.
-  // Outer hood carries the team colour; a smaller green inset keeps the viper read.
   part(head, viperHoodGeometry(), mats.armor, {
     pos: [0, 0.005, -0.082],
     rot: [-0.5, 0, 0],
@@ -1551,53 +2651,69 @@ function buildViper(mats) {
     rot: [-0.5, 0, 0],
     scale: [0.72, 0.76, 0.65],
   });
-  const markGeo = cached('viper-hood-mark', () => new THREE.RingGeometry(0.016, 0.032, 16));
+  const spotGeo = cached('viper-hood-spot', () => new THREE.CylinderGeometry(0.022, 0.022, 0.008, 8));
   for (const side of [-1, 1]) {
-    part(head, markGeo, mats.trim, {
-      pos: [side * 0.058, 0.056, -0.052],
-      rot: [-0.5, 0, 0],
+    part(head, spotGeo, mats.trim, {
+      pos: [side * 0.058, 0.056, -0.05],
+      rot: [1.07, 0, 0],
+      shadow: false,
+    });
+    part(head, cached('viper-hood-spot-core', () => new THREE.CylinderGeometry(0.01, 0.01, 0.01, 6)), mats.gold, {
+      pos: [side * 0.058, 0.056, -0.046],
+      rot: [1.07, 0, 0],
       shadow: false,
     });
   }
 
-  part(head, cached('viper-skull', () => new THREE.SphereGeometry(0.079, 16, 12)), scaleMat, {
-    scale: [1.18, 0.8, 1.34],
+  part(head, cached('viper-skull', () => new THREE.SphereGeometry(0.078, 10, 8)), scaleMat, {
+    scale: [1.16, 0.78, 1.32],
   });
-  part(head, cached('viper-snout', () => new THREE.ConeGeometry(0.05, 0.115, 10)), scaleMat, {
-    pos: [0, -0.014, 0.094],
-    rot: [Math.PI / 2, 0, 0],
-    scale: [1.1, 1, 0.8],
+  part(head, viperSnoutGeometry(), scaleMat, {
+    pos: [0, -0.006, 0.072],
+    rot: [0.12, Math.PI / 2, 0],
   });
-  part(head, cached('viper-jaw', () => new THREE.BoxGeometry(0.082, 0.028, 0.115)), bellyMat, {
-    pos: [0, -0.042, 0.062],
-    rot: [0.12, 0, 0],
+  part(head, trapezoidPlateGeometry(0.07, 0.086, 0.1, 0.022), bellyMat, {
+    pos: [0, -0.04, 0.068],
+    rot: [1.2, 0, 0],
   });
-
-  const browGeo = cached('viper-brow', () => new THREE.BoxGeometry(0.05, 0.018, 0.055));
+  const browGeo = trapezoidPlateGeometry(0.042, 0.03, 0.04, 0.016);
   for (const side of [-1, 1]) {
-    part(head, browGeo, scaleDeepMat, { pos: [side * 0.05, 0.038, 0.042], rot: [0.2, 0, side * 0.24] });
+    part(head, browGeo, scaleDeepMat, {
+      pos: [side * 0.048, 0.034, 0.048],
+      rot: [0.35, side * -0.15, side * 0.22],
+    });
+  }
+  const nareGeo = cached('viper-nare', () => new THREE.CylinderGeometry(0.006, 0.006, 0.01, 6));
+  for (const side of [-1, 1]) {
+    part(head, nareGeo, scaleDeepMat, {
+      pos: [side * 0.018, 0.002, 0.15],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
   }
   const eyes = addEyes(head, mats, { y: 0.016, z: 0.072, spread: 0.053, size: 0.014 });
 
-  const fangGeo = cached('viper-fang', () => new THREE.ConeGeometry(0.013, 0.055, 6));
+  const fangGeo = cached('viper-fang', () => new THREE.ConeGeometry(0.012, 0.058, 5));
   for (const side of [-1, 1]) {
     part(head, fangGeo, bellyMat, {
-      pos: [side * 0.028, -0.062, 0.085],
-      rot: [0.3, 0, side * 0.16],
+      pos: [side * 0.026, -0.06, 0.1],
+      rot: [0.35, 0, side * 0.14],
       shadow: false,
     });
   }
   const tongue = new THREE.Group();
-  tongue.position.set(0, -0.044, 0.122);
-  tongue.rotation.x = 0.3;
-  part(tongue, cached('viper-tongue', () => new THREE.BoxGeometry(0.008, 0.004, 0.05)), poisonMat, {
-    pos: [0, 0, 0.025],
+  tongue.position.set(0, -0.042, 0.132);
+  tongue.rotation.x = 0.28;
+  part(tongue, cached('viper-tongue', () => new THREE.CylinderGeometry(0.004, 0.004, 0.048, 5)), poisonMat, {
+    pos: [0, 0, 0.024],
+    rot: [Math.PI / 2, 0, 0],
     shadow: false,
   });
+  const forkGeo = cached('viper-tongue-tip', () => new THREE.CylinderGeometry(0.003, 0.003, 0.028, 5));
   for (const side of [-1, 1]) {
-    part(tongue, cached('viper-tongue-tip', () => new THREE.BoxGeometry(0.006, 0.004, 0.03)), poisonMat, {
-      pos: [side * 0.011, 0, 0.062],
-      rot: [0, side * -0.42, 0],
+    part(tongue, forkGeo, poisonMat, {
+      pos: [side * 0.01, 0, 0.058],
+      rot: [Math.PI / 2, side * -0.4, 0],
       shadow: false,
     });
   }
@@ -1606,96 +2722,271 @@ function buildViper(mats) {
   return { group, torso, head, eyes, extraMaterials };
 }
 
-function buildBomber(mats) {
-  const group = new THREE.Group();
-  const legs = addLegs(group, mats, { spread: 0.086, legLength: 0.11, bootMat: mats.charcoal });
-  const torso = new THREE.Group();
-  torso.position.set(0, 0.42, 0);
-  part(torso, cached('bomber-belly', () => new THREE.SphereGeometry(0.17, 12, 10)), mats.armor, {
-    scale: [1, 0.92, 0.88],
-  });
-  part(torso, cached('bomber-belt', () => new THREE.TorusGeometry(0.15, 0.022, 6, 14)), mats.leather, {
-    pos: [0, -0.06, 0],
+function buildBomberBomb(mats) {
+  const bomb = new THREE.Group();
+  part(bomb, cached('bomber-bomb-shell', () => new THREE.SphereGeometry(0.096, 10, 8)), mats.charcoal);
+  part(bomb, cached('bomber-bomb-band', () => new THREE.TorusGeometry(0.084, 0.01, 5, 12)), mats.gold, {
+    pos: [0, 0.012, 0],
     rot: [-Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.9],
   });
-  const pouch = cached('bomber-pouch', () => new THREE.SphereGeometry(0.038, 10, 8));
-  part(torso, pouch, mats.charcoal, { pos: [-0.12, -0.07, 0.09] });
-  part(torso, pouch, mats.charcoal, { pos: [0.13, -0.07, 0.06] });
-
-  // Bandolier of spare charges: the belly alone gave no hint of the class.
-  const bandolier = new THREE.Group();
-  bandolier.rotation.z = 0.6;
-  part(bandolier, cached('bomber-strap', () => new THREE.TorusGeometry(0.158, 0.019, 6, 14)), mats.leather, {
-    rot: [-Math.PI / 2, 0, 0],
-    scale: [1, 1, 0.86],
-  });
-  const chargeGeo = cached('bomber-charge', () => new THREE.SphereGeometry(0.032, 8, 6));
-  const capGeo = cached('bomber-charge-cap', () => new THREE.CylinderGeometry(0.012, 0.014, 0.018, 6));
-  for (const angle of [1.1, 1.75]) {
-    const x = Math.cos(angle) * 0.158;
-    const z = Math.sin(angle) * 0.158 * 0.86;
-    part(bandolier, chargeGeo, mats.charcoal, { pos: [x, 0, z] });
-    part(bandolier, capGeo, mats.gold, { pos: [x, 0.036, z], shadow: false });
-  }
-  torso.add(bandolier);
-  group.add(torso);
-
-  const armL = addArm(group, mats, -1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
-  const armR = addArm(group, mats, 1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
-  const head = addHead(group, mats, { y: 0.66, radius: 0.108 });
-  const eyes = addEyes(head, mats, { y: -0.046, z: 0.094, spread: 0.042, size: 0.013, socket: false });
-
-  part(head, cached('bomber-cap', () => new THREE.SphereGeometry(0.118, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.44)), mats.leather, {
-    pos: [0, 0.03, -0.004],
-    scale: [1, 1.05, 1],
-  });
-  const flapGeo = cached('bomber-earflap', () => new THREE.SphereGeometry(0.052, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.62));
-  for (const side of [-1, 1]) {
-    part(head, flapGeo, mats.leather, {
-      pos: [side * 0.098, 0.006, -0.008],
-      rot: [0, 0, side * 1.85],
-      scale: [1, 1.35, 1],
-    });
-  }
-  part(head, cached('bomber-cap-seam', () => new THREE.TorusGeometry(0.113, 0.011, 5, 14)), mats.charcoal, {
-    pos: [0, 0.058, 0],
-    rot: [-Math.PI / 2, 0, 0],
-    scale: [0.86, 0.86, 1],
+  part(bomb, cached('bomber-bomb-band-hi', () => new THREE.TorusGeometry(0.078, 0.008, 5, 10)), mats.steel, {
+    pos: [0, 0.048, 0],
+    rot: [-Math.PI / 2 + 0.15, 0, 0],
     shadow: false,
   });
+  part(bomb, cached('bomber-bomb-cap', () => new THREE.CylinderGeometry(0.028, 0.036, 0.032, 8)), mats.steel, {
+    pos: [0, 0.094, 0],
+  });
+  part(bomb, cached('bomber-bomb-port', () => new THREE.CylinderGeometry(0.012, 0.014, 0.016, 6)), mats.gold, {
+    pos: [0, 0.114, 0],
+    shadow: false,
+  });
+  const fuseCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0.12, 0),
+    new THREE.Vector3(0.026, 0.16, 0.014),
+    new THREE.Vector3(-0.012, 0.198, -0.012),
+    new THREE.Vector3(0.018, 0.228, 0.01),
+  ]);
+  part(bomb, cached('bomber-bomb-fuse', () => new THREE.TubeGeometry(fuseCurve, 12, 0.007, 5, false)), mats.leather);
+  const spark = part(bomb, cached('bomber-bomb-spark', () => new THREE.SphereGeometry(0.02, 8, 6)), mats.ember, {
+    pos: [0.018, 0.232, 0.01],
+    shadow: false,
+  });
+  const rivetGeo = cached('bomber-bomb-rivet', () => new THREE.CylinderGeometry(0.007, 0.007, 0.01, 6));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    part(bomb, rivetGeo, mats.gold, {
+      pos: [Math.cos(a) * 0.09, 0.01, Math.sin(a) * 0.09],
+      rot: [Math.PI / 2, 0, a],
+      shadow: false,
+    });
+  }
+  return { group: bomb, spark };
+}
 
-  const goggleLens = cached('goggle-lens', () => new THREE.CylinderGeometry(0.034, 0.034, 0.024, 8));
+function addBomberHelm(head, mats) {
+  part(head, cached('bomber-cap', () =>
+    new THREE.SphereGeometry(0.116, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.46)
+  ), mats.leather, {
+    pos: [0, 0.028, -0.004],
+    scale: [1.02, 1.04, 1.02],
+  });
+  part(head, cached('bomber-cap-button', () => new THREE.CylinderGeometry(0.014, 0.014, 0.01, 6)), mats.gold, {
+    pos: [0, 0.118, -0.006],
+    shadow: false,
+  });
+  part(head, trapezoidPlateGeometry(0.11, 0.14, 0.036, 0.016), mats.leather, {
+    pos: [0, 0.012, 0.1],
+    rot: [0.35, 0, 0],
+  });
+  const flapGeo = cached('bomber-earflap', () =>
+    new THREE.SphereGeometry(0.05, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.58)
+  );
   for (const side of [-1, 1]) {
-    part(head, goggleLens, mats.ember, {
-      pos: [side * 0.043, 0.03, 0.094],
+    part(head, flapGeo, mats.leather, {
+      pos: [side * 0.096, 0.002, -0.008],
+      rot: [0, 0, side * 1.85],
+      scale: [1, 1.28, 1],
+    });
+  }
+  part(head, cached('bomber-cap-seam', () => new THREE.TorusGeometry(0.11, 0.009, 5, 12)), mats.charcoal, {
+    pos: [0, 0.056, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [0.88, 0.88, 1],
+    shadow: false,
+  });
+  part(head, cached('bomber-chin-strap', () => new THREE.TorusGeometry(0.1, 0.008, 5, 10, Math.PI * 1.1)), mats.leather, {
+    pos: [0, -0.02, 0.01],
+    rot: [Math.PI / 2 - 0.35, 0, Math.PI * 0.72],
+    scale: [0.92, 1, 0.88],
+  });
+
+  const frameGeo = cached('goggle-frame', () => new THREE.TorusGeometry(0.03, 0.006, 5, 8));
+  const lensGeo = cached('goggle-lens', () => new THREE.CylinderGeometry(0.026, 0.026, 0.016, 8));
+  for (const side of [-1, 1]) {
+    part(head, frameGeo, mats.steel, {
+      pos: [side * 0.042, 0.028, 0.096],
+      rot: [Math.PI / 2 - 0.14, 0, 0],
+      shadow: false,
+    });
+    part(head, lensGeo, mats.ember, {
+      pos: [side * 0.042, 0.028, 0.098],
       rot: [Math.PI / 2 - 0.14, 0, 0],
       shadow: false,
     });
   }
-  part(head, cached('goggle-bridge', () => new THREE.BoxGeometry(0.03, 0.014, 0.02)), mats.steel, {
-    pos: [0, 0.03, 0.101],
+  part(head, cached('goggle-bridge', () => new THREE.BoxGeometry(0.028, 0.012, 0.016)), mats.steel, {
+    pos: [0, 0.03, 0.1],
     shadow: false,
   });
-  // Open at the front so the strap runs behind the head instead of across the
-  // lenses it is supposed to be holding on.
-  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.112, 0.013, 5, 14, Math.PI * 1.2)), mats.charcoal, {
-    pos: [0, 0.03, -0.004],
+  part(head, cached('goggle-strap', () => new THREE.TorusGeometry(0.11, 0.011, 5, 12, Math.PI * 1.2)), mats.charcoal, {
+    pos: [0, 0.028, -0.004],
     rot: [Math.PI / 2 - 0.14, 0, Math.PI * 0.7],
     scale: [1, 1, 0.92],
   });
-  part(head, cached('bomber-scarf', () => new THREE.TorusGeometry(0.085, 0.028, 6, 14)), mats.cloth, {
-    pos: [0, -0.086, -0.006],
-    rot: [-Math.PI / 2 + 0.12, 0, 0],
-    scale: [1, 1.1, 1],
+  part(head, wrapBandGeometry(0.1, 0.096, 0.036, 2.1, 8), mats.cloth, {
+    pos: [0, -0.078, 0.006],
+  });
+}
+
+function addBomberKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.168, 0.158, 0.14, 2.15, 10), mats.leather, {
+    pos: [0, 0.02, 0],
+    scale: [1.02, 1, 0.88],
+  });
+  part(torso, wrapBandGeometry(0.164, 0.154, 0.05, 1.95, 8), mats.armorDeep, {
+    pos: [0, 0.05, 0],
+    scale: [1, 1, 0.9],
+  });
+  part(torso, cached('bomber-belt', () => new THREE.CylinderGeometry(0.152, 0.152, 0.038, 12)), mats.leather, {
+    pos: [0, -0.068, 0],
+    scale: [1.02, 1, 0.88],
+  });
+  part(torso, cached('bomber-buckle', () => new THREE.CylinderGeometry(0.018, 0.018, 0.012, 6)), mats.gold, {
+    pos: [0, -0.068, 0.14],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
   });
 
-  const bomb = buildBomb(mats);
-  bomb.group.position.set(0, -0.03, 0.06);
-  bomb.group.rotation.set(-0.2, 0, 0);
+  const bandolier = new THREE.Group();
+  bandolier.rotation.z = 0.55;
+  part(bandolier, cached('bomber-strap', () => new THREE.TorusGeometry(0.16, 0.016, 5, 14)), mats.leather, {
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [1, 1, 0.86],
+  });
+  const chargeGeo = cached('bomber-charge', () => new THREE.CylinderGeometry(0.02, 0.022, 0.052, 8));
+  const chargeBand = cached('bomber-charge-band', () => new THREE.TorusGeometry(0.022, 0.004, 5, 8));
+  const capGeo = cached('bomber-charge-cap', () => new THREE.CylinderGeometry(0.012, 0.014, 0.016, 6));
+  for (const angle of [0.85, 1.35, 1.85]) {
+    const x = Math.cos(angle) * 0.16;
+    const z = Math.sin(angle) * 0.16 * 0.86;
+    part(bandolier, chargeGeo, mats.charcoal, {
+      pos: [x, 0, z],
+      rot: [0, 0, 0.15],
+    });
+    part(bandolier, chargeBand, mats.gold, {
+      pos: [x, 0.004, z],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+    part(bandolier, capGeo, mats.steel, {
+      pos: [x, 0.032, z],
+      shadow: false,
+    });
+  }
+  torso.add(bandolier);
+
+  const pouchGeo = cached('bomber-pouch', () => new THREE.CylinderGeometry(0.028, 0.024, 0.046, 8));
+  const flapGeo = cached('bomber-pouch-flap', () => new THREE.CylinderGeometry(0.026, 0.022, 0.014, 8));
+  part(torso, pouchGeo, mats.leather, {
+    pos: [-0.122, -0.086, 0.08],
+    rot: [0.15, -0.25, 0.1],
+  });
+  part(torso, flapGeo, mats.charcoal, {
+    pos: [-0.12, -0.062, 0.082],
+    rot: [0.15, -0.25, 0.1],
+    shadow: false,
+  });
+  part(torso, pouchGeo, mats.leather, {
+    pos: [0.128, -0.086, 0.05],
+    rot: [0.12, 0.3, -0.08],
+  });
+  part(torso, flapGeo, mats.charcoal, {
+    pos: [0.126, -0.062, 0.052],
+    rot: [0.12, 0.3, -0.08],
+    shadow: false,
+  });
+  part(torso, cached('bomber-fuse-tin', () => new THREE.CylinderGeometry(0.018, 0.018, 0.032, 8)), mats.steel, {
+    pos: [0.06, -0.09, 0.12],
+    rot: [0.2, 0.15, 0],
+  });
+  part(torso, cached('bomber-fuse-lid', () => new THREE.CylinderGeometry(0.016, 0.016, 0.008, 8)), mats.gold, {
+    pos: [0.06, -0.072, 0.124],
+    rot: [0.2, 0.15, 0],
+    shadow: false,
+  });
+}
+
+function addBomberShoulders(parent, mats) {
+  const capGeo = cached('bomber-shoulder', () =>
+    new THREE.SphereGeometry(0.072, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.52)
+  );
+  const lameGeo = cached('bomber-shoulder-lame', () =>
+    new THREE.SphereGeometry(0.068, 8, 6, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.22)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.168, 0.52, 0.01);
+    pad.rotation.z = side * -0.28;
+    part(pad, capGeo, mats.leather, { scale: [1.12, 0.5, 1.06] });
+    part(pad, lameGeo, mats.armorDeep, {
+      pos: [0, -0.01, 0],
+      scale: [1.14, 0.68, 1.08],
+    });
+    parent.add(pad);
+  }
+}
+
+function addBomberLegKit(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.054, 0.05, 0.07, 2.1, 8);
+  const shinGeo = wrapBandGeometry(0.05, 0.046, 0.08, 2.3, 8);
+  const bootFoot = trapezoidPlateGeometry(0.09, 0.068, 0.12, 0.032);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.leather, { pos: [0, -legs.thigh * 0.46, 0.004] });
+    part(knee, shinGeo, mats.charcoal, { pos: [0, -legs.shin * 0.52, 0.002] });
+    part(knee, wrapBandGeometry(0.052, 0.05, 0.02, 2.15, 8), mats.gold, {
+      pos: [0, -legs.shin * 0.26, 0.004],
+      shadow: false,
+    });
+    part(knee, bootFoot, mats.charcoal, {
+      pos: [0, -legs.shin - 0.012, 0.03],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addBomberBracers(armL, armR, mats) {
+  const bracerGeo = wrapBandGeometry(0.044, 0.04, 0.08, 2.2, 8);
+  const cuffGeo = wrapBandGeometry(0.046, 0.044, 0.018, 2.1, 8);
+  const gloveGeo = wrapBandGeometry(0.042, 0.04, 0.034, 2.2, 8);
+  part(armL.pivot, bracerGeo, mats.leather, { pos: [0, -0.148, 0.003] });
+  part(armR.pivot, bracerGeo, mats.leather, { pos: [0, -0.148, 0.003] });
+  part(armL.pivot, cuffGeo, mats.steel, { pos: [0, -0.118, 0.004], shadow: false });
+  part(armR.pivot, cuffGeo, mats.steel, { pos: [0, -0.118, 0.004], shadow: false });
+  part(armL.hand, gloveGeo, mats.charcoal, { pos: [0, -0.002, 0.003] });
+  part(armR.hand, gloveGeo, mats.charcoal, { pos: [0, -0.002, 0.003] });
+}
+
+function buildBomber(mats) {
+  const group = new THREE.Group();
+  const legs = addLegs(group, mats, { spread: 0.086, legLength: 0.11, boots: false });
+  addBomberLegKit(legs, mats);
+
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.42, 0);
+  part(torso, cached('bomber-belly', () => new THREE.SphereGeometry(0.168, 10, 8)), mats.armor, {
+    scale: [1, 0.92, 0.88],
+  });
+  addBomberKit(torso, mats);
+  group.add(torso);
+  addBomberShoulders(group, mats);
+
+  const armL = addArm(group, mats, -1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.165, shoulderY: 0.5, sleeveMat: mats.armorDeep });
+  addBomberBracers(armL, armR, mats);
+
+  const head = addHead(group, mats, { y: 0.66, radius: 0.106 });
+  const eyes = addEyes(head, mats, { y: -0.046, z: 0.094, spread: 0.042, size: 0.013, socket: false });
+  addBomberHelm(head, mats);
+
+  const bomb = buildBomberBomb(mats);
+  bomb.group.position.set(0, -0.028, 0.058);
+  bomb.group.rotation.set(-0.18, 0.08, 0);
   armR.hand.add(bomb.group);
-  armR.pivot.rotation.set(-0.72, 0, 0.22);
-  armL.pivot.rotation.set(0.16, 0, -0.26);
+  armR.pivot.rotation.set(-0.7, 0, 0.2);
+  armL.pivot.rotation.set(0.12, 0, -0.24);
 
   return {
     group,
@@ -1725,13 +3016,24 @@ function addWingFeather(wing, geometry, material, { yaw, droop = 0, x, y = 0, z 
 function buildEagleWing(mats) {
   const wing = new THREE.Group();
 
-  part(wing, cached('eagle-shoulder-lite', () => new THREE.SphereGeometry(0.075, 10, 8)), mats.armor, {
-    pos: [0.055, 0, -0.01],
-    scale: [1.7, 0.62, 1.3],
+  part(wing, cached('eagle-shoulder', () =>
+    new THREE.SphereGeometry(0.072, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.7)
+  ), mats.armor, {
+    pos: [0.05, 0.004, -0.008],
+    rot: [0, 0, -0.4],
+    scale: [1.55, 0.52, 1.22],
   });
-  part(wing, cached('eagle-radius-lite', () => new THREE.CapsuleGeometry(0.026, 0.16, 4, 6)), mats.armorDeep, {
+  part(wing, wrapBandGeometry(0.058, 0.052, 0.028, 2.1, 8), mats.steel, {
+    pos: [0.062, 0, 0.006],
+    rot: [0, 0, Math.PI / 2],
+  });
+  part(wing, cached('eagle-radius', () => new THREE.CapsuleGeometry(0.022, 0.15, 3, 6)), mats.armorDeep, {
     pos: [0.16, -0.004, 0.012],
     rot: [0, 0, Math.PI / 2],
+  });
+  part(wing, cached('eagle-ulna', () => new THREE.CapsuleGeometry(0.016, 0.1, 3, 6)), mats.armor, {
+    pos: [0.22, -0.016, 0.02],
+    rot: [0.15, 0, Math.PI / 2 + 0.18],
   });
 
   const primaries = 4;
@@ -1769,59 +3071,204 @@ function buildEagleWing(mats) {
   return wing;
 }
 
+function eagleBeakGeometry() {
+  return cached('eagle-beak-profile', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.02);
+    shape.lineTo(0.1, 0.014);
+    shape.quadraticCurveTo(0.152, 0.006, 0.158, -0.03);
+    shape.quadraticCurveTo(0.142, -0.062, 0.108, -0.052);
+    shape.lineTo(0.058, -0.012);
+    shape.lineTo(0, -0.006);
+    shape.lineTo(0, 0.02);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.044,
+      bevelEnabled: false,
+      curveSegments: 3,
+    });
+    geometry.translate(0, 0, -0.022);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function eagleMandibleGeometry() {
+  return cached('eagle-mandible-profile', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.004);
+    shape.lineTo(0.078, 0);
+    shape.quadraticCurveTo(0.1, -0.008, 0.092, -0.02);
+    shape.lineTo(0, -0.012);
+    shape.lineTo(0, 0.004);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.03,
+      bevelEnabled: false,
+      curveSegments: 2,
+    });
+    geometry.translate(0, 0, -0.015);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function addEagleHead(parent, mats) {
+  const head = new THREE.Group();
+  head.position.set(0, 0.568, 0.228);
+  part(head, cached('eagle-skull', () => new THREE.SphereGeometry(0.1, 10, 8)), mats.trim, {
+    scale: [0.88, 0.82, 1.18],
+  });
+  part(head, wrapBandGeometry(0.094, 0.088, 0.03, 2.05, 8), mats.armorDeep, {
+    pos: [0, 0.03, 0.014],
+  });
+  const browGeo = trapezoidPlateGeometry(0.048, 0.03, 0.032, 0.014);
+  for (const side of [-1, 1]) {
+    part(head, browGeo, mats.charcoal, {
+      pos: [side * 0.04, 0.036, 0.082],
+      rot: [0.48, side * -0.28, side * 0.2],
+    });
+  }
+  part(head, cached('eagle-cere', () => new THREE.CylinderGeometry(0.028, 0.034, 0.032, 8)), mats.gold, {
+    pos: [0, 0.004, 0.092],
+    rot: [Math.PI / 2 - 0.12, 0, 0],
+    scale: [1.15, 0.7, 1],
+  });
+  const nareGeo = cached('eagle-nare', () => new THREE.CylinderGeometry(0.006, 0.006, 0.01, 6));
+  for (const side of [-1, 1]) {
+    part(head, nareGeo, mats.charcoal, {
+      pos: [side * 0.014, 0.01, 0.108],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+  }
+  part(head, eagleBeakGeometry(), mats.gold, {
+    pos: [0, -0.004, 0.1],
+    rot: [0.08, Math.PI / 2, 0],
+  });
+  part(head, eagleMandibleGeometry(), mats.gold, {
+    pos: [0, -0.02, 0.096],
+    rot: [0.18, Math.PI / 2, 0],
+  });
+  const eyes = addEyes(head, mats, { z: 0.094, y: 0.014, spread: 0.05, size: 0.018 });
+  const crestGeo = eagleFeatherGeometry(0.074, 0.028, 0.008);
+  part(head, crestGeo, mats.armorDeep, {
+    pos: [0, 0.07, -0.036],
+    rot: [-1.05, 0, 0],
+    shadow: false,
+  });
+  part(head, crestGeo, mats.armor, {
+    pos: [0.016, 0.066, -0.03],
+    rot: [-0.95, 0.4, 0.18],
+    shadow: false,
+  });
+  part(head, crestGeo, mats.armor, {
+    pos: [-0.016, 0.066, -0.03],
+    rot: [-0.95, -0.4, -0.18],
+    shadow: false,
+  });
+  parent.add(head);
+  return { head, eyes };
+}
+
+function addEagleTalons(parent, mats) {
+  const shankWrap = wrapBandGeometry(0.032, 0.028, 0.022, 2.2, 8);
+  const toeGeo = cached('eagle-talon', () => new THREE.ConeGeometry(0.016, 0.086, 5));
+  const hookGeo = cached('eagle-talon-hook', () => new THREE.ConeGeometry(0.01, 0.036, 5));
+  const toes = [
+    [0.038, 0.058, 0.62],
+    [-0.038, 0.058, 0.62],
+    [0, 0.072, 0.82],
+    [0.01, -0.052, -0.95],
+  ];
+
+  for (const side of [-1, 1]) {
+    const foot = new THREE.Group();
+    foot.position.set(side * 0.078, 0.198, 0.058);
+    part(foot, cached('eagle-shank', () => new THREE.CylinderGeometry(0.022, 0.03, 0.08, 6)), mats.gold, {
+      pos: [0, 0.036, 0],
+    });
+    part(foot, shankWrap, mats.armorDeep, { pos: [0, 0.048, 0.004] });
+    part(foot, shankWrap, mats.armorDeep, { pos: [0, 0.022, 0.004] });
+    part(foot, cached('eagle-ankle', () => new THREE.SphereGeometry(0.026, 8, 6)), mats.gold, {
+      pos: [0, 0, 0.006],
+    });
+    part(foot, cached('eagle-pad', () => new THREE.SphereGeometry(0.022, 8, 6)), mats.charcoal, {
+      pos: [0, -0.012, 0.01],
+      scale: [1.2, 0.45, 1.15],
+    });
+    for (const [tx, tz, tilt] of toes) {
+      part(foot, toeGeo, mats.gold, { pos: [tx, -0.014, tz], rot: [tilt, 0, 0] });
+      part(foot, hookGeo, mats.steel, {
+        pos: [tx, -0.048, tz + (tilt > 0 ? 0.034 : -0.026)],
+        rot: [tilt > 0 ? 1.62 : -1.62, 0, 0],
+        shadow: false,
+      });
+    }
+    parent.add(foot);
+  }
+}
+
 function buildEagle(mats) {
   const group = new THREE.Group();
 
-  const torso = part(
-    group,
-    cached('eagle-body-lite', () => new THREE.SphereGeometry(0.19, 12, 10)),
-    mats.armorDeep,
-    { pos: [0, 0.38, -0.01], scale: [0.74, 0.98, 1.5], rot: [0.2, 0, 0] }
-  );
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.38, -0.01);
+  part(torso, cached('eagle-body', () => new THREE.SphereGeometry(0.188, 10, 8)), mats.armorDeep, {
+    scale: [0.74, 0.98, 1.5],
+    rot: [0.2, 0, 0],
+  });
+  part(torso, wrapBandGeometry(0.15, 0.138, 0.12, 2.15, 8), mats.armor, {
+    pos: [0, 0.02, 0.04],
+    rot: [0.25, 0, 0],
+    scale: [0.86, 1, 1.15],
+  });
+  part(torso, cached('eagle-keel', () => new THREE.BoxGeometry(0.02, 0.1, 0.016)), mats.steel, {
+    pos: [0, 0.01, 0.14],
+    rot: [0.35, 0, 0],
+    shadow: false,
+  });
+  group.add(torso);
 
-  const chest = part(
-    group,
-    cached('eagle-chest-lite', () => new THREE.SphereGeometry(0.14, 12, 10)),
-    mats.armor,
-    { pos: [0, 0.4, 0.15], scale: [0.84, 1.18, 0.68] }
-  );
+  const chest = new THREE.Group();
+  chest.position.set(0, 0.4, 0.15);
+  part(chest, cached('eagle-chest', () => new THREE.SphereGeometry(0.136, 10, 8)), mats.armor, {
+    scale: [0.84, 1.18, 0.68],
+  });
+  part(chest, wrapBandGeometry(0.12, 0.11, 0.08, 2.0, 8), mats.trim, {
+    pos: [0, -0.01, 0.02],
+    scale: [0.9, 1, 0.7],
+  });
+  const breastGeo = cached('eagle-breast-feather', () => eagleFeatherGeometry(0.062, 0.04, 0.008));
+  for (let i = 0; i < 2; i++) {
+    const side = i === 0 ? -1 : 1;
+    part(chest, breastGeo, mats.trim, {
+      pos: [side * 0.028, -0.018, 0.072],
+      rot: [1.15, side * 0.28, 0],
+      shadow: false,
+    });
+  }
+  group.add(chest);
 
-  const ruffGeo = cached('eagle-ruff-lite', () => eagleFeatherGeometry(0.07, 0.048, 0.009));
-  for (let i = 0; i < 4; i++) {
-    const angle = -0.7 + (i / 3) * 1.4;
-    part(group, ruffGeo, mats.trim, {
-      pos: [Math.sin(angle) * 0.115, 0.5, 0.11 + Math.cos(angle) * 0.055],
-      rot: [-Math.PI / 2 + 1.15, angle, 0],
+  part(group, cached('eagle-neck', () => new THREE.CapsuleGeometry(0.055, 0.06, 4, 8)), mats.trim, {
+    pos: [0, 0.52, 0.14],
+    rot: [0.55, 0, 0],
+  });
+  const ruffGeo = cached('eagle-ruff', () => eagleFeatherGeometry(0.068, 0.044, 0.009));
+  for (let i = 0; i < 6; i++) {
+    const angle = -0.85 + (i / 5) * 1.7;
+    part(group, ruffGeo, i % 2 ? mats.trim : mats.armor, {
+      pos: [Math.sin(angle) * 0.112, 0.5, 0.108 + Math.cos(angle) * 0.052],
+      rot: [-Math.PI / 2 + 1.12, angle, 0],
       shadow: false,
     });
   }
 
-  const head = new THREE.Group();
-  head.position.set(0, 0.57, 0.22);
-  part(head, cached('eagle-head-lite', () => new THREE.SphereGeometry(0.108, 12, 10)), mats.trim, {
-    scale: [0.94, 1, 1.1],
-  });
-  part(head, cached('eagle-brow-lite', () => new THREE.BoxGeometry(0.165, 0.03, 0.06)), mats.steel, {
-    pos: [0, 0.042, 0.072],
-    rot: [0.34, 0, 0],
-  });
-  part(head, cached('eagle-cere-lite', () => new THREE.SphereGeometry(0.05, 8, 8)), mats.gold, {
-    pos: [0, 0.006, 0.086],
-    scale: [1, 0.85, 0.7],
-  });
-  part(head, cached('eagle-beak-lite', () => new THREE.ConeGeometry(0.045, 0.17, 8)), mats.gold, {
-    pos: [0, -0.014, 0.15],
-    rot: [Math.PI / 2 - 0.22, 0, 0],
-    scale: [1, 1, 0.75],
-  });
-  const eyes = addEyes(head, mats, { z: 0.088, y: 0.014, spread: 0.055, size: 0.016, socket: false });
-  group.add(head);
+  const { head, eyes } = addEagleHead(group, mats);
 
   const wings = {};
   for (const side of [-1, 1]) {
     const wing = buildEagleWing(mats);
     wing.position.set(side * 0.1, 0.45, 0);
-    wing.rotation.z = side * 0.3;
+    wing.rotation.z = side * 0.4;
     wing.scale.x = side;
     group.add(wing);
     wings[side < 0 ? 'left' : 'right'] = wing;
@@ -1830,11 +3277,11 @@ function buildEagle(mats) {
   const tail = new THREE.Group();
   tail.position.set(0, 0.27, -0.28);
   tail.rotation.x = 0.16;
-  for (let i = 0; i < 3; i++) {
-    const spread = (i / 2 - 0.5) * 0.75;
+  for (let i = 0; i < 4; i++) {
+    const spread = (i / 3 - 0.5) * 0.88;
     const pivot = new THREE.Group();
     pivot.rotation.set(0, Math.PI / 2 + spread, -0.16);
-    part(pivot, eagleFeatherGeometry(0.22 - Math.abs(spread) * 0.06, 0.078, 0.014), i % 2 ? mats.trim : mats.steel, {
+    part(pivot, eagleFeatherGeometry(0.21 - Math.abs(spread) * 0.05, 0.07, 0.012), i % 2 ? mats.trim : mats.steel, {
       pos: [0.02, 0, 0],
       rot: [-Math.PI / 2, 0, 0],
       shadow: false,
@@ -1842,19 +3289,7 @@ function buildEagle(mats) {
     tail.add(pivot);
   }
   group.add(tail);
-
-  const toeGeo = cached('eagle-toe-lite', () => new THREE.ConeGeometry(0.015, 0.075, 5));
-  for (const side of [-1, 1]) {
-    const foot = new THREE.Group();
-    foot.position.set(side * 0.07, 0.21, 0.05);
-    part(foot, cached('eagle-shank-lite', () => new THREE.CylinderGeometry(0.022, 0.026, 0.075, 6)), mats.gold, {
-      pos: [0, 0.03, 0],
-    });
-    for (const [tx, tz, tilt] of [[0.03, 0.05, 0.7], [-0.03, 0.05, 0.7], [0, -0.045, -0.8]]) {
-      part(foot, toeGeo, mats.gold, { pos: [tx, -0.02, tz], rot: [tilt, 0, 0] });
-    }
-    group.add(foot);
-  }
+  addEagleTalons(group, mats);
 
   return {
     group,
@@ -1872,89 +3307,261 @@ function buildEagle(mats) {
 // silhouette and it aims with the right arm.
 function buildBombard(mats) {
   const cannon = new THREE.Group();
-
-  part(cannon, cached('bombard-tube', () => new THREE.CylinderGeometry(0.058, 0.048, 0.34, 8)), mats.steel, {
-    pos: [0, 0.07, 0],
+  part(cannon, cached('bombard-tube', () => new THREE.CylinderGeometry(0.09, 0.07, 0.42, 8)), mats.steel, {
+    pos: [0, 0.08, 0],
   });
-  part(cannon, cached('bombard-mouth', () => new THREE.CylinderGeometry(0.076, 0.06, 0.06, 8)), mats.gold, {
-    pos: [0, 0.265, 0],
+  part(cannon, cached('bombard-reinforce', () => new THREE.CylinderGeometry(0.1, 0.086, 0.1, 8)), mats.armorDeep, {
+    pos: [0, -0.03, 0],
   });
-  part(cannon, cached('bombard-bore', () => new THREE.CylinderGeometry(0.05, 0.05, 0.03, 6)), mats.charcoal, {
-    pos: [0, 0.285, 0],
+  part(cannon, cached('bombard-mouth', () => new THREE.CylinderGeometry(0.118, 0.09, 0.07, 8)), mats.gold, {
+    pos: [0, 0.318, 0],
+  });
+  part(cannon, cached('bombard-bore', () => new THREE.CylinderGeometry(0.07, 0.07, 0.03, 6)), mats.charcoal, {
+    pos: [0, 0.348, 0],
     shadow: false,
   });
-  const bandGeo = cached('bombard-band', () => new THREE.TorusGeometry(0.06, 0.013, 5, 12));
-  part(cannon, bandGeo, mats.gold, { pos: [0, 0.16, 0], rot: [-Math.PI / 2, 0, 0] });
-  part(cannon, cached('bombard-breech', () => new THREE.SphereGeometry(0.062, 10, 8)), mats.charcoal, {
-    pos: [0, -0.11, 0],
-    scale: [1, 1.15, 1],
+  part(cannon, cached('bombard-shot', () => new THREE.SphereGeometry(0.048, 8, 6)), mats.charcoal, {
+    pos: [0, 0.3, 0],
+    shadow: false,
   });
-
-  part(cannon, cached('bombard-stock', () => new THREE.BoxGeometry(0.07, 0.22, 0.06)), mats.wood, {
-    pos: [0, -0.15, -0.008],
-    rot: [0.22, 0, 0],
-  });
-  part(cannon, cached('bombard-grip', () => new THREE.CylinderGeometry(0.019, 0.019, 0.11, 6)), mats.wood, {
-    pos: [0, 0.03, 0.075],
+  const bandGeo = cached('bombard-band', () => new THREE.TorusGeometry(0.092, 0.014, 5, 10));
+  part(cannon, bandGeo, mats.gold, { pos: [0, 0.2, 0], rot: [-Math.PI / 2, 0, 0] });
+  part(cannon, bandGeo, mats.gold, { pos: [0, 0.08, 0], rot: [-Math.PI / 2, 0, 0] });
+  part(cannon, cached('bombard-trunnion', () => new THREE.CylinderGeometry(0.016, 0.016, 0.14, 6)), mats.steel, {
+    pos: [0, 0.03, 0],
     rot: [0, 0, Math.PI / 2],
   });
-
+  part(cannon, cached('bombard-breech', () => new THREE.CylinderGeometry(0.086, 0.094, 0.09, 8)), mats.charcoal, {
+    pos: [0, -0.14, 0],
+  });
+  part(cannon, cached('bombard-breech-cap', () => new THREE.CylinderGeometry(0.055, 0.05, 0.024, 8)), mats.gold, {
+    pos: [0, -0.192, 0],
+  });
+  part(cannon, cached('bombard-vent', () => new THREE.SphereGeometry(0.016, 6, 6)), mats.ember, {
+    pos: [0, -0.1, 0.086],
+    shadow: false,
+  });
+  part(cannon, cached('bombard-glow', () => new THREE.CylinderGeometry(0.04, 0.04, 0.02, 6)), mats.ember, {
+    pos: [0, 0.355, 0],
+    shadow: false,
+  });
+  part(cannon, trapezoidPlateGeometry(0.08, 0.1, 0.24, 0.055), mats.wood, {
+    pos: [0, -0.16, -0.012],
+    rot: [0.18, 0, 0],
+  });
+  part(cannon, cached('bombard-grip', () => new THREE.CylinderGeometry(0.02, 0.02, 0.12, 6)), mats.wood, {
+    pos: [0, 0.02, 0.1],
+    rot: [0, 0, Math.PI / 2],
+  });
+  part(cannon, cached('bombard-sight', () => new THREE.BoxGeometry(0.016, 0.036, 0.02)), mats.charcoal, {
+    pos: [0, 0.22, 0.09],
+    shadow: false,
+  });
   return cannon;
 }
 
-function buildShellPouch(mats) {
-  const pouch = new THREE.Group();
-  part(pouch, cached('shell-pouch', () => new THREE.CylinderGeometry(0.06, 0.052, 0.11, 8)), mats.leather);
-  part(pouch, cached('shell-pouch-lip', () => new THREE.TorusGeometry(0.06, 0.01, 5, 12)), mats.gold, {
-    pos: [0, 0.052, 0],
-    rot: [-Math.PI / 2, 0, 0],
+function buildLinstock(mats) {
+  const stick = new THREE.Group();
+  part(stick, cached('linstock-shaft', () => new THREE.CylinderGeometry(0.01, 0.012, 0.16, 6)), mats.wood, {
+    pos: [0, 0.06, 0],
   });
-  const shellGeo = cached('shell-ball', () => new THREE.SphereGeometry(0.03, 8, 6));
-  const spots = [
-    [0.025, 0.072, 0.014],
-    [-0.024, 0.068, -0.012],
-  ];
-  for (const [x, y, z] of spots) {
-    part(pouch, shellGeo, mats.charcoal, { pos: [x, y, z] });
+  part(stick, cached('linstock-fork', () => new THREE.BoxGeometry(0.032, 0.014, 0.014)), mats.steel, {
+    pos: [0, 0.14, 0],
+  });
+  part(stick, cached('linstock-ember', () => new THREE.SphereGeometry(0.018, 8, 6)), mats.ember, {
+    pos: [0, 0.162, 0],
+    shadow: false,
+  });
+  return stick;
+}
+
+function buildShellRack(mats) {
+  const rack = new THREE.Group();
+  part(rack, cached('shell-rack', () => new THREE.BoxGeometry(0.16, 0.08, 0.08)), mats.leather);
+  const shellGeo = cached('shell-ball-lg', () => new THREE.SphereGeometry(0.038, 8, 6));
+  for (const x of [-0.05, 0, 0.05]) {
+    part(rack, shellGeo, mats.charcoal, { pos: [x, 0.05, 0.01] });
   }
-  return pouch;
+  part(rack, cached('shell-rack-band', () => new THREE.BoxGeometry(0.17, 0.02, 0.086)), mats.gold, {
+    pos: [0, 0.01, 0],
+    shadow: false,
+  });
+  return rack;
+}
+
+function addArtilleryHelm(head, mats) {
+  part(head, cached('artillery-helm-bowl', () => new THREE.CylinderGeometry(0.114, 0.124, 0.12, 8)), mats.armor, {
+    pos: [0, 0.03, 0],
+    scale: [1, 1, 0.92],
+  });
+  part(head, cached('artillery-helm-crown', () => new THREE.CylinderGeometry(0.114, 0.114, 0.03, 8)), mats.armor, {
+    pos: [0, 0.104, 0],
+    scale: [1, 1, 0.92],
+  });
+  part(head, cached('artillery-helm-brim', () => new THREE.CylinderGeometry(0.16, 0.15, 0.02, 8)), mats.armorDeep, {
+    pos: [0, -0.02, 0.01],
+    scale: [1, 1, 0.9],
+  });
+  part(head, wrapBandGeometry(0.118, 0.114, 0.05, 2.3, 8), mats.charcoal, {
+    pos: [0, 0.004, 0.006],
+  });
+  part(head, cached('artillery-visor-glow', () => new THREE.BoxGeometry(0.09, 0.012, 0.01)), mats.ember, {
+    pos: [0, 0.01, 0.118],
+    shadow: false,
+  });
+  part(head, trapezoidPlateGeometry(0.014, 0.028, 0.07, 0.014), mats.trim, {
+    pos: [0, 0.13, -0.01],
+    rot: [0.2, 0, 0],
+  });
+  part(head, cached('artillery-helm-band', () => new THREE.TorusGeometry(0.118, 0.01, 5, 10)), mats.trim, {
+    pos: [0, 0.062, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    scale: [1, 0.9, 1],
+    shadow: false,
+  });
+}
+
+function addArtilleryKit(torso, mats) {
+  part(torso, wrapBandGeometry(0.17, 0.152, 0.18, 2.25, 10), mats.armor, {
+    pos: [0, 0.018, 0],
+    scale: [1.04, 1, 0.82],
+  });
+  part(torso, wrapBandGeometry(0.166, 0.154, 0.08, 1.95, 8), mats.steel, {
+    pos: [0, 0.042, 0],
+    scale: [1.02, 1, 0.84],
+  });
+  part(torso, trapezoidPlateGeometry(0.05, 0.08, 0.07, 0.016), mats.trim, {
+    pos: [0, 0.04, 0.138],
+  });
+  part(torso, cached('artillery-sash', () => new THREE.CylinderGeometry(0.016, 0.016, 0.26, 6)), mats.leather, {
+    pos: [-0.02, 0.016, 0.108],
+    rot: [0, 0, -0.4],
+  });
+  part(torso, cached('artillery-belt', () => new THREE.CylinderGeometry(0.136, 0.136, 0.042, 12)), mats.leather, {
+    pos: [0, -0.095, 0],
+    scale: [1.04, 1, 0.82],
+  });
+  part(torso, cached('artillery-buckle', () => new THREE.CylinderGeometry(0.022, 0.022, 0.014, 6)), mats.gold, {
+    pos: [0, -0.095, 0.116],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(torso, trapezoidPlateGeometry(0.16, 0.2, 0.16, 0.018), mats.leather, {
+    pos: [0, -0.155, 0.118],
+    rot: [0.1, 0, 0],
+  });
+  part(torso, cached('artillery-horn', () => new THREE.CylinderGeometry(0.02, 0.034, 0.1, 7)), mats.charcoal, {
+    pos: [0.122, -0.078, 0.052],
+    rot: [0.35, 0.28, 0.48],
+  });
+  part(torso, cached('artillery-horn-cap', () => new THREE.CylinderGeometry(0.016, 0.016, 0.016, 6)), mats.gold, {
+    pos: [0.164, -0.036, 0.072],
+    rot: [0.35, 0.28, 0.48],
+    shadow: false,
+  });
+}
+
+function addArtilleryLegKit(legs, mats) {
+  const thighGeo = wrapBandGeometry(0.058, 0.052, 0.09, 2.1, 8);
+  const kneeGeo = cached('artillery-knee', () =>
+    new THREE.SphereGeometry(0.034, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const greaveGeo = wrapBandGeometry(0.052, 0.046, 0.11, 2.3, 8);
+  const bootFoot = trapezoidPlateGeometry(0.1, 0.074, 0.13, 0.034);
+
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    part(hip, thighGeo, mats.armor, { pos: [0, -legs.thigh * 0.46, 0.006] });
+    part(knee, kneeGeo, mats.steel, {
+      pos: [0, 0.002, 0.03],
+      scale: [1.15, 0.6, 1],
+    });
+    part(knee, greaveGeo, mats.armorDeep, { pos: [0, -legs.shin * 0.52, 0.004] });
+    part(knee, bootFoot, mats.armor, {
+      pos: [0, -legs.shin - 0.014, 0.032],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addArtilleryShoulders(parent, mats) {
+  const capGeo = cached('artillery-pauldron-cap', () =>
+    new THREE.SphereGeometry(0.092, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  );
+  const lameGeo = cached('artillery-pauldron-lame', () =>
+    new THREE.SphereGeometry(0.088, 8, 6, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.24)
+  );
+  for (const side of [-1, 1]) {
+    const pad = new THREE.Group();
+    pad.position.set(side * 0.178, 0.565, 0.008);
+    pad.rotation.z = side * -0.28;
+    part(pad, capGeo, mats.armor, { scale: [1.16, 0.58, 1.08] });
+    part(pad, lameGeo, mats.steel, {
+      pos: [0, -0.014, 0],
+      scale: [1.18, 0.72, 1.1],
+    });
+    parent.add(pad);
+  }
+}
+
+function addArtilleryCape(parent, mats) {
+  const cape = new THREE.Group();
+  cape.position.set(0, 0.5, -0.05);
+  part(cape, cached('artillery-cape', () =>
+    new THREE.CylinderGeometry(0.16, 0.22, 0.28, 12, 2, true, Math.PI * 0.7, Math.PI * 0.6)
+  ), mats.leather, {
+    pos: [0, -0.08, -0.01],
+  });
+  parent.add(cape);
+}
+
+function addArtilleryBracers(armL, armR, mats) {
+  part(armR.pivot, wrapBandGeometry(0.05, 0.044, 0.11, 2.3, 8), mats.steel, {
+    pos: [0, -0.15, 0.004],
+  });
+  part(armL.pivot, wrapBandGeometry(0.048, 0.042, 0.1, 2.25, 8), mats.armorDeep, {
+    pos: [0, -0.15, 0.004],
+  });
+  part(armL.hand, wrapBandGeometry(0.044, 0.04, 0.042, 2.3, 8), mats.leather, {
+    pos: [0, -0.002, 0.004],
+  });
 }
 
 function buildArtillery(mats) {
   const group = new THREE.Group();
-  const legs = addLegs(group, mats, { spread: 0.082, legLength: 0.14 });
-  const torso = addTorso(group, mats, { width: 0.98, height: 0.25, y: 0.45 });
-  part(torso, cached('artillery-strap', () => new THREE.BoxGeometry(0.05, 0.24, 0.02)), mats.leather, {
-    pos: [-0.02, 0.02, 0.1],
-    rot: [0, 0, -0.35],
-  });
-  addPauldrons(group, mats, { radius: 0.074, x: 0.16, material: mats.armorDeep });
-  const armL = addArm(group, mats, -1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
-  const armR = addArm(group, mats, 1, { shoulderX: 0.16, sleeveMat: mats.armorDeep });
-  const head = addHead(group, mats, { y: 0.71, radius: 0.108 });
-  const eyes = addEyes(head, mats, { y: 0.002, z: 0.095, size: 0.014, socket: false });
-  part(head, cached('artillery-helm', () => new THREE.SphereGeometry(0.12, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)), mats.armor, {
-    pos: [0, 0.012, 0],
-  });
-  part(head, cached('artillery-helm-rim', () => new THREE.TorusGeometry(0.108, 0.012, 5, 12)), mats.trim, {
-    pos: [0, 0.03, 0],
-    rot: [-Math.PI / 2, 0, 0],
-  });
+  const legs = addLegs(group, mats, { spread: 0.095, legLength: 0.13, boots: false });
+  addArtilleryLegKit(legs, mats);
+  const torso = addTorso(group, mats, { width: 1.16, height: 0.28, y: 0.44, fittings: false });
+  addArtilleryKit(torso, mats);
+  addArtilleryShoulders(group, mats);
+  addArtilleryCape(group, mats);
+  const armL = addArm(group, mats, -1, { shoulderX: 0.185, shoulderY: 0.545, sleeveMat: mats.armorDeep });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.185, shoulderY: 0.545, sleeveMat: mats.armorDeep });
+  addArtilleryBracers(armL, armR, mats);
+  const head = addHead(group, mats, { y: 0.7, radius: 0.096 });
+  const eyes = addEyes(head, mats, { y: 0.006, z: 0.094, size: 0.013 });
+  addArtilleryHelm(head, mats);
 
   const cannon = buildBombard(mats);
   // Braced against the right shoulder and canted up-forward, so the charge
   // animation on armR reads as raising the barrel to fire.
-  cannon.position.set(0.012, 0.02, 0.05);
-  cannon.rotation.set(1.96, -0.2, -0.06);
-  cannon.scale.setScalar(1.1);
+  cannon.position.set(0.02, 0.03, 0.06);
+  cannon.rotation.set(1.88, -0.16, -0.04);
+  cannon.scale.setScalar(1.28);
   armR.hand.add(cannon);
-  armR.pivot.rotation.set(-0.8, 0.04, 0.24);
-  armL.pivot.rotation.set(-1.2, 0, 0.34);
+  armR.pivot.rotation.set(-0.72, 0.06, 0.18);
 
-  const pouch = buildShellPouch(mats);
-  pouch.position.set(-0.145, 0.36, -0.04);
-  pouch.rotation.set(0.12, 0, 0.24);
-  group.add(pouch);
+  const linstock = buildLinstock(mats);
+  linstock.position.set(0.12, -0.02, 0.08);
+  linstock.rotation.set(0.5, 0.2, 1.1);
+  torso.add(linstock);
+
+  const rack = buildShellRack(mats);
+  rack.position.set(0, 0.46, -0.14);
+  rack.rotation.set(0.18, 0, 0);
+  group.add(rack);
+
+  armL.pivot.rotation.set(-0.95, 0.1, 0.55);
 
   return {
     group,
@@ -1965,105 +3572,160 @@ function buildArtillery(mats) {
     armR: armR.pivot,
     eyes,
     cannon,
+    weapon: cannon,
   };
 }
 
 // Compact bolt thrower for the arrow tower deck.
 function buildBallista(mats) {
   const ballista = new THREE.Group();
-
-  part(ballista, cached('ballista-mount-lite', () => new THREE.BoxGeometry(0.1, 0.045, 0.1)), mats.armorDeep, {
-    pos: [0, 0.022, 0],
+  part(ballista, cached('ballista-mount', () => new THREE.CylinderGeometry(0.042, 0.048, 0.04, 8)), mats.armorDeep, {
+    pos: [0, 0.02, 0],
   });
-  part(ballista, cached('ballista-stock-lite', () => new THREE.BoxGeometry(0.05, 0.042, 0.2)), mats.wood, {
-    pos: [0, 0.066, 0.045],
-    rot: [-0.16, 0, 0],
+  part(ballista, cached('ballista-stock', () => new THREE.BoxGeometry(0.042, 0.038, 0.22)), mats.wood, {
+    pos: [0, 0.062, 0.05],
+    rot: [-0.14, 0, 0],
   });
-  part(ballista, cached('ballista-limb-lite', () => new THREE.BoxGeometry(0.24, 0.024, 0.024)), mats.wood, {
-    pos: [0, 0.08, 0.085],
-    rot: [0, 0, 0],
+  part(ballista, cached('ballista-winch', () => new THREE.CylinderGeometry(0.018, 0.018, 0.05, 6)), mats.steel, {
+    pos: [0, 0.07, 0.01],
+    rot: [0, 0, Math.PI / 2],
   });
-  part(ballista, cached('ballista-string-lite', () => new THREE.BoxGeometry(0.22, 0.008, 0.008)), mats.trim, {
-    pos: [0, 0.086, 0.058],
+  const limbGeo = cached('ballista-limb', () => new THREE.BoxGeometry(0.12, 0.02, 0.022));
+  part(ballista, limbGeo, mats.wood, {
+    pos: [0.07, 0.078, 0.09],
+    rot: [0, 0.18, 0.22],
+  });
+  part(ballista, limbGeo, mats.wood, {
+    pos: [-0.07, 0.078, 0.09],
+    rot: [0, -0.18, -0.22],
+  });
+  part(ballista, cached('ballista-string', () => new THREE.BoxGeometry(0.2, 0.006, 0.006)), mats.trim, {
+    pos: [0, 0.086, 0.062],
     shadow: false,
   });
-  part(ballista, cached('ballista-bolt-lite', () => new THREE.CylinderGeometry(0.011, 0.011, 0.2, 6)), mats.wood, {
-    pos: [0, 0.088, 0.13],
+  part(ballista, cached('ballista-bolt', () => new THREE.CylinderGeometry(0.01, 0.01, 0.2, 5)), mats.wood, {
+    pos: [0, 0.086, 0.135],
     rot: [Math.PI / 2 - 0.14, 0, 0],
   });
-  part(ballista, cached('ballista-tip-lite', () => new THREE.ConeGeometry(0.024, 0.06, 6)), mats.steel, {
-    pos: [0, 0.102, 0.235],
+  part(ballista, cached('ballista-tip', () => new THREE.ConeGeometry(0.022, 0.055, 6)), mats.steel, {
+    pos: [0, 0.1, 0.238],
     rot: [Math.PI / 2 - 0.14, 0, 0],
   });
-
+  part(ballista, cached('ballista-fletch', () => new THREE.ConeGeometry(0.016, 0.036, 4)), mats.trim, {
+    pos: [0, 0.074, 0.042],
+    rot: [Math.PI / 2 - 0.14, 0, 0],
+    shadow: false,
+  });
   return ballista;
 }
 
 function buildTower(mats) {
   const group = new THREE.Group();
 
-  part(group, cached('arrow-tower-foot', () => new THREE.BoxGeometry(0.6, 0.09, 0.6)), mats.armorDeep, {
-    pos: [0, 0.045, 0],
+  part(group, cached('arrow-tower-foot', () => new THREE.BoxGeometry(0.66, 0.08, 0.66)), mats.armorDeep, {
+    pos: [0, 0.04, 0],
   });
-  part(group, cached('arrow-tower-plinth', () => new THREE.BoxGeometry(0.52, 0.07, 0.52)), mats.armor, {
-    pos: [0, 0.125, 0],
+  part(group, cached('arrow-tower-step', () => new THREE.BoxGeometry(0.22, 0.04, 0.12)), mats.armorDeep, {
+    pos: [0, 0.06, 0.36],
   });
-  part(group, cached('arrow-tower-shaft', () => new THREE.BoxGeometry(0.4, 0.42, 0.4)), mats.armor, {
-    pos: [0, 0.37, 0],
+  part(group, cached('arrow-tower-plinth', () => new THREE.BoxGeometry(0.56, 0.08, 0.56)), mats.armor, {
+    pos: [0, 0.12, 0],
+  });
+  part(group, cached('arrow-tower-shaft-low', () => new THREE.BoxGeometry(0.46, 0.22, 0.46)), mats.armor, {
+    pos: [0, 0.27, 0],
+  });
+  part(group, cached('arrow-tower-band', () => new THREE.BoxGeometry(0.5, 0.04, 0.5)), mats.trim, {
+    pos: [0, 0.39, 0],
+  });
+  part(group, cached('arrow-tower-shaft-high', () => new THREE.BoxGeometry(0.4, 0.22, 0.4)), mats.armor, {
+    pos: [0, 0.52, 0],
   });
 
-  const pilasterGeo = cached('arrow-tower-pilaster', () => new THREE.BoxGeometry(0.09, 0.42, 0.09));
-  for (const x of [-0.2, 0.2]) {
-    for (const z of [-0.2, 0.2]) {
-      part(group, pilasterGeo, mats.armorDeep, { pos: [x, 0.37, z] });
+  const pilasterGeo = cached('arrow-tower-pilaster', () => new THREE.BoxGeometry(0.08, 0.46, 0.08));
+  for (const x of [-0.22, 0.22]) {
+    for (const z of [-0.22, 0.22]) {
+      part(group, pilasterGeo, mats.armorDeep, { pos: [x, 0.39, z] });
     }
   }
-  part(group, cached('arrow-tower-band', () => new THREE.BoxGeometry(0.44, 0.045, 0.44)), mats.trim, {
-    pos: [0, 0.3, 0],
+
+  part(group, cached('arrow-tower-door-arch', () => new THREE.BoxGeometry(0.16, 0.2, 0.04)), mats.charcoal, {
+    pos: [0, 0.22, 0.24],
+  });
+  part(group, cached('arrow-tower-door', () => new THREE.BoxGeometry(0.12, 0.16, 0.02)), mats.wood, {
+    pos: [0, 0.21, 0.258],
+  });
+  part(group, cached('arrow-tower-lintel', () => new THREE.BoxGeometry(0.2, 0.04, 0.06)), mats.trim, {
+    pos: [0, 0.33, 0.25],
   });
 
-  const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.06, 0.17, 0.02));
+  const slitGeo = cached('arrow-tower-slit', () => new THREE.BoxGeometry(0.04, 0.12, 0.018));
+  const glowGeo = cached('arrow-tower-slit-glow', () => new THREE.BoxGeometry(0.02, 0.08, 0.01));
   for (let i = 0; i < 4; i++) {
     const yaw = (i / 4) * Math.PI * 2;
     const nx = Math.sin(yaw);
     const nz = Math.cos(yaw);
-    part(group, slitGeo, mats.charcoal, { pos: [nx * 0.209, 0.45, nz * 0.209], rot: [0, yaw, 0] });
+    part(group, slitGeo, mats.charcoal, { pos: [nx * 0.21, 0.52, nz * 0.21], rot: [0, yaw, 0] });
+    part(group, glowGeo, mats.ember, {
+      pos: [nx * 0.218, 0.52, nz * 0.218],
+      rot: [0, yaw, 0],
+      shadow: false,
+    });
   }
 
-  part(group, cached('arrow-tower-corbel', () => new THREE.BoxGeometry(0.54, 0.055, 0.54)), mats.armorDeep, {
-    pos: [0, 0.605, 0],
+  part(group, cached('arrow-tower-corbel', () => new THREE.BoxGeometry(0.56, 0.05, 0.56)), mats.armorDeep, {
+    pos: [0, 0.645, 0],
   });
-  part(group, cached('arrow-tower-deck', () => new THREE.BoxGeometry(0.6, 0.05, 0.6)), mats.armor, {
-    pos: [0, 0.657, 0],
+  part(group, cached('arrow-tower-deck', () => new THREE.BoxGeometry(0.62, 0.045, 0.62)), mats.armor, {
+    pos: [0, 0.692, 0],
+  });
+  part(group, cached('arrow-tower-rail', () => new THREE.BoxGeometry(0.5, 0.03, 0.5)), mats.wood, {
+    pos: [0, 0.73, 0],
+    shadow: false,
   });
 
-  const merlonGeo = cached('arrow-tower-merlon', () => new THREE.BoxGeometry(0.13, 0.15, 0.13));
-  for (const x of [-0.23, 0.23]) {
-    for (const z of [-0.23, 0.23]) {
-      part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.757, z] });
+  const merlonGeo = cached('arrow-tower-merlon', () => new THREE.BoxGeometry(0.12, 0.14, 0.12));
+  for (const x of [-0.25, 0.25]) {
+    for (const z of [-0.25, 0.25]) {
+      part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.79, z] });
     }
+  }
+  const midMerlonGeo = cached('arrow-tower-merlon-mid', () => new THREE.BoxGeometry(0.16, 0.1, 0.07));
+  part(group, midMerlonGeo, mats.armor, { pos: [0, 0.77, 0.275] });
+  part(group, midMerlonGeo, mats.armor, { pos: [0, 0.77, -0.275] });
+  part(group, cached('arrow-tower-merlon-side', () => new THREE.BoxGeometry(0.07, 0.1, 0.16)), mats.armor, {
+    pos: [0.275, 0.77, 0],
+  });
+  part(group, cached('arrow-tower-merlon-side', () => new THREE.BoxGeometry(0.07, 0.1, 0.16)), mats.armor, {
+    pos: [-0.275, 0.77, 0],
+  });
+
+  const torchGeo = cached('arrow-tower-torch', () => new THREE.CylinderGeometry(0.012, 0.016, 0.07, 6));
+  const flameGeo = cached('arrow-tower-flame', () => new THREE.SphereGeometry(0.02, 8, 6));
+  for (const x of [-0.18, 0.18]) {
+    part(group, torchGeo, mats.wood, { pos: [x, 0.36, 0.25] });
+    part(group, flameGeo, mats.ember, { pos: [x, 0.41, 0.25], shadow: false });
   }
 
   const turret = new THREE.Group();
-  turret.position.y = 0.682;
-  for (let i = 0; i < 2; i++) {
-    const yaw = i * Math.PI;
+  turret.position.y = 0.715;
+  for (let i = 0; i < 4; i++) {
+    const yaw = (i / 4) * Math.PI * 2;
     const ballista = buildBallista(mats);
-    ballista.position.set(Math.sin(yaw) * 0.19, 0, Math.cos(yaw) * 0.19);
+    ballista.position.set(Math.sin(yaw) * 0.175, 0, Math.cos(yaw) * 0.175);
     ballista.rotation.y = yaw;
     turret.add(ballista);
   }
   group.add(turret);
 
-  part(group, cached('arrow-tower-mast', () => new THREE.CylinderGeometry(0.014, 0.016, 0.36, 8)), mats.wood, {
-    pos: [0, 0.86, 0],
+  part(group, cached('arrow-tower-mast', () => new THREE.CylinderGeometry(0.014, 0.016, 0.32, 8)), mats.wood, {
+    pos: [0, 0.9, 0],
   });
-  part(group, cached('arrow-tower-finial', () => new THREE.OctahedronGeometry(0.034, 0)), mats.gold, {
-    pos: [0, 1.055, 0],
+  part(group, cached('arrow-tower-finial', () => new THREE.OctahedronGeometry(0.036, 0)), mats.gold, {
+    pos: [0, 1.08, 0],
     shadow: false,
   });
-  part(group, cached('arrow-tower-pennant', () => new THREE.BoxGeometry(0.006, 0.14, 0.23)), mats.ring, {
-    pos: [0, 0.955, 0.118],
+  part(group, cached('arrow-tower-pennant', () => new THREE.BoxGeometry(0.006, 0.12, 0.2)), mats.ring, {
+    pos: [0, 0.99, 0.11],
     shadow: false,
   });
 
@@ -2073,19 +3735,24 @@ function buildTower(mats) {
 function buildCastle(mats) {
   const group = new THREE.Group();
 
-  part(group, cached('castle-foot', () => new THREE.BoxGeometry(0.78, 0.1, 0.78)), mats.armorDeep, {
-    pos: [0, 0.05, 0],
+  part(group, cached('castle-foot', () => new THREE.BoxGeometry(0.8, 0.08, 0.8)), mats.armorDeep, {
+    pos: [0, 0.04, 0],
   });
   part(group, cached('castle-plinth', () => new THREE.BoxGeometry(0.72, 0.08, 0.72)), mats.armor, {
-    pos: [0, 0.14, 0],
+    pos: [0, 0.12, 0],
+  });
+  part(group, cached('castle-yard', () => new THREE.BoxGeometry(0.42, 0.02, 0.42)), mats.charcoal, {
+    pos: [0, 0.165, 0],
+    shadow: false,
   });
 
   const wallH = 0.28;
-  const wallY = 0.18 + wallH / 2;
+  const wallY = 0.16 + wallH / 2;
   const wallThick = 0.1;
   const wallSpan = 0.66;
-  const wallCapY = 0.18 + wallH + 0.02;
-  const wallCapGeo = cached('castle-wall-cap', () => new THREE.BoxGeometry(wallSpan, 0.04, wallThick + 0.02));
+  const wallCapY = 0.16 + wallH + 0.02;
+  const wallCapNS = cached('castle-wall-cap-ns', () => new THREE.BoxGeometry(wallSpan, 0.04, wallThick + 0.02));
+  const wallCapEW = cached('castle-wall-cap-ew', () => new THREE.BoxGeometry(wallThick + 0.02, 0.04, wallSpan - wallThick * 2));
 
   part(group, cached('castle-wall-n', () => new THREE.BoxGeometry(wallSpan, wallH, wallThick)), mats.armor, {
     pos: [0, wallY, -0.28],
@@ -2099,105 +3766,169 @@ function buildCastle(mats) {
   part(group, cached('castle-wall-e', () => new THREE.BoxGeometry(wallThick, wallH, wallSpan - wallThick * 2)), mats.armor, {
     pos: [0.28, wallY, 0],
   });
-  part(group, wallCapGeo, mats.trim, { pos: [0, wallCapY, -0.28] });
-  part(group, wallCapGeo, mats.trim, { pos: [0, wallCapY, 0.28] });
-  part(group, cached('castle-wall-cap-side', () => new THREE.BoxGeometry(wallThick + 0.02, 0.04, wallSpan - wallThick * 2)), mats.trim, {
-    pos: [-0.28, wallCapY, 0],
-  });
-  part(group, cached('castle-wall-cap-side', () => new THREE.BoxGeometry(wallThick + 0.02, 0.04, wallSpan - wallThick * 2)), mats.trim, {
-    pos: [0.28, wallCapY, 0],
-  });
+  part(group, wallCapNS, mats.trim, { pos: [0, wallCapY, -0.28] });
+  part(group, wallCapNS, mats.trim, { pos: [0, wallCapY, 0.28] });
+  part(group, wallCapEW, mats.trim, { pos: [-0.28, wallCapY, 0] });
+  part(group, wallCapEW, mats.trim, { pos: [0.28, wallCapY, 0] });
 
-  const wallMerlonGeo = cached('castle-wall-merlon', () => new THREE.BoxGeometry(0.08, 0.07, 0.07));
+  const wallMerlonGeo = cached('castle-wall-merlon', () => new THREE.BoxGeometry(0.07, 0.068, 0.068));
   for (const x of [-0.18, 0.18]) {
-    part(group, wallMerlonGeo, mats.armorDeep, { pos: [x, wallCapY + 0.05, 0.28] });
+    part(group, wallMerlonGeo, mats.armorDeep, { pos: [x, wallCapY + 0.048, 0.28] });
+    part(group, wallMerlonGeo, mats.armorDeep, { pos: [x, wallCapY + 0.048, -0.28] });
+  }
+  for (const z of [-0.12, 0.12]) {
+    part(group, wallMerlonGeo, mats.armorDeep, { pos: [-0.28, wallCapY + 0.048, z] });
+    part(group, wallMerlonGeo, mats.armorDeep, { pos: [0.28, wallCapY + 0.048, z] });
   }
 
-  const slitGeo = cached('castle-slit', () => new THREE.BoxGeometry(0.035, 0.09, 0.025));
-  part(group, slitGeo, mats.charcoal, { pos: [0.14, wallY + 0.02, -0.28] });
+  const slitGeo = cached('castle-slit', () => new THREE.BoxGeometry(0.028, 0.08, 0.02));
+  const slitGlow = cached('castle-slit-glow', () => new THREE.BoxGeometry(0.018, 0.05, 0.012));
+  for (const [x, z, yaw] of [
+    [0.16, -0.332, 0],
+    [-0.16, -0.332, 0],
+    [0.332, 0, Math.PI / 2],
+    [-0.332, 0, Math.PI / 2],
+  ]) {
+    part(group, slitGeo, mats.charcoal, { pos: [x, wallY + 0.02, z], rot: [0, yaw, 0] });
+    part(group, slitGlow, mats.ember, { pos: [x, wallY + 0.02, z], rot: [0, yaw, 0], shadow: false });
+  }
 
-  part(group, cached('castle-gate-lintel', () => new THREE.BoxGeometry(0.22, 0.06, 0.08)), mats.trim, {
-    pos: [0, 0.24, 0.28],
+  part(group, cached('castle-gate-lintel', () => new THREE.BoxGeometry(0.24, 0.055, 0.08)), mats.trim, {
+    pos: [0, 0.26, 0.3],
   });
-  part(group, cached('castle-gate-arch', () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 10, 1, false, 0, Math.PI)), mats.charcoal, {
-    pos: [0, 0.24, 0.28],
+  part(group, cached('castle-gate-arch', () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 8, 1, false, 0, Math.PI)), mats.charcoal, {
+    pos: [0, 0.25, 0.3],
     rot: [Math.PI / 2, 0, 0],
     shadow: false,
   });
-  const gatePillarGeo = cached('castle-gate-pillar', () => new THREE.BoxGeometry(0.055, 0.24, 0.055));
-  part(group, gatePillarGeo, mats.armorDeep, { pos: [-0.105, 0.21, 0.285] });
-  part(group, gatePillarGeo, mats.armorDeep, { pos: [0.105, 0.21, 0.285] });
+  const gatePillarGeo = cached('castle-gate-pillar', () => new THREE.BoxGeometry(0.05, 0.26, 0.055));
+  part(group, gatePillarGeo, mats.armorDeep, { pos: [-0.11, 0.22, 0.305] });
+  part(group, gatePillarGeo, mats.armorDeep, { pos: [0.11, 0.22, 0.305] });
 
-  part(group, cached('castle-portcullis', () => new THREE.BoxGeometry(0.12, 0.15, 0.012)), mats.steel, {
-    pos: [0, 0.175, 0.272],
-    shadow: false,
-  });
-  part(group, cached('castle-drawbridge', () => new THREE.BoxGeometry(0.19, 0.018, 0.11)), mats.wood, {
-    pos: [0, 0.075, 0.355],
-    rot: [0.14, 0, 0],
-  });
+  const barV = cached('castle-port-bar-v', () => new THREE.BoxGeometry(0.012, 0.14, 0.01));
+  const barH = cached('castle-port-bar-h', () => new THREE.BoxGeometry(0.12, 0.012, 0.01));
+  for (const x of [-0.04, 0, 0.04]) {
+    part(group, barV, mats.steel, { pos: [x, 0.18, 0.29], shadow: false });
+  }
+  for (const y of [0.14, 0.22]) {
+    part(group, barH, mats.steel, { pos: [0, y, 0.29], shadow: false });
+  }
 
-  const torchGeo = cached('castle-torch', () => new THREE.CylinderGeometry(0.012, 0.016, 0.08, 6));
-  for (const x of [-0.16, 0.16]) {
-    part(group, torchGeo, mats.wood, { pos: [x, 0.28, 0.3] });
-    part(group, cached('castle-torch-flame', () => new THREE.SphereGeometry(0.022, 8, 6)), mats.ember, {
-      pos: [x, 0.335, 0.3],
+  part(group, cached('castle-drawbridge', () => new THREE.BoxGeometry(0.2, 0.022, 0.14)), mats.wood, {
+    pos: [0, 0.072, 0.38],
+    rot: [0.16, 0, 0],
+  });
+  const plankGeo = cached('castle-plank', () => new THREE.BoxGeometry(0.2, 0.006, 0.028));
+  for (const z of [-0.04, 0, 0.04]) {
+    part(group, plankGeo, mats.leather, {
+      pos: [0, 0.086, 0.38 + z],
+      rot: [0.16, 0, 0],
+      shadow: false,
+    });
+  }
+  const chainGeo = cached('castle-chain', () => new THREE.CylinderGeometry(0.005, 0.005, 0.16, 4));
+  for (const x of [-0.07, 0.07]) {
+    part(group, chainGeo, mats.steel, {
+      pos: [x, 0.2, 0.34],
+      rot: [0.85, 0, 0],
       shadow: false,
     });
   }
 
-  const cornerGeo = cached('castle-corner', () => new THREE.CylinderGeometry(0.1, 0.11, 0.38, 10));
-  const cornerCapGeo = cached('castle-corner-cap', () => new THREE.ConeGeometry(0.12, 0.12, 10));
+  const torchGeo = cached('castle-torch', () => new THREE.CylinderGeometry(0.012, 0.016, 0.07, 6));
+  const flameGeo = cached('castle-torch-flame', () => new THREE.SphereGeometry(0.02, 6, 5));
+  for (const x of [-0.17, 0.17]) {
+    part(group, torchGeo, mats.wood, { pos: [x, 0.28, 0.322] });
+    part(group, flameGeo, mats.ember, { pos: [x, 0.328, 0.322], shadow: false });
+  }
+
+  const cornerLow = cached('castle-corner-low', () => new THREE.CylinderGeometry(0.108, 0.118, 0.16, 8));
+  const cornerMid = cached('castle-corner-mid', () => new THREE.CylinderGeometry(0.092, 0.104, 0.22, 8));
+  const cornerBand = cached('castle-corner-band', () => new THREE.TorusGeometry(0.1, 0.012, 5, 8));
+  const cornerCap = cached('castle-corner-cap', () => new THREE.ConeGeometry(0.11, 0.1, 8));
+  const cornerMerlon = cached('castle-corner-merlon', () => new THREE.BoxGeometry(0.04, 0.05, 0.04));
+  const cornerSlit = cached('castle-corner-slit', () => new THREE.BoxGeometry(0.02, 0.06, 0.016));
   for (const [x, z] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) {
-    part(group, cornerGeo, mats.armorDeep, { pos: [x, 0.37, z] });
-    part(group, cornerCapGeo, mats.trim, { pos: [x, 0.65, z], shadow: false });
+    part(group, cornerLow, mats.armorDeep, { pos: [x, 0.24, z] });
+    part(group, cornerMid, mats.armor, { pos: [x, 0.42, z] });
+    part(group, cornerBand, mats.trim, {
+      pos: [x, 0.34, z],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+    part(group, cornerCap, mats.trim, { pos: [x, 0.62, z], shadow: false });
+    part(group, cornerMerlon, mats.armorDeep, { pos: [x, 0.55, z + 0.07] });
+    part(group, cornerSlit, mats.ember, { pos: [x, 0.44, z + (z > 0 ? 0.1 : -0.1)], shadow: false });
   }
 
-  part(group, cached('castle-keep-base', () => new THREE.BoxGeometry(0.36, 0.12, 0.36)), mats.armorDeep, {
-    pos: [0, 0.24, 0],
+  part(group, cached('castle-keep-base', () => new THREE.BoxGeometry(0.38, 0.1, 0.38)), mats.armorDeep, {
+    pos: [0, 0.22, 0],
   });
-  part(group, cached('castle-keep-body', () => new THREE.BoxGeometry(0.32, 0.42, 0.32)), mats.armor, {
-    pos: [0, 0.51, 0],
+  part(group, cached('castle-keep-body', () => new THREE.BoxGeometry(0.3, 0.4, 0.3)), mats.armor, {
+    pos: [0, 0.48, 0],
   });
-  part(group, cached('castle-keep-band', () => new THREE.BoxGeometry(0.34, 0.05, 0.34)), mats.trim, {
-    pos: [0, 0.4, 0],
+  part(group, cached('castle-keep-band', () => new THREE.BoxGeometry(0.33, 0.045, 0.33)), mats.trim, {
+    pos: [0, 0.38, 0],
   });
-  part(group, cached('castle-keep-roof', () => new THREE.ConeGeometry(0.23, 0.13, 8)), mats.armorDeep, {
-    pos: [0, 0.84, 0],
+  part(group, cached('castle-keep-roof', () => new THREE.ConeGeometry(0.22, 0.12, 8)), mats.armorDeep, {
+    pos: [0, 0.8, 0],
   });
-
-  const keepWindowGeo = cached('castle-keep-window', () => new THREE.BoxGeometry(0.055, 0.1, 0.02));
-  part(group, keepWindowGeo, mats.ember, { pos: [0, 0.55, 0.165], shadow: false });
-
-  const merlonGeo = cached('castle-merlon', () => new THREE.BoxGeometry(0.08, 0.1, 0.08));
-  for (const [x, z] of [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]]) {
-    part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.77, z] });
+  const keepWindowGeo = cached('castle-keep-window', () => new THREE.BoxGeometry(0.048, 0.08, 0.016));
+  for (const [x, z, yaw] of [
+    [0, 0.158, 0],
+    [0, -0.158, 0],
+    [0.158, 0, Math.PI / 2],
+    [-0.158, 0, Math.PI / 2],
+  ]) {
+    part(group, keepWindowGeo, mats.ember, {
+      pos: [x, 0.54, z],
+      rot: [0, yaw, 0],
+      shadow: false,
+    });
   }
-
-  part(group, cached('castle-crest', () => new THREE.BoxGeometry(0.11, 0.13, 0.018)), mats.ring, {
-    pos: [0, 0.62, 0.168],
+  part(group, cached('castle-keep-door', () => new THREE.BoxGeometry(0.07, 0.1, 0.016)), mats.wood, {
+    pos: [0, 0.34, 0.16],
+  });
+  const merlonGeo = cached('castle-keep-merlon', () => new THREE.BoxGeometry(0.07, 0.08, 0.07));
+  for (const [x, z] of [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]]) {
+    part(group, merlonGeo, mats.armorDeep, { pos: [x, 0.74, z] });
+  }
+  part(group, cached('castle-crest', () => new THREE.BoxGeometry(0.1, 0.12, 0.016)), mats.ring, {
+    pos: [0, 0.6, 0.158],
+    shadow: false,
+  });
+  part(group, cached('castle-crest-cross-v', () => new THREE.BoxGeometry(0.016, 0.07, 0.008)), mats.gold, {
+    pos: [0, 0.6, 0.168],
+    shadow: false,
+  });
+  part(group, cached('castle-crest-cross-h', () => new THREE.BoxGeometry(0.05, 0.016, 0.008)), mats.gold, {
+    pos: [0, 0.61, 0.168],
     shadow: false,
   });
 
-  part(group, cached('castle-mast', () => new THREE.CylinderGeometry(0.016, 0.018, 0.42, 8)), mats.wood, {
-    pos: [0, 0.93, 0],
+  const banner = new THREE.Group();
+  banner.position.set(0, 0.93, 0);
+  part(banner, cached('castle-mast', () => new THREE.CylinderGeometry(0.014, 0.016, 0.36, 6)), mats.wood, {
+    pos: [0, 0.1, 0],
   });
-  part(group, cached('castle-pennant', () => new THREE.BoxGeometry(0.008, 0.18, 0.28)), mats.ring, {
-    pos: [0, 1.02, 0.14],
+  part(banner, trapezoidPlateGeometry(0.16, 0.1, 0.2, 0.01), mats.ring, {
+    pos: [0.1, 0.16, 0],
+    rot: [0, Math.PI / 2, 0.12],
     shadow: false,
   });
-  part(group, cached('castle-finial', () => new THREE.OctahedronGeometry(0.038, 0)), mats.gold, {
-    pos: [0, 1.16, 0],
+  part(banner, cached('castle-finial', () => new THREE.OctahedronGeometry(0.032, 0)), mats.gold, {
+    pos: [0, 0.3, 0],
     shadow: false,
   });
+  group.add(banner);
 
-  return { group };
+  return { group, banner };
 }
 
 // Shoulders that flare out and then draw back into a trailing wisp, so the
 // silhouette tapers instead of sitting on the tile like an egg.
 function ghostShroudGeometry() {
-  return cached('ghost-shroud', () => {
+  return cached('ghost-shroud-14', () => {
     const profile = [
       new THREE.Vector2(0.002, 0.3),
       new THREE.Vector2(0.075, 0.295),
@@ -2212,7 +3943,27 @@ function ghostShroudGeometry() {
       new THREE.Vector2(0.028, -0.13),
       new THREE.Vector2(0.0, -0.16),
     ];
-    return new THREE.LatheGeometry(profile, 26);
+    return new THREE.LatheGeometry(profile, 14);
+  });
+}
+
+function ghostTatterGeometry() {
+  return cached('ghost-tatter-strip', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.016, 0.1);
+    shape.lineTo(0.016, 0.1);
+    shape.lineTo(0.028, -0.06);
+    shape.quadraticCurveTo(0.012, -0.12, 0, -0.1);
+    shape.quadraticCurveTo(-0.018, -0.14, -0.026, -0.05);
+    shape.lineTo(-0.016, 0.1);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.008,
+      bevelEnabled: false,
+      curveSegments: 2,
+    });
+    geometry.translate(0, 0, -0.004);
+    geometry.computeVertexNormals();
+    return geometry;
   });
 }
 
@@ -2253,21 +4004,49 @@ function buildGhost(mats) {
   torso.position.set(0, 0.3, 0);
   group.add(torso);
   part(torso, ghostShroudGeometry(), gauze, { shadow: false });
+  part(torso, ghostShroudGeometry(), gauzeDeep, {
+    pos: [0, 0.012, 0],
+    scale: [0.84, 0.9, 0.84],
+    shadow: false,
+  });
+  part(torso, wrapBandGeometry(0.16, 0.148, 0.08, 2.15, 8), gauzeDeep, {
+    pos: [0, 0.12, 0],
+    scale: [1, 1, 0.82],
+    shadow: false,
+  });
 
-  // Torn strips hanging off the hem; without them the tapered lathe reads as a
-  // smooth teardrop rather than something that has been rotting for a century.
-  const tatterGeo = cached('ghost-tatter', () => new THREE.ConeGeometry(0.05, 0.22, 6));
+  const tatterGeo = ghostTatterGeometry();
   const tatters = [
-    [0.0, 0.8], [0.78, 0.5], [1.57, 0.9], [2.36, 0.6],
-    [3.14, 0.85], [3.93, 0.45], [4.71, 0.75], [5.5, 0.55],
+    [0.0, 1], [0.7, 0.72], [1.5, 1.08], [2.3, 0.78],
+    [3.14, 1.02], [3.9, 0.68], [4.7, 0.92], [5.5, 0.74],
   ];
   for (const [angle, length] of tatters) {
-    const r = 0.155;
+    const r = 0.15;
     part(torso, tatterGeo, gauzeDeep, {
-      // Flattened tangentially so each one reads as a hanging strip of cloth.
-      pos: [Math.cos(angle) * r, 0.01 - 0.11 * length, Math.sin(angle) * r],
-      rot: [Math.sin(angle) * 0.26, -angle, -Math.cos(angle) * 0.26],
-      scale: [1.75, length, 0.4],
+      pos: [Math.cos(angle) * r, -0.02, Math.sin(angle) * r],
+      rot: [0.2 + Math.sin(angle) * 0.18, -angle, -Math.cos(angle) * 0.2],
+      scale: [1.1, length, 1],
+      shadow: false,
+    });
+  }
+  part(torso, tatterGeo, gauze, {
+    pos: [0.02, -0.04, -0.16],
+    rot: [0.55, 0.15, 0.08],
+    scale: [0.9, 1.35, 1],
+    shadow: false,
+  });
+  part(torso, tatterGeo, gauze, {
+    pos: [-0.04, -0.03, -0.15],
+    rot: [0.48, -0.2, -0.1],
+    scale: [0.85, 1.2, 1],
+    shadow: false,
+  });
+
+  const linkGeo = cached('ghost-chain', () => new THREE.TorusGeometry(0.014, 0.004, 5, 8));
+  for (let i = 0; i < 3; i++) {
+    part(torso, linkGeo, mats.steel, {
+      pos: [0.12, 0.08 - i * 0.032, 0.04],
+      rot: [0.3, 0.4, i * 0.7],
       shadow: false,
     });
   }
@@ -2275,35 +4054,59 @@ function buildGhost(mats) {
   const head = new THREE.Group();
   head.position.set(0, 0.58, 0);
   group.add(head);
-  part(head, cached('ghost-skull', () => new THREE.SphereGeometry(0.115, 18, 14)), gauze, {
-    scale: [1, 1.06, 0.96],
+  part(head, cached('ghost-skull', () => new THREE.SphereGeometry(0.11, 10, 8)), gauze, {
+    scale: [1, 1.06, 0.94],
     shadow: false,
   });
-  // Hollow face so the glow has something to sit in.
-  // Pushed proud of the veil: behind it, the translucent skull washes the
-  // hollow out to the same milky grey as the rest of the shroud.
-  part(head, cached('ghost-void', () => new THREE.SphereGeometry(0.1, 16, 12)), voidMat, {
-    pos: [0, -0.006, 0.052],
-    scale: [0.9, 0.96, 0.8],
+  part(head, cached('ghost-veil', () =>
+    new THREE.SphereGeometry(0.122, 10, 7, Math.PI / 2 + 0.95, Math.PI * 2 - 1.9, 0, Math.PI * 0.62)
+  ), gauzeDeep, {
+    pos: [0, 0.01, -0.014],
+    scale: [1.02, 0.96, 1.1],
     shadow: false,
   });
-  const eyes = addEyes(head, mats, { y: 0.024, z: 0.116, spread: 0.046, size: 0.024, socket: false });
-  part(head, cached('ghost-mouth', () => new THREE.SphereGeometry(0.03, 12, 10)), mats.eye, {
-    pos: [0, -0.05, 0.108],
-    scale: [0.66, 1.15, 0.5],
+  part(head, cached('ghost-void', () => new THREE.SphereGeometry(0.096, 10, 8)), voidMat, {
+    pos: [0, -0.006, 0.054],
+    scale: [0.88, 0.94, 0.78],
+    shadow: false,
+  });
+  const eyes = addEyes(head, mats, { y: 0.022, z: 0.114, spread: 0.046, size: 0.022 });
+  part(head, trapezoidPlateGeometry(0.036, 0.05, 0.04, 0.012), voidMat, {
+    pos: [0, -0.042, 0.1],
+  });
+  part(head, cached('ghost-mouth', () => new THREE.SphereGeometry(0.018, 8, 6)), mats.eye, {
+    pos: [0, -0.044, 0.108],
+    scale: [0.7, 1.2, 0.45],
+    shadow: false,
+  });
+  part(head, wrapBandGeometry(0.1, 0.096, 0.024, 2.0, 8), gauzeDeep, {
+    pos: [0, -0.02, 0.01],
     shadow: false,
   });
 
-  // Wispy arms reaching forward; pivots so the shared idle sway still applies.
-  const armGeo = cached('ghost-arm', () => new THREE.CapsuleGeometry(0.032, 0.16, 5, 10));
-  const clawGeo = cached('ghost-claw', () => new THREE.ConeGeometry(0.03, 0.09, 7));
+  const armGeo = cached('ghost-arm', () => new THREE.CapsuleGeometry(0.03, 0.15, 4, 8));
+  const sleeveGeo = wrapBandGeometry(0.038, 0.03, 0.1, 2.2, 8);
+  const clawGeo = cached('ghost-claw', () => new THREE.ConeGeometry(0.012, 0.07, 5));
   const arms = {};
   for (const side of [-1, 1]) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.128, 0.5, 0.015);
-    pivot.rotation.set(-1.0, 0, side * 0.34);
-    part(pivot, armGeo, gauze, { pos: [0, -0.09, 0], scale: [1, 1, 1], shadow: false });
-    part(pivot, clawGeo, gauzeDeep, { pos: [0, -0.2, 0.012], rot: [0.5, 0, 0], shadow: false });
+    pivot.position.set(side * 0.13, 0.5, 0.016);
+    pivot.rotation.set(-1.02, 0, side * 0.32);
+    part(pivot, armGeo, gauze, { pos: [0, -0.088, 0], shadow: false });
+    part(pivot, sleeveGeo, gauzeDeep, { pos: [0, -0.1, 0.004], shadow: false });
+    part(pivot, tatterGeo, gauzeDeep, {
+      pos: [side * 0.02, -0.12, -0.02],
+      rot: [0.4, 0, side * 0.25],
+      scale: [0.7, 0.7, 1],
+      shadow: false,
+    });
+    for (const [x, tilt] of [[-0.016, 0.28], [0, 0.5], [0.016, 0.28]]) {
+      part(pivot, clawGeo, gauzeDeep, {
+        pos: [x, -0.2, 0.014],
+        rot: [tilt, 0, x * 8],
+        shadow: false,
+      });
+    }
     group.add(pivot);
     arms[side < 0 ? 'left' : 'right'] = pivot;
   }
@@ -2359,45 +4162,73 @@ function crabArcGeometry(key, radius, tube, arc) {
   });
 }
 
-function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat) {
+function buildCrabClaw(side, mats, shellMat, clawMat, clawDeepMat, jointMat, { crush = false } = {}) {
   const claw = new THREE.Group();
   claw.position.set(side * 0.185, 0.03, 0.1);
   claw.rotation.set(-0.34, side * 0.54, 0);
+  const bulk = crush ? 1.18 : 0.92;
 
-  part(claw, cached('crab-shoulder-lite', () => new THREE.SphereGeometry(0.05, 10, 8)), jointMat, {
-    scale: [1, 0.88, 1],
+  part(claw, cached('crab-shoulder', () => new THREE.SphereGeometry(0.048, 8, 6)), jointMat, {
+    scale: [1, 0.86, 1],
   });
-  part(claw, cached('crab-arm-upper-lite', () => new THREE.CylinderGeometry(0.036, 0.046, 0.085, 8)), shellMat, {
+  part(claw, cached('crab-merus', () => new THREE.CylinderGeometry(0.034, 0.044, 0.086, 8)), shellMat, {
     pos: [0, 0.004, 0.048],
     rot: [Math.PI / 2, 0, 0],
+    scale: [bulk, 1, bulk],
+  });
+  part(claw, wrapBandGeometry(0.04, 0.038, 0.018, 2.2, 8), jointMat, {
+    pos: [0, 0.004, 0.088],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
   });
 
   const palm = new THREE.Group();
   palm.position.set(0, 0.016, 0.16);
   palm.rotation.set(0.1, side * -0.24, side * 0.42);
   claw.add(palm);
-  part(palm, cached('crab-palm-lite', () => new THREE.SphereGeometry(0.07, 10, 8)), clawMat, {
-    scale: [0.78, 1, 1.24],
+  part(palm, cached(`crab-palm-${crush ? 'crush' : 'cut'}`, () =>
+    new THREE.SphereGeometry(crush ? 0.078 : 0.064, 8, 6)
+  ), clawMat, {
+    scale: [0.72, 0.92, 1.28],
+  });
+  part(palm, wrapBandGeometry(crush ? 0.07 : 0.058, crush ? 0.066 : 0.054, 0.02, 2.0, 8), mats.gold, {
+    pos: [0, 0.01, 0.02],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
   });
 
-  const pincerGeo = cached('crab-pincer-lite', () => new THREE.CylinderGeometry(0.01, 0.038, 0.1, 8));
+  const finger = trapezoidPlateGeometry(crush ? 0.028 : 0.02, crush ? 0.055 : 0.042, crush ? 0.1 : 0.12, crush ? 0.032 : 0.022);
+  const toothGeo = cached('crab-tooth', () => new THREE.BoxGeometry(0.01, 0.01, 0.014));
+
   const upperPinch = new THREE.Group();
-  upperPinch.position.set(0, 0.036, 0.058);
-  upperPinch.rotation.set(-0.34, 0, 0);
+  upperPinch.position.set(0, crush ? 0.04 : 0.032, 0.055);
+  upperPinch.rotation.set(-0.32, 0, 0);
   palm.add(upperPinch);
-  part(upperPinch, pincerGeo, clawMat, {
-    pos: [0, 0, 0.05],
+  part(upperPinch, finger, clawMat, {
+    pos: [0, 0, 0.052],
     rot: [Math.PI / 2, 0, 0],
+  });
+  part(upperPinch, toothGeo, mats.gold, {
+    pos: [0, -0.012, 0.07],
+    shadow: false,
+  });
+  part(upperPinch, toothGeo, mats.gold, {
+    pos: [0, -0.012, 0.092],
+    shadow: false,
   });
 
   const lowerPinch = new THREE.Group();
-  lowerPinch.position.set(0, -0.032, 0.058);
-  lowerPinch.rotation.set(0.26, 0, 0);
+  lowerPinch.position.set(0, crush ? -0.036 : -0.028, 0.055);
+  lowerPinch.rotation.set(0.24, 0, 0);
   palm.add(lowerPinch);
-  part(lowerPinch, pincerGeo, clawDeepMat, {
-    pos: [0, 0, 0.042],
+  part(lowerPinch, finger, clawDeepMat, {
+    pos: [0, 0, 0.046],
     rot: [Math.PI / 2, 0, 0],
-    scale: [0.88, 0.88, 0.84],
+    scale: [0.88, 0.88, 0.86],
+  });
+  part(lowerPinch, toothGeo, mats.gold, {
+    pos: [0, 0.01, 0.078],
+    shadow: false,
   });
 
   return claw;
@@ -2407,10 +4238,15 @@ function addCrabEyeStalk(parent, side, mats, shellMat) {
   const stalk = new THREE.Group();
   stalk.position.set(side * 0.066, 0.028, 0.05);
   stalk.rotation.set(-0.14, 0, side * -0.3);
-  part(stalk, cached('crab-stalk-lite', () => new THREE.CylinderGeometry(0.012, 0.017, 0.086, 8)), shellMat, {
+  part(stalk, cached('crab-stalk', () => new THREE.CylinderGeometry(0.011, 0.016, 0.086, 6)), shellMat, {
     pos: [0, 0.043, 0],
   });
-  const eye = part(stalk, cached('crab-eyeball-lite', () => new THREE.SphereGeometry(0.023, 8, 8)), mats.eye, {
+  part(stalk, cached('crab-eye-cup', () => new THREE.TorusGeometry(0.02, 0.005, 5, 8)), mats.gold, {
+    pos: [0, 0.096, 0.012],
+    rot: [0.4, 0, 0],
+    shadow: false,
+  });
+  const eye = part(stalk, cached('crab-eyeball', () => new THREE.SphereGeometry(0.022, 8, 6)), mats.eye, {
     pos: [0, 0.102, 0.014],
     shadow: false,
   });
@@ -2424,23 +4260,48 @@ function addCrabLeg(parent, side, z, fan, splay, mats, legMat) {
   leg.rotation.set(0, side * fan, side * splay);
   parent.add(leg);
 
-  part(leg, cached('crab-leg-femur-lite', () => new THREE.CylinderGeometry(0.018, 0.024, 0.11, 7)), legMat, {
+  part(leg, cached('crab-leg-femur', () => new THREE.CylinderGeometry(0.017, 0.023, 0.11, 6)), legMat, {
     pos: [0, -0.055, 0],
+  });
+  part(leg, wrapBandGeometry(0.022, 0.02, 0.016, 2.2, 8), mats.gold, {
+    pos: [0, -0.03, 0.004],
+    shadow: false,
   });
 
   const knee = new THREE.Group();
   knee.position.set(0, -0.11, 0);
   knee.rotation.z = side * -(splay + 0.16);
   leg.add(knee);
-  part(knee, cached('crab-leg-tibia-lite', () => new THREE.CylinderGeometry(0.012, 0.017, 0.078, 7)), legMat, {
+  part(knee, cached('crab-leg-knee', () => new THREE.SphereGeometry(0.018, 8, 6)), mats.charcoal, {
+    pos: [0, 0.002, 0],
+  });
+  part(knee, cached('crab-leg-tibia', () => new THREE.CylinderGeometry(0.011, 0.016, 0.078, 6)), legMat, {
     pos: [0, -0.042, 0],
   });
-  part(knee, cached('crab-leg-tip-lite', () => new THREE.ConeGeometry(0.013, 0.048, 6)), mats.charcoal, {
-    pos: [0, -0.104, 0],
+  part(knee, cached('crab-leg-tip', () => new THREE.ConeGeometry(0.012, 0.05, 5)), mats.charcoal, {
+    pos: [0, -0.106, 0],
     rot: [Math.PI, 0, 0],
     shadow: false,
   });
   return leg;
+}
+
+function addCrabBanner(parent, mats) {
+  const banner = new THREE.Group();
+  banner.position.set(0, 0.08, -0.12);
+  part(banner, cached('crab-banner-pole', () => new THREE.CylinderGeometry(0.008, 0.01, 0.16, 6)), mats.steel, {
+    pos: [0, 0.08, 0],
+  });
+  part(banner, cached('crab-banner-finial', () => new THREE.SphereGeometry(0.014, 6, 5)), mats.gold, {
+    pos: [0, 0.164, 0],
+    shadow: false,
+  });
+  part(banner, trapezoidPlateGeometry(0.07, 0.05, 0.08, 0.008), mats.cloth, {
+    pos: [0.04, 0.11, 0],
+    rot: [0, 0, -0.15],
+  });
+  parent.add(banner);
+  return banner;
 }
 
 function buildCrabGeneral(mats) {
@@ -2504,10 +4365,15 @@ function buildCrabGeneral(mats) {
     scale: [1.25, 1, 1],
     shadow: false,
   });
+  part(body, crabArcGeometry('crab-shell-groove-2', 0.09, 0.006, Math.PI * 0.95), shellDeepMat, {
+    pos: [0, 0.078, -0.02],
+    scale: [1.15, 1, 1],
+    shadow: false,
+  });
 
-  const knobGeo = cached('crab-shell-knob-lite', () => new THREE.SphereGeometry(0.026, 8, 6));
-  for (const x of [-0.11, 0.11]) {
-    part(body, knobGeo, shellMat, { pos: [x, 0.09, 0.02], scale: [0.95, 0.5, 0.95], shadow: false });
+  const knobGeo = cached('crab-shell-knob', () => new THREE.SphereGeometry(0.024, 8, 6));
+  for (const [x, z] of [[-0.11, 0.02], [0.11, 0.02], [-0.07, -0.08], [0.07, -0.08]]) {
+    part(body, knobGeo, shellMat, { pos: [x, 0.088, z], scale: [0.95, 0.48, 0.95], shadow: false });
   }
 
   part(body, crabArcGeometry('crab-shell-brow', 0.175, 0.012, Math.PI * 0.72), mats.gold, {
@@ -2515,38 +4381,54 @@ function buildCrabGeneral(mats) {
     scale: [1.18, 1, 1],
     shadow: false,
   });
+  part(body, trapezoidPlateGeometry(0.04, 0.07, 0.05, 0.01), mats.gold, {
+    pos: [0, 0.1, 0.02],
+    rot: [Math.PI / 2 - 0.4, 0, 0],
+    shadow: false,
+  });
 
-  const spikeGeo = cached('crab-shell-spike-lite', () => new THREE.ConeGeometry(0.026, 0.085, 6));
+  const spikeGeo = cached('crab-shell-spike', () => new THREE.ConeGeometry(0.026, 0.085, 6));
   for (const side of [-1, 1]) {
     part(body, spikeGeo, shellDeepMat, {
       pos: [side * 0.295, 0.004, 0.018],
       rot: [0, 0.35, side * -1.46],
       shadow: false,
     });
+    part(body, spikeGeo, shellDeepMat, {
+      pos: [side * 0.22, 0.002, -0.14],
+      rot: [0.35, 0, side * -1.2],
+      scale: [0.75, 0.75, 0.75],
+      shadow: false,
+    });
   }
 
-  part(body, cached('crab-belly-plate', () => new THREE.BoxGeometry(0.3, 0.045, 0.24)), bellyMat, {
-    pos: [0, -0.045, -0.005],
+  part(body, trapezoidPlateGeometry(0.26, 0.22, 0.22, 0.04), bellyMat, {
+    pos: [0, -0.046, -0.005],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(body, trapezoidPlateGeometry(0.16, 0.12, 0.1, 0.016), bellyMat, {
+    pos: [0, -0.058, 0.06],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
   });
 
-  // Face sits in the notch under the front lip, where the shell overhangs it.
   const head = new THREE.Group();
   head.position.set(0, -0.012, 0.132);
   body.add(head);
-  part(head, cached('crab-face-plate', () => new THREE.BoxGeometry(0.13, 0.058, 0.06)), shellDeepMat, {
-    pos: [0, 0, 0.005],
+  part(head, trapezoidPlateGeometry(0.1, 0.14, 0.06, 0.05), shellDeepMat, {
+    pos: [0, 0, 0.008],
     rot: [0.12, 0, 0],
   });
-  part(head, cached('crab-maxilliped', () => new THREE.BoxGeometry(0.075, 0.036, 0.03)), bellyMat, {
-    pos: [0, -0.03, 0.026],
+  part(head, trapezoidPlateGeometry(0.055, 0.08, 0.036, 0.024), bellyMat, {
+    pos: [0, -0.028, 0.028],
     rot: [0.24, 0, 0],
     shadow: false,
   });
-  const mandibleGeo = cached('crab-mandible', () => new THREE.ConeGeometry(0.014, 0.05, 6));
+  const mandibleGeo = trapezoidPlateGeometry(0.012, 0.02, 0.042, 0.014);
   for (const side of [-1, 1]) {
     part(head, mandibleGeo, jointMat, {
-      pos: [side * 0.042, -0.026, 0.03],
-      rot: [1.5, 0, side * 0.34],
+      pos: [side * 0.04, -0.028, 0.036],
+      rot: [1.15, 0, side * 0.32],
       shadow: false,
     });
   }
@@ -2557,19 +4439,22 @@ function buildCrabGeneral(mats) {
   }
   const eyes = [eyeStalks.left.eye, eyeStalks.right.eye];
 
-  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat);
-  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat);
+  const clawL = buildCrabClaw(-1, mats, shellMat, clawMat, clawDeepMat, jointMat, { crush: true });
+  const clawR = buildCrabClaw(1, mats, shellMat, clawMat, clawDeepMat, jointMat, { crush: false });
   body.add(clawL);
   body.add(clawR);
 
   for (const [z, fan, splay] of [
-    [0.04, 0.22, 0.98],
-    [-0.09, -0.28, 0.88],
+    [0.07, 0.38, 1.02],
+    [0.0, 0.04, 0.94],
+    [-0.1, -0.34, 0.86],
   ]) {
     for (const side of [-1, 1]) {
       addCrabLeg(body, side, z, fan, splay, mats, legMat);
     }
   }
+
+  const banner = addCrabBanner(body, mats);
 
   return {
     group,
@@ -2580,6 +4465,7 @@ function buildCrabGeneral(mats) {
     eyes,
     eyeStalkL: eyeStalks.left.stalk,
     eyeStalkR: eyeStalks.right.stalk,
+    banner,
     extraMaterials,
   };
 }
@@ -2619,14 +4505,14 @@ const GLOBAL_SCALE = 0.88;
 const SILHOUETTE = {
   swordsman: [1, 1, 1],
   archer: [0.94, 1.04, 0.94],
-  artillery: [1.02, 0.96, 1.04],
-  tower: [0.92, 0.92, 0.92],
-  shield: [1.1, 0.94, 1.08],
-  mage: [0.96, 1.02, 0.96],
+  artillery: [1.12, 0.94, 1.12],
+  tower: [1.02, 1.04, 1.02],
+  shield: [1.16, 0.94, 1.12],
+  mage: [0.92, 1.08, 0.92],
   assassin: [0.92, 1.03, 0.92],
   bomber: [1.06, 0.9, 1.06],
-  eagle: [1, 1, 1],
-  priest: [0.94, 1, 0.94],
+  eagle: [1.06, 1, 1.06],
+  priest: [1.04, 0.98, 1.04],
   ghost: [0.9, 1.08, 0.9],
   viper: [0.98, 1.04, 0.98],
   crabGeneral: [1.14, 0.86, 1.14],

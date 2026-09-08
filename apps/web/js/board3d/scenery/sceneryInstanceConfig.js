@@ -7,6 +7,12 @@ import {
   buildWildflowers,
   buildMushrooms,
   buildReeds,
+  buildBush,
+  buildFence,
+  buildLantern,
+  buildStatue,
+  buildDebris,
+  buildLawnMound,
 } from '../SceneryModels.js';
 
 /** Kinds rendered via InstancedMesh (Level 1+2). */
@@ -19,6 +25,12 @@ export const SCENERY_INSTANCE_KINDS = {
   reeds: { variants: 3, builder: buildReeds },
   tree: { variants: 3, builder: buildDecorTree },
   hedge: { variants: 2, builder: buildHedge },
+  bush: { variants: 3, builder: buildBush },
+  fence: { variants: 2, builder: buildFence },
+  lantern: { variants: 2, builder: buildLantern },
+  statue: { variants: 2, builder: buildStatue },
+  debris: { variants: 4, builder: buildDebris },
+  mound: { variants: 3, builder: buildLawnMound },
 };
 
 export function isSceneryInstanceKind(kind) {
