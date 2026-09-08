@@ -213,17 +213,20 @@
           <button type="button" class="codex-tab" role="tab" data-codex-tab="items" aria-selected="false">道具</button>
           <button type="button" class="codex-tab" role="tab" data-codex-tab="mechanisms" aria-selected="false">機關</button>
         </div>
-        <div class="screen-scroll">
-          <div class="class-picker" id="codexPicker"></div>
-          <div class="class-detail" id="codexDetail">
+        <div class="class-detail" id="codexDetail">
             <div class="detail-preview-host" id="codexPreviewHost">
+              <div class="codex-static-preview hidden" id="codexStaticPreview"></div>
+              <button type="button" class="codex-preview-close hidden" id="codexPreviewClose" aria-label="關閉全螢幕預覽">✕</button>
+              <div class="codex-preview-hint hidden" id="codexPreviewHint">拖曳旋轉 · 雙指縮放</div>
               <div class="range-legend" id="codexRangeLegend" aria-label="範圍圖例">
                 <span><i class="range-swatch move"></i>移動範圍</span>
                 <span><i class="range-swatch attack"></i>攻擊範圍</span>
               </div>
             </div>
-            <div class="detail-info" id="codexDetailInfo"></div>
-          </div>
+          <div class="detail-info" id="codexDetailInfo"></div>
+        </div>
+        <div class="screen-scroll">
+          <div class="class-grid" id="codexPicker"></div>
         </div>
       </section>
 

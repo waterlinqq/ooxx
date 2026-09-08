@@ -1,7 +1,9 @@
+import { ASSET_VERSION } from './assetVersion.js';
+
 const THUMB_ROOT = '/thumbs';
 
 export function thumbnailUrl(category, id) {
-  return `${THUMB_ROOT}/${category}/${id}.png`;
+  return `${THUMB_ROOT}/${category}/${id}.png?v=${ASSET_VERSION}`;
 }
 
 export function createThumbnailMap(ids, category) {

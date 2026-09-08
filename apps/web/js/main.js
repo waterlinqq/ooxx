@@ -12,7 +12,7 @@ import { fillItemIcon, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { createThumbnailMap } from './board3d/thumbnailPaths.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, FRAGMENTS_PER_COPY, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX } from './units.js';
 import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
-import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml } from './uiIcons.js';
+import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml, uiIconSvg } from './uiIcons.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
 import { STAGNATION_ROUND_THRESHOLD, STAGNATION_HINT_THRESHOLD } from '@ooxx/shared/stagnation.js';
 import { CODEX_TABS } from './codex.js';
@@ -82,6 +82,9 @@ const codexTabsEl = document.getElementById('codexTabs');
 const codexPickerEl = document.getElementById('codexPicker');
 const codexDetailInfoEl = document.getElementById('codexDetailInfo');
 const codexPreviewHostEl = document.getElementById('codexPreviewHost');
+const codexStaticPreviewEl = document.getElementById('codexStaticPreview');
+const codexPreviewCloseEl = document.getElementById('codexPreviewClose');
+const codexPreviewHintEl = document.getElementById('codexPreviewHint');
 const codexRangeLegendEl = document.getElementById('codexRangeLegend');
 const endResultEl = document.getElementById('endResult');
 const gameEndOverlayEl = document.getElementById('gameEndOverlay');
@@ -582,6 +585,7 @@ let selectedClassId = 'swordsman';
 let codexPreviewLevel = CLASS_LEVEL_MIN;
 let codexPreviewLevelForClass = null;
 let activeCodexTab = 'units';
+let codexPreviewExpanded = false;
 let selectedItemId = ITEM_IDS[0];
 let selectedMechanismId = MAP_PROP_KINDS[0];
 let lastPhase = 'lobby';
@@ -771,10 +775,37 @@ function setMapPropIcon(container, kind) {
   fillMapPropIcon(container, kind, mapPropThumbnails, prop?.icon ?? '?', prop?.name ?? kind);
 }
 
-function updateCodexPreviewVisibility() {
+function setCodexPreviewExpanded(expanded) {
   const showUnit3d = activeNav === 'codex' && activeCodexTab === 'units';
+  const next = Boolean(expanded) && showUnit3d;
+  if (codexPreviewExpanded === next) return;
+  codexPreviewExpanded = next;
+  syncCodexPreviewChrome();
+  unitPreview.setExpanded(next);
+}
+
+function syncCodexPreviewChrome() {
+  const showUnit3d = activeNav === 'codex' && activeCodexTab === 'units';
+  codexPreviewHostEl?.classList.toggle('preview-expanded', codexPreviewExpanded);
+  codexPreviewHostEl?.classList.toggle('codex-preview-interactive', showUnit3d && !codexPreviewExpanded);
+  document.body.classList.toggle('codex-preview-expanded', codexPreviewExpanded);
+  codexPreviewCloseEl?.classList.toggle('hidden', !codexPreviewExpanded);
+  codexPreviewHintEl?.classList.toggle('hidden', !codexPreviewExpanded);
+}
+
+function updateCodexPreviewVisibility() {
+  const onCodex = activeNav === 'codex';
+  const showUnit3d = onCodex && activeCodexTab === 'units';
+  if (!showUnit3d) setCodexPreviewExpanded(false);
   unitPreview.setVisible(showUnit3d);
-  codexPreviewHostEl?.classList.toggle('hidden', !showUnit3d);
+  codexStaticPreviewEl?.classList.toggle('hidden', !onCodex || showUnit3d);
+  codexRangeLegendEl?.classList.toggle('hidden', !showUnit3d);
+  syncCodexPreviewChrome();
+}
+
+function renderCodexStaticPreview(fillIcon) {
+  if (!codexStaticPreviewEl) return;
+  fillIcon(codexStaticPreviewEl);
 }
 
 function switchCodexTab(tab) {
@@ -792,14 +823,29 @@ function renderCodexTabs() {
   }
 }
 
-function createCodexPickBtn({ active, title, onClick, fillIcon }) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'class-pick-btn' + (active ? ' active' : '');
-  btn.title = title;
-  fillIcon(btn);
-  btn.addEventListener('click', onClick);
-  return btn;
+function createCodexCard({ active, title, locked, onClick, fillIcon }) {
+  const card = document.createElement('div');
+  card.className = 'class-card' + (active ? ' selected' : '') + (locked ? ' class-card-unowned' : '');
+
+  const selectBtn = document.createElement('button');
+  selectBtn.type = 'button';
+  selectBtn.className = 'class-card-select';
+  selectBtn.title = title;
+  selectBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'class-icon';
+  fillIcon(iconWrap);
+  selectBtn.append(iconWrap);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'class-name';
+  nameEl.textContent = title;
+  selectBtn.append(nameEl);
+
+  selectBtn.addEventListener('click', onClick);
+  card.append(selectBtn);
+  return card;
 }
 
 function renderCodexItemDetail(itemId) {
@@ -823,39 +869,45 @@ function renderCodexMechanismDetail(kind) {
 }
 
 function renderCodexUnits() {
+  const state = getAppState();
   for (const cls of Object.values(CLASSES)) {
-    codexPickerEl.appendChild(createCodexPickBtn({
+    const owned = isClassOwnedInState(state, cls.id);
+    codexPickerEl.appendChild(createCodexCard({
       active: cls.id === selectedClassId,
       title: cls.name,
+      locked: !owned,
       onClick: () => selectClass(cls.id),
-      fillIcon: (btn) => setUnitIcon(btn, cls.id),
+      fillIcon: (el) => setUnitIcon(el, cls.id),
     }));
   }
-  renderClassDetail(selectedClassId);
+  renderClassDetail(selectedClassId, state);
 }
 
 function renderCodexItems() {
+  const selected = ITEMS[selectedItemId];
   for (const item of Object.values(ITEMS)) {
-    codexPickerEl.appendChild(createCodexPickBtn({
+    codexPickerEl.appendChild(createCodexCard({
       active: item.id === selectedItemId,
       title: item.name,
       onClick: () => selectCodexItem(item.id),
-      fillIcon: (btn) => setItemIcon(btn, item),
+      fillIcon: (el) => setItemIcon(el, item),
     }));
   }
+  renderCodexStaticPreview((el) => setItemIcon(el, selected));
   renderCodexItemDetail(selectedItemId);
 }
 
 function renderCodexMechanisms() {
   for (const kind of MAP_PROP_KINDS) {
     const prop = MAP_PROPS[kind];
-    codexPickerEl.appendChild(createCodexPickBtn({
+    codexPickerEl.appendChild(createCodexCard({
       active: kind === selectedMechanismId,
       title: prop.name,
       onClick: () => selectCodexMechanism(kind),
-      fillIcon: (btn) => setMapPropIcon(btn, kind),
+      fillIcon: (el) => setMapPropIcon(el, kind),
     }));
   }
+  renderCodexStaticPreview((el) => setMapPropIcon(el, selectedMechanismId));
   renderCodexMechanismDetail(selectedMechanismId);
 }
 
@@ -874,6 +926,10 @@ function renderCodex() {
   }
 
   updateCodexPreviewVisibility();
+  requestAnimationFrame(() => {
+    codexPickerEl.querySelector('.class-card.selected')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
 }
 
 function selectCodexItem(itemId) {
@@ -926,6 +982,7 @@ function switchNav(navId) {
   if (navId === 'codex') {
     updateCodexPreviewVisibility();
   } else {
+    setCodexPreviewExpanded(false);
     unitPreview.setVisible(false);
   }
 }
@@ -1030,6 +1087,26 @@ function selectClass(classId) {
   codexPreviewLevel = owned ? progress.level : CLASS_LEVEL_MIN;
   codexPreviewLevelForClass = classId;
   render(getAppState());
+}
+
+function openCodexForClass(classId) {
+  switchCodexTab('units');
+  switchNav('codex');
+  selectClass(classId);
+}
+
+function createClassInspectBtn(classId, className) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'class-card-inspect';
+  btn.title = `查看 ${className} 圖鑑`;
+  btn.setAttribute('aria-label', `查看 ${className} 圖鑑`);
+  btn.innerHTML = uiIconSvg('inspect');
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openCodexForClass(classId);
+  });
+  return btn;
 }
 
 function createItemChip(item, { count, equipped, onSelect }) {
@@ -1572,7 +1649,7 @@ function renderFormation(state) {
     });
 
     actions.append(synthBtn, upgradeBtn);
-    card.append(selectBtn, actions);
+    card.append(createClassInspectBtn(cls.id, cls.name), selectBtn, actions);
     formationPoolEl.appendChild(card);
   }
 }
@@ -2213,6 +2290,23 @@ codexTabsEl?.addEventListener('click', (e) => {
   if (!btn) return;
   switchCodexTab(btn.dataset.codexTab);
   render(getAppState());
+});
+
+codexPreviewHostEl?.addEventListener('click', (event) => {
+  if (codexPreviewExpanded) return;
+  if (activeNav !== 'codex' || activeCodexTab !== 'units') return;
+  if (event.target.closest('.codex-preview-close')) return;
+  setCodexPreviewExpanded(true);
+});
+
+codexPreviewCloseEl?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  setCodexPreviewExpanded(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !codexPreviewExpanded) return;
+  setCodexPreviewExpanded(false);
 });
 
 function getOnlineBoardMode() {

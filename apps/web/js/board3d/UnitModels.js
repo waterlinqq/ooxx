@@ -1343,7 +1343,8 @@ function buildSwordsman(mats) {
 
   const sword = buildKnightSword(mats);
   sword.position.set(0.01, 0.022, 0.04);
-  sword.rotation.set(-0.22, 0, 0.3);
+  // Flip the authored x/z tilt so the tip sits up and forward of the fist.
+  sword.rotation.set(0.55, 0, -0.5);
   armR.hand.add(sword);
   armR.pivot.rotation.set(-0.36, 0, 0.28);
   armL.pivot.rotation.set(0.1, 0, -0.12);
@@ -1382,7 +1383,8 @@ function buildArcher(mats) {
 
   const bow = buildBow(mats);
   bow.group.position.set(-0.018, -0.016, 0.078);
-  bow.group.rotation.set(0.18, -0.32, 0.08);
+  // +π X shows the stave to the camera while keeping the string toward the body.
+  bow.group.rotation.set(0.18 + Math.PI, -0.32, 0.08);
   armL.hand.add(bow.group);
   armL.pivot.rotation.set(-1.18, 0, -0.28);
   armR.pivot.rotation.set(-0.82, 0, 0.48);
@@ -1396,6 +1398,7 @@ function buildArcher(mats) {
     armR: armR.pivot,
     eyes,
     hood,
+    weapon: bow.group,
     bowString: bow.string,
   };
 }
@@ -1644,7 +1647,8 @@ function buildShield(mats) {
 
   const mace = buildFlangedMace(mats);
   mace.position.set(0, 0.03, 0.035);
-  mace.rotation.set(-0.28, 0, 0.34);
+  // Flip the authored x/z tilt so the head sits up and forward of the fist.
+  mace.rotation.set(0.55, 0, -0.5);
   armR.hand.add(mace);
   armR.pivot.rotation.set(-0.32, 0, 0.22);
 

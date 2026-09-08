@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-// Shallower 3/4 view than the old ~47° ortho: ~28° elevation, mild telephoto.
+// Shallower 3/4 view than the old ~47° ortho: ~38° elevation, mild telephoto.
 export const BOARD_CAM = {
-  pos: new THREE.Vector3(0, 6.2, 11.5),
+  pos: new THREE.Vector3(0, 8.05, 10.15),
   lookAt: new THREE.Vector3(0, 0.2, 0),
   fov: 28,
 };

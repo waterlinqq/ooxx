@@ -140,6 +140,7 @@ export class LimitedOrbitControls {
     zoomSpeed = 0.0012,
     touchRotate = true,
     zoomViaScale = true,
+    primaryOrbit = false,
     onChange = null,
   }) {
     this.domElement = domElement;
@@ -154,6 +155,7 @@ export class LimitedOrbitControls {
     this.zoomSpeed = zoomSpeed;
     this.touchRotate = touchRotate;
     this.zoomViaScale = zoomViaScale;
+    this.primaryOrbit = primaryOrbit;
     this.onChange = onChange;
 
     this.enabled = true;
@@ -200,7 +202,27 @@ export class LimitedOrbitControls {
   }
 
   isOrbitPointer(event) {
+    if (this.primaryOrbit && event.button === 0) return true;
     return event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
+  }
+
+  applySettings(settings = {}) {
+    const keys = [
+      'primaryOrbit',
+      'minAzimuth',
+      'maxAzimuth',
+      'minPolar',
+      'maxPolar',
+      'minZoom',
+      'maxZoom',
+    ];
+    for (const key of keys) {
+      if (settings[key] != null) this[key] = settings[key];
+    }
+    this.azimuth = clamp(this.azimuth, this.minAzimuth, this.maxAzimuth);
+    this.polar = clamp(this.polar, this.minPolar, this.maxPolar);
+    this.zoom = sanitizeZoom(this.zoom, this.minZoom, this.maxZoom);
+    this.emitChange();
   }
 
   onWheel = (event) => {

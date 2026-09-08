@@ -34,6 +34,24 @@ const PREVIEW_TILE_PITCH = 0.29;
 const PREVIEW_FRUSTUM = 2.8;
 const PREVIEW_FRAME_PADDING = 0.08;
 const PREVIEW_ORBIT_HEADROOM = 1.2;
+const COMPACT_ORBIT = {
+  primaryOrbit: false,
+  minAzimuth: -0.28,
+  maxAzimuth: 0.28,
+  minPolar: -0.12,
+  maxPolar: 0.12,
+  minZoom: 0.85,
+  maxZoom: 1.15,
+};
+const EXPANDED_ORBIT = {
+  primaryOrbit: true,
+  minAzimuth: -Infinity,
+  maxAzimuth: Infinity,
+  minPolar: -0.7,
+  maxPolar: 0.9,
+  minZoom: 0.5,
+  maxZoom: 2.4,
+};
 const RANGE_Y = 0.047;
 const PREVIEW_BOX = new THREE.Box3();
 
@@ -157,6 +175,8 @@ export class CharacterPreviewScene {
       zoomViaScale: !isTouchDevice(),
       onChange: () => this.applyOrbitZoom(),
     });
+    this.orbitControls.applySettings(COMPACT_ORBIT);
+    this.orbitControls.enabled = false;
 
     this.layoutFrustum = null;
     this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'codex') : null;
@@ -206,6 +226,7 @@ export class CharacterPreviewScene {
     this.loadGeneration = 0;
     this.assetLoaderReady = initUnitAssets();
     this.visible = false;
+    this.expanded = false;
     this.pageHidden = document.hidden;
     this.animating = false;
 
@@ -587,9 +608,22 @@ export class CharacterPreviewScene {
     }
   }
 
+  syncOrbitEnabled() {
+    if (!this.orbitControls) return;
+    this.orbitControls.enabled = this.visible && this.expanded;
+  }
+
+  setExpanded(expanded) {
+    this.expanded = Boolean(expanded);
+    this.orbitControls?.applySettings(this.expanded ? EXPANDED_ORBIT : COMPACT_ORBIT);
+    if (!this.expanded) this.orbitControls?.reset();
+    this.syncOrbitEnabled();
+    if (this.visible) this.onResize();
+  }
+
   setVisible(show) {
     this.visible = show;
-    if (this.orbitControls) this.orbitControls.enabled = show;
+    this.syncOrbitEnabled();
     this.renderer.domElement.style.display = show ? 'block' : 'none';
     if (show) {
       this.onResize();

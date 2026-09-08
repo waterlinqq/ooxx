@@ -40,7 +40,7 @@ ANIMATED_NODES = (
 REST_ARM = {
     'ooxx:ArmL': Euler((0.1, 0.0, -0.12)),
     'ooxx:ArmR': Euler((-0.36, 0.0, 0.28)),
-    'ooxx:Weapon': Euler((-0.24, 0.0, 0.34)),
+    'ooxx:Weapon': Euler((0.55, 0.0, -0.5)),
 }
 
 

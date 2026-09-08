@@ -15,6 +15,10 @@ const ICONS = {
     <path d="M3.8 2.2h8.1c.55 0 .85.62.52 1.03l-1.45 1.72 1.45 1.72c.33.41.03 1.03-.52 1.03H3.8" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/>
     <path d="M3.8 2.2v6.47" stroke="rgba(255,255,255,0.35)" stroke-width="0.45"/>
   `,
+  inspect: `
+    <circle cx="6.8" cy="6.8" r="4.15" fill="none" stroke="currentColor" stroke-width="1.45"/>
+    <path d="M9.9 9.9 13.3 13.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  `,
 };
 
 export function uiIconSvg(type, size) {

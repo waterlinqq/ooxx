@@ -32,15 +32,36 @@ fi
 echo "Build with VITE_API_BASE=$VITE_API_BASE"
 VITE_API_BASE="$VITE_API_BASE" npm run build
 
+# Hashed Vite bundles can be cached forever. Thumbs/GLBs keep stable names and must revalidate.
+aws s3 sync apps/web/dist/assets/ "s3://$BUCKET/assets/" \
+  --profile "$PROFILE" \
+  --cache-control "public,max-age=31536000,immutable"
+
 aws s3 sync apps/web/dist/ "s3://$BUCKET/" \
   --profile "$PROFILE" \
   --exclude index.html \
-  --cache-control "public,max-age=31536000,immutable"
+  --exclude "assets/*" \
+  --cache-control "public,max-age=0,must-revalidate"
 
 aws s3 cp apps/web/dist/index.html "s3://$BUCKET/index.html" \
   --profile "$PROFILE" \
   --content-type "text/html; charset=utf-8" \
   --cache-control "no-cache"
+
+CF_HOST="${VITE_API_BASE#https://}"
+CF_HOST="${CF_HOST#http://}"
+CF_HOST="${CF_HOST%%/*}"
+DIST_ID="$(aws cloudfront list-distributions --profile "$PROFILE" \
+  --query "DistributionList.Items[?DomainName=='${CF_HOST}'].Id" \
+  --output text 2>/dev/null || true)"
+if [[ -n "${DIST_ID}" && "${DIST_ID}" != "None" ]]; then
+  echo "Invalidating CloudFront ${DIST_ID}"
+  aws cloudfront create-invalidation --profile "$PROFILE" \
+    --distribution-id "$DIST_ID" \
+    --paths "/index.html" "/thumbs/*" "/units/*" >/dev/null
+else
+  echo "警告：找不到 CloudFront distribution（${CF_HOST}），請手動清快取" >&2
+fi
 
 echo "部署完成"
 echo "遊戲網址（請用此 HTTPS 入口，避免 Mixed Content）："

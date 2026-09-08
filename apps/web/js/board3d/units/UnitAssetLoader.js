@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../../assets/units/manifest.json';
+import { ASSET_VERSION } from '../assetVersion.js';
 import { applyTeamTintToMaterials, collectMeshMaterials, normalizeGltfMaterials, finalizeGltfMeshes } from './teamTint.js';
 import {
   poolSharedMaterials,
@@ -66,7 +67,7 @@ class UnitAssetLoader {
     if (templateCache.has(classId)) return;
     const spec = manifest.units[classId];
     if (!spec) throw new Error(`Unknown unit manifest entry: ${classId}`);
-    const gltf = await gltfLoader.loadAsync(`/units/${spec.file}`);
+    const gltf = await gltfLoader.loadAsync(`/units/${spec.file}?v=${ASSET_VERSION}`);
     templateCache.set(classId, gltf);
   }
 

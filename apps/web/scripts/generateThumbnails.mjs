@@ -11,6 +11,16 @@ import fs from 'node:fs/promises';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
 const thumbsRoot = path.join(webRoot, 'public', 'thumbs');
+const assetVersionPath = path.join(webRoot, 'js', 'board3d', 'assetVersion.js');
+
+async function bumpAssetVersion() {
+  const version = Date.now().toString(36);
+  await fs.writeFile(
+    assetVersionPath,
+    `/** Bumped by thumbnail/GLB bake so CDN/browser cache cannot pin stale assets. */\nexport const ASSET_VERSION = '${version}';\n`,
+  );
+  return version;
+}
 
 function dataUrlToBuffer(dataUrl) {
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
@@ -60,10 +70,12 @@ async function main() {
     results.push([category, await writeCategory(category, entries)]);
   }
 
+  const version = await bumpAssetVersion();
   const total = results.reduce((sum, [, count]) => sum + count, 0);
   const summary = results.map(([category, count]) => `${category} ${count}`).join(', ');
   console.log(`Generated ${total} thumbnails (${summary}) in ${Date.now() - started}ms`);
   console.log(`Output: ${thumbsRoot}`);
+  console.log(`Asset version: ${version}`);
 }
 
 main().catch((err) => {
