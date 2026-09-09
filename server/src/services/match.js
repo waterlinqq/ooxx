@@ -148,7 +148,7 @@ function hasValidActionsForTeam(state, team) {
     for (const unit of row) {
       if (!unit || unit.team !== team || state.actedUnitIds.includes(unit.id)) continue;
       if (getValidMoves(state.board, unit, state.mapProps, state.shadowClones).length > 0) return true;
-      if (getValidAttackTargets(state.board, unit).length > 0) return true;
+      if (getValidAttackTargets(state.board, unit, state.mapProps, state.shadowClones).length > 0) return true;
     }
   }
   return false;
@@ -420,7 +420,7 @@ export function applyGameAction(state, action, team) {
     if (!target || target.team === unit.team) return { ok: false, error: '無效目標' };
     if (state.actedUnitIds.includes(unit.id)) return { ok: false, error: '此單位已行動' };
 
-    const valid = getValidAttackTargets(state.board, unit);
+    const valid = getValidAttackTargets(state.board, unit, state.mapProps, state.shadowClones);
     if (!valid.some((t) => t.id === target.id)) {
       return { ok: false, error: '無法攻擊此目標' };
     }

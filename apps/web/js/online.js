@@ -403,7 +403,12 @@ export class OnlineClient {
     if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
     const unit = this.gameState.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    return getValidAttackTargets(this.gameState.board, unit).map((t) => [t.row, t.col]);
+    return getValidAttackTargets(
+      this.gameState.board,
+      unit,
+      this.gameState.mapProps,
+      this.gameState.shadowClones,
+    ).map((t) => [t.row, t.col]);
   }
 
   getHighlightDeploy() {

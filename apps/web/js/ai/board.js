@@ -121,6 +121,7 @@ function cloneUnit(unit, searchIndex) {
     moveRange: unit.moveRange ?? 1,
     jumpMove: unit.jumpMove ?? false,
     jumpRange: unit.jumpRange ?? null,
+    lineMove: unit.lineMove ?? CLASSES[unit.classId]?.lineMove ?? false,
     shadowCloneOnMove: unit.shadowCloneOnMove ?? false,
     deathExplosion: unit.deathExplosion ?? 0,
     passiveBlessing: unit.passiveBlessing ?? false,

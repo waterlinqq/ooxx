@@ -1103,6 +1103,7 @@ function formatClassTrait(cls) {
   if (cls.deathExplosion) return `上下左右近戰 · 亡語自爆 ${cls.deathExplosion} 傷（周圍八格）`;
   if (cls.shadowCloneOnMove) return '上下左右近戰 · 移動時原格留下影分身佔位一回合';
   if (cls.jumpMove) return cls.jumpRange ? `可跳躍至周遭 ${cls.jumpRange} 格` : '可跳躍至任意空格';
+  if (cls.lineMove) return '上下左右直線無限移動與攻擊（受障礙物阻擋），攻擊時駛入目標鄰格';
   if (cls.moveRange === Infinity) return '移動距離無限';
   if (cls.type === 'mage') return '上下左右光束穿透攻擊';
   if (cls.type === 'artillery') return '上下左右第二格 · 無法近戰';
@@ -1737,7 +1738,8 @@ function renderFormation(state) {
       chip.className = `roster-chip ${getRarityCardClass(classId)}`;
       chip.title = `移除 ${CLASSES[classId].name}`;
       setUnitIcon(chip, classId);
-      chip.addEventListener('click', () => {
+      chip.addEventListener('click', (event) => {
+        event.currentTarget.blur();
         const rosterIndex = picked.indexOf(classId);
         if (rosterIndex >= 0) game.removeFromFormation(rosterIndex);
       });
@@ -1747,42 +1749,36 @@ function renderFormation(state) {
 
   formationPoolEl.innerHTML = '';
   for (const cls of Object.values(CLASSES)) {
-    const isFixedCastle = autoCastle && cls.id === 'castle';
-    if (!isClassOwnedInState(state, cls.id) && !isFixedCastle) continue;
+    if (autoCastle && cls.id === 'castle') continue;
+    if (!isClassOwnedInState(state, cls.id)) continue;
 
     const selected = picked.includes(cls.id);
-    if (selected && !isFixedCastle) continue;
+    if (selected) continue;
 
-    const rosterFull = !isFixedCastle && deployablePicked.length >= limit;
+    const rosterFull = deployablePicked.length >= limit;
     const progress = getProgressFromState(state, cls.id);
     const stats = getClassCombatStats(cls.id, progress.level);
-    const hpDisplay = cls.id === 'castle' && autoCastle
-      ? getCastleHpForMode(state.boardMode) + getClassLevelBonuses('castle', progress.level).hp
-      : stats.hp;
 
     const card = document.createElement('div');
     card.className = 'class-card'
       + ` ${getRarityCardClass(cls.id)}`
-      + (rosterFull || isFixedCastle ? ' class-card-locked' : '')
-      + (rosterFull ? ' class-card-soldout' : '');
+      + (rosterFull ? ' class-card-locked class-card-soldout' : '');
 
     const selectBtn = document.createElement('button');
     selectBtn.type = 'button';
     selectBtn.className = 'class-card-select';
-    selectBtn.disabled = isFixedCastle;
-    if (isFixedCastle) selectBtn.title = '攻城戰固定城堡';
-    else if (rosterFull) selectBtn.title = '隊伍已滿，點擊查看提示';
+    if (rosterFull) selectBtn.title = '隊伍已滿，點擊查看提示';
     const iconWrap = document.createElement('span');
     iconWrap.className = 'class-icon';
     setUnitIcon(iconWrap, cls.id);
     selectBtn.append(iconWrap);
     selectBtn.insertAdjacentHTML('beforeend', `
       <span class="class-name">${cls.name} · ${renderStatBadgeHtml('level', progress.level)}</span>
-      <span class="class-meta">${renderStatBadgeHtml('hp', hpDisplay)} · ${renderStatBadgeHtml('atk', stats.atk)}</span>
+      <span class="class-meta">${renderStatBadgeHtml('hp', stats.hp)} · ${renderStatBadgeHtml('atk', stats.atk)}</span>
     `);
     if (rosterFull) {
       selectBtn.addEventListener('click', () => playFormationFullHint());
-    } else if (!isFixedCastle) {
+    } else {
       selectBtn.addEventListener('click', () => tryAddToFormation(cls.id));
     }
 

@@ -90,7 +90,7 @@ function generateActions(ctx) {
       for (const [row, col] of getValidMoves(board, unit, ctx.mapProps, ctx.shadowClones)) {
         actions.push({ type: 'move', unitId: unit.id, row, col });
       }
-      const attackTargets = getValidAttackTargets(board, unit);
+      const attackTargets = getValidAttackTargets(board, unit, ctx.mapProps, ctx.shadowClones);
       // Every tower target triggers the same four-way volley, so one search action is enough.
       const uniqueAttackTargets = unit.type === 'tower'
         ? attackTargets.slice(0, 1)
@@ -251,7 +251,7 @@ function generateKills(ctx) {
       if (!unit || unit.team !== team) continue;
       if (ctx.acted.has(unit.searchIndex)) continue;
 
-      const targets = getValidAttackTargets(board, unit);
+      const targets = getValidAttackTargets(board, unit, ctx.mapProps, ctx.shadowClones);
       const unique = unit.type === 'tower' ? targets.slice(0, 1) : targets;
       for (const target of unique) {
         let gain = 0;

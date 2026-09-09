@@ -151,6 +151,13 @@ export function getValidMoves(board, unit, mapProps = null, shadowClones = null)
 
   const size = boardSize(board);
 
+  if (unitLineMove(unit)) {
+    return getLineReachCells(board, unit.row, unit.col, mapProps, shadowClones, {
+      team: unit.team,
+      allowFriendlyCastle: true,
+    });
+  }
+
   if (unit.jumpMove) {
     const maxJump = unit.jumpRange ?? size;
     const moves = [];
@@ -313,7 +320,48 @@ function unitDiagonalOnly(unit) {
   return unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly ?? false;
 }
 
-export function getValidAttackTargets(board, unit) {
+function unitLineMove(unit) {
+  return unit.lineMove ?? CLASSES[unit.classId]?.lineMove ?? false;
+}
+
+/** Orthogonal rays from a cell; stops at obstacles, units, or shadow clones. */
+export function getLineReachCells(board, row, col, mapProps = null, shadowClones = null, {
+  team = null,
+  allowFriendlyCastle = false,
+} = {}) {
+  const size = boardSize(board);
+  const cells = [];
+
+  for (const [dr, dc] of ORTHOGONAL_DIRS) {
+    let r = row + dr;
+    let c = col + dc;
+    while (isInBounds(r, c, size)) {
+      if (isObstacleCell(mapProps, r, c)) break;
+      if (hasShadowClone(shadowClones, r, c)) break;
+      const cell = board[r][c];
+      if (cell) {
+        if (allowFriendlyCastle && team && isFriendlyCastleCell(board, r, c, team)) {
+          cells.push([r, c]);
+        }
+        break;
+      }
+      cells.push([r, c]);
+      r += dr;
+      c += dc;
+    }
+  }
+
+  return cells;
+}
+
+export function getLineAttackLandingCell(unit, target) {
+  const dr = Math.sign(target.row - unit.row);
+  const dc = Math.sign(target.col - unit.col);
+  if (dr === 0 && dc === 0) return [unit.row, unit.col];
+  return [target.row - dr, target.col - dc];
+}
+
+export function getValidAttackTargets(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
   if (unit.stunned) return [];
   if (isCastleUnit(unit) || (unit.atk ?? CLASSES[unit.classId]?.atk ?? 0) <= 0) return [];
@@ -323,6 +371,36 @@ export function getValidAttackTargets(board, unit) {
   const type = unitAttackType(unit);
 
   if (type === 'melee' || type === 'support') {
+    if (unitLineMove(unit)) {
+      const seen = new Set();
+      for (const [dr, dc] of ORTHOGONAL_DIRS) {
+        let r = unit.row + dr;
+        let c = unit.col + dc;
+        while (isInBounds(r, c, size)) {
+          if (isObstacleCell(mapProps, r, c)) break;
+          if (hasShadowClone(shadowClones, r, c)) break;
+          const target = board[r][c];
+          if (target) {
+            if (canAttackTarget(unit, target) && !seen.has(target.id)) {
+              const [lr, lc] = getLineAttackLandingCell(unit, target);
+              const landing = board[lr]?.[lc];
+              const landingOk = (lr === unit.row && lc === unit.col)
+                || (!landing && !isObstacleCell(mapProps, lr, lc) && !hasShadowClone(shadowClones, lr, lc))
+                || isFriendlyCastleCell(board, lr, lc, unit.team);
+              if (landingOk) {
+                seen.add(target.id);
+                targets.push(target);
+              }
+            }
+            break;
+          }
+          r += dr;
+          c += dc;
+        }
+      }
+      return targets;
+    }
+
     const adjacent = unitDiagonalOnly(unit)
       ? getAdjacentCellsDiagonal(unit.row, unit.col, size)
       : getAdjacentCells(unit.row, unit.col, size);
@@ -654,6 +732,7 @@ export function applyPossession(attacker, victim) {
     moveRange: attacker.moveRange,
     jumpMove: attacker.jumpMove,
     jumpRange: attacker.jumpRange,
+    lineMove: attacker.lineMove,
     shadowCloneOnMove: attacker.shadowCloneOnMove,
     type: attacker.type,
     deathExplosion: attacker.deathExplosion,
@@ -684,6 +763,7 @@ export function applyPossession(attacker, victim) {
   attacker.moveRange = cls.moveRange ?? 1;
   attacker.jumpMove = cls.jumpMove ?? false;
   attacker.jumpRange = cls.jumpRange ?? null;
+  attacker.lineMove = cls.lineMove ?? false;
   attacker.shadowCloneOnMove = cls.shadowCloneOnMove ?? false;
   attacker.type = cls.type;
   attacker.deathExplosion = cls.deathExplosion ?? 0;
@@ -744,6 +824,18 @@ export function resolveDeathExplosions(board, killedUnits) {
 
 export function applyAttack(board, attacker, target) {
   const next = cloneBoard(board);
+  let attackerOnBoard = next[attacker.row]?.[attacker.col];
+  if (unitLineMove(attacker) && attackerOnBoard) {
+    const [lr, lc] = getLineAttackLandingCell(attacker, target);
+    if (lr !== attacker.row || lc !== attacker.col) {
+      next[attacker.row][attacker.col] = null;
+      attackerOnBoard.row = lr;
+      attackerOnBoard.col = lc;
+      next[lr][lc] = attackerOnBoard;
+      attacker = attackerOnBoard;
+    }
+  }
+
   let hits;
   if (unitAttackType(attacker) === 'mage') {
     hits = getEnemiesOnLine(board, attacker, target.row, target.col);
@@ -770,7 +862,7 @@ export function applyAttack(board, attacker, target) {
   const poisoned = [];
   const immobilized = [];
   const stunned = [];
-  const attackerOnBoard = next[attacker.row]?.[attacker.col];
+  attackerOnBoard = next[attacker.row]?.[attacker.col];
   const lifestealAmount = attackerOnBoard?.lifestealOnHit ?? 0;
   let lifestealHeal = 0;
   if (lifestealAmount > 0 && hits.some((h) => h.team !== attacker.team)) {

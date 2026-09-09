@@ -97,6 +97,18 @@ function getAttackRangeCells(unit) {
     return cells;
   }
 
+  if (unit.lineMove ?? CLASSES[unit.classId]?.lineMove) {
+    for (const [dr, dc] of ORTHOGONAL_DIRECTIONS) {
+      for (let step = 1; step < PREVIEW_BOARD_SIZE; step++) {
+        const row = unit.row + dr * step;
+        const col = unit.col + dc * step;
+        if (!isInBounds(row, col, PREVIEW_BOARD_SIZE)) break;
+        cells.push([row, col]);
+      }
+    }
+    return cells;
+  }
+
   const maxRange = unit.type === 'melee' || unit.type === 'support'
     ? 1
     : unit.type === 'mage'

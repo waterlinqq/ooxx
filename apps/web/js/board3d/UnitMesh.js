@@ -16,7 +16,8 @@ const STRIDE = 0.3;
 const LEAP_DISTANCE = 1.6;
 
 // Magical and flying units materialise on the spot; everyone else drops in.
-const SPAWN_STYLE = { mage: 'warp', eagle: 'warp', raceCar: 'warp', thunderGod: 'warp' };
+const SPAWN_STYLE = { mage: 'warp', eagle: 'warp', thunderGod: 'warp' };
+const NO_LEAP_CLASSES = new Set(['raceCar']);
 const SPAWN_SPIN = {};
 
 function easeOutBack(x) {
@@ -368,7 +369,7 @@ export class UnitMeshManager {
       };
     } else if (!entry.targetPos.equals(TMP_TARGET)) {
       const travel = entry.displayPos.distanceTo(TMP_TARGET);
-      if (travel > LEAP_DISTANCE) {
+      if (travel > LEAP_DISTANCE && !NO_LEAP_CLASSES.has(unit.classId)) {
         entry.leap = {
           start: performance.now(),
           duration: 320 + travel * 70,

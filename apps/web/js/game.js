@@ -715,7 +715,7 @@ export class Game {
       for (const unit of row) {
         if (!unit || unit.team !== team || this.actedUnitIds.has(unit.id)) continue;
         if (getValidMoves(this.board, unit, this.mapProps, this.shadowClones).length > 0) return true;
-        if (getValidAttackTargets(this.board, unit).length > 0) return true;
+        if (getValidAttackTargets(this.board, unit, this.mapProps, this.shadowClones).length > 0) return true;
       }
     }
     return false;
@@ -1213,7 +1213,7 @@ export class Game {
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
-    const targets = getValidAttackTargets(this.board, unit).map((t) => [t.row, t.col]);
+    const targets = getValidAttackTargets(this.board, unit, this.mapProps, this.shadowClones).map((t) => [t.row, t.col]);
     return this.narrowToTutorialGoal(targets, 'attack');
   }
 
@@ -1359,7 +1359,7 @@ export class Game {
     if (!unit || !target || target.team === unit.team) return false;
     if (this.actedUnitIds.has(unitId)) return false;
 
-    const valid = getValidAttackTargets(this.board, unit);
+    const valid = getValidAttackTargets(this.board, unit, this.mapProps, this.shadowClones);
     if (!valid.some((t) => t.id === target.id)) return false;
     const attack = { type: 'attack', from: { row: unit.row, col: unit.col }, to: { row, col } };
     if (!this.isTutorialActionAllowed(attack)) return false;

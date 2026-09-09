@@ -69,6 +69,20 @@ export function buildThreatMap(ctx, attackerTeam) {
       if (!unit || unit.team !== attackerTeam) continue;
 
       if (unit.type === 'melee' || unit.type === 'support') {
+        if (unit.lineMove ?? CLASSES[unit.classId]?.lineMove) {
+          for (const [dr, dc] of ORTHOGONAL_DIRS) {
+            let nr = r + dr;
+            let nc = c + dc;
+            while (nr >= 0 && nr < size && nc >= 0 && nc < size) {
+              mark(map, nr * size + nc, unit.atk, false);
+              if (board[nr][nc]) break;
+              nr += dr;
+              nc += dc;
+            }
+          }
+          continue;
+        }
+
         const dirs = (unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly)
           ? DIAGONAL_DIRS
           : ORTHOGONAL_DIRS;
