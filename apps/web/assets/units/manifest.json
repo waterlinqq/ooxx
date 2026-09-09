@@ -189,6 +189,20 @@
         "acted": "acted"
       }
     },
+    "thunderGod": {
+      "file": "mage.glb",
+      "scale": [0.96, 1.02, 0.96],
+      "globalScale": 0.88,
+      "spawnStyle": "warp",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "arcane"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackRanged": "attack_ranged",
+        "spawn": "spawn_warp",
+        "acted": "acted"
+      }
+    },
     "castle": {
       "file": "castle.glb",
       "scale": [1.08, 1.08, 1.08],

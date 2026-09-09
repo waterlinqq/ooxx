@@ -141,6 +141,7 @@ function scoreAttackOrder(ctx, action, team) {
       }
     } else {
       score += attacker.atk * 8;
+      if (attacker.stunOnHit) score += 120 + materialValue(hit) * 0.15;
     }
   }
 

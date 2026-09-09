@@ -28,6 +28,8 @@ import {
   applyAttack,
   applyTeamPriestBlessings,
   applyPoisonTurnTicks,
+  applyImmobilizeTurnExpiry,
+  applyStunTurnExpiry,
   expireShadowClonesForTurnStart,
   checkWin,
   checkCastleVictory,
@@ -563,6 +565,8 @@ export class Game {
   applyTurnBoundaryEffects(endedTeam) {
     if (this.resolvePendingBombs()) return true;
     if (this.resolvePoisonTicks(endedTeam)) return true;
+    this.resolveImmobilizeExpiry(endedTeam);
+    this.resolveStunExpiry(endedTeam);
     return false;
   }
 
@@ -588,6 +592,30 @@ export class Game {
 
     const detail = labels.length > 0 ? `☠️ 中毒結算：${labels.join('、')}` : '☠️ 中毒結算';
     return this.checkWinAfterItemEffect(detail);
+  }
+
+  resolveImmobilizeExpiry(endedTeam) {
+    const hasExpiring = this.board.some((row) =>
+      row.some((unit) =>
+        unit?.immobilized && unit.immobilizeExpiresOnTurnEnd && unit.team === endedTeam,
+      ),
+    );
+    if (!hasExpiring) return;
+
+    const result = applyImmobilizeTurnExpiry(this.board, endedTeam);
+    this.board = result.board;
+  }
+
+  resolveStunExpiry(endedTeam) {
+    const hasExpiring = this.board.some((row) =>
+      row.some((unit) =>
+        unit?.stunned && unit.stunExpiresOnTurnEnd && unit.team === endedTeam,
+      ),
+    );
+    if (!hasExpiring) return;
+
+    const result = applyStunTurnExpiry(this.board, endedTeam);
+    this.board = result.board;
   }
 
   getState() {
@@ -1305,6 +1333,12 @@ export class Game {
     }
     if (result.poisoned?.length > 0) {
       detail += `，${result.poisoned.length} 人中毒`;
+    }
+    if (result.immobilized?.length > 0) {
+      detail += `，${result.immobilized.length} 人定身`;
+    }
+    if (result.stunned?.length > 0) {
+      detail += `，${result.stunned.length} 人暈眩`;
     }
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);

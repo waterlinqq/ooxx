@@ -4474,6 +4474,54 @@ function buildCrabGeneral(mats) {
   };
 }
 
+function buildSlime(mats) {
+  const group = new THREE.Group();
+  const base = mats.armor.userData.baseColor.clone();
+  const jelly = standard(base.clone().lerp(new THREE.Color(0x4ade80), 0.55), {
+    roughness: 0.18,
+    metalness: 0.05,
+    emissive: base.clone().lerp(new THREE.Color(0x22c55e), 0.4),
+    emissiveIntensity: 0.12,
+    transparent: true,
+    opacity: 0.82,
+  });
+  jelly.name = 'cloth';
+  jelly.userData.preserveTransparent = true;
+  const jellyDeep = standard(base.clone().lerp(new THREE.Color(0x15803d), 0.35), {
+    roughness: 0.22,
+    metalness: 0.04,
+    transparent: true,
+    opacity: 0.74,
+  });
+  jellyDeep.name = 'armorDeep';
+  jellyDeep.userData.preserveTransparent = true;
+  const extraMaterials = [jelly, jellyDeep];
+
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.22, 0);
+  group.add(torso);
+
+  part(torso, cached('slime-body', () => new THREE.SphereGeometry(0.2, 14, 12)), jelly, {
+    scale: [1.08, 0.78, 1.08],
+  });
+  part(torso, cached('slime-core', () => new THREE.SphereGeometry(0.11, 10, 8)), jellyDeep, {
+    pos: [0, -0.02, 0],
+    scale: [1.1, 0.7, 1.1],
+  });
+  part(torso, cached('slime-highlight', () => new THREE.SphereGeometry(0.05, 8, 6)), jelly, {
+    pos: [0.05, 0.08, 0.07],
+    scale: [1.2, 0.8, 1],
+    shadow: false,
+  });
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.1, 0.12);
+  torso.add(head);
+  const eyes = addEyes(head, mats, { y: 0, z: 0.02, spread: 0.05, size: 0.016, socket: false });
+
+  return { group, torso, head, eyes, extraMaterials };
+}
+
 function buildFallback(mats) {
   const group = new THREE.Group();
   const legs = addLegs(group, mats);
@@ -4499,6 +4547,7 @@ const BUILDERS = {
   priest: buildPriest,
   ghost: buildGhost,
   viper: buildViper,
+  slime: buildSlime,
   crabGeneral: buildCrabGeneral,
   castle: buildCastle,
 };
@@ -4519,6 +4568,7 @@ const SILHOUETTE = {
   priest: [1.04, 0.98, 1.04],
   ghost: [0.9, 1.08, 0.9],
   viper: [0.98, 1.04, 0.98],
+  slime: [1.02, 0.88, 1.02],
   crabGeneral: [1.14, 0.86, 1.14],
   castle: [1.08, 1.08, 1.08],
 };

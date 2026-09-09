@@ -147,7 +147,7 @@ export function recycleUnitToReserve(board, unit) {
 
 export function getValidMoves(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
-  if (unit.immobilized || isCastleUnit(unit)) return [];
+  if (unit.stunned || unit.immobilized || isCastleUnit(unit)) return [];
 
   const size = boardSize(board);
 
@@ -315,6 +315,7 @@ function unitDiagonalOnly(unit) {
 
 export function getValidAttackTargets(board, unit) {
   if (unit.row < 0) return [];
+  if (unit.stunned) return [];
   if (isCastleUnit(unit) || (unit.atk ?? CLASSES[unit.classId]?.atk ?? 0) <= 0) return [];
 
   const size = boardSize(board);
@@ -373,6 +374,15 @@ export function getValidAttackTargets(board, unit) {
           seen.add(enemy.id);
           targets.push(enemy);
         }
+      }
+    }
+    return targets;
+  }
+
+  if (type === 'thunder') {
+    for (const row of board) {
+      for (const cell of row) {
+        if (cell && canAttackTarget(unit, cell)) targets.push(cell);
       }
     }
     return targets;
@@ -542,6 +552,60 @@ export function clearPoison(unit) {
   unit.atk = unit.baseAtk ?? unit.atk;
 }
 
+/** Applies immobilize debuff if the unit is not already immobilized. Returns true when newly immobilized. */
+export function applyImmobilizeEffect(unit) {
+  if (unit.immobilized) return false;
+  unit.immobilized = true;
+  unit.immobilizeExpiresOnTurnEnd = true;
+  return true;
+}
+
+/** Clears temporary immobilize when a team's turn ends. */
+export function applyImmobilizeTurnExpiry(board, team) {
+  const cleared = [];
+  const next = cloneBoard(board);
+  for (let r = 0; r < next.length; r++) {
+    for (let c = 0; c < next[r].length; c++) {
+      const unit = next[r][c];
+      if (!unit?.immobilized || !unit.immobilizeExpiresOnTurnEnd || unit.team !== team) continue;
+      unit.immobilized = false;
+      unit.immobilizeExpiresOnTurnEnd = false;
+      cleared.push({ row: r, col: c, unit: { ...unit } });
+    }
+  }
+  return { board: next, cleared };
+}
+
+/** Applies stun debuff if the unit is not already stunned. Returns true when newly stunned. */
+export function applyStunEffect(unit) {
+  if (unit.stunned) return false;
+  unit.stunned = true;
+  unit.stunExpiresOnTurnEnd = true;
+  return true;
+}
+
+export function clearStun(unit) {
+  if (!unit.stunned) return;
+  unit.stunned = false;
+  unit.stunExpiresOnTurnEnd = false;
+}
+
+/** Clears temporary stun when a team's turn ends. */
+export function applyStunTurnExpiry(board, team) {
+  const cleared = [];
+  const next = cloneBoard(board);
+  for (let r = 0; r < next.length; r++) {
+    for (let c = 0; c < next[r].length; c++) {
+      const unit = next[r][c];
+      if (!unit?.stunned || !unit.stunExpiresOnTurnEnd || unit.team !== team) continue;
+      unit.stunned = false;
+      unit.stunExpiresOnTurnEnd = false;
+      cleared.push({ row: r, col: c, unit: { ...unit } });
+    }
+  }
+  return { board: next, cleared };
+}
+
 /** Resolves poison damage when a team's turn ends. Skips the tick on the turn poison was applied. */
 export function applyPoisonTurnTicks(board, team) {
   const next = cloneBoard(board);
@@ -596,9 +660,15 @@ export function applyPossession(attacker, victim) {
     passiveBlessing: attacker.passiveBlessing,
     possessionOnKill: attacker.possessionOnKill,
     poisonOnHit: attacker.poisonOnHit,
+    immobilizeOnHit: attacker.immobilizeOnHit,
+    stunOnHit: attacker.stunOnHit,
     diagonalOnly: attacker.diagonalOnly,
     poisoned: attacker.poisoned,
     poisonFresh: attacker.poisonFresh,
+    immobilized: attacker.immobilized,
+    immobilizeExpiresOnTurnEnd: attacker.immobilizeExpiresOnTurnEnd,
+    stunned: attacker.stunned,
+    stunExpiresOnTurnEnd: attacker.stunExpiresOnTurnEnd,
   };
 
   attacker.classId = victim.classId;
@@ -619,8 +689,11 @@ export function applyPossession(attacker, victim) {
   attacker.passiveBlessing = cls.passiveBlessing ?? false;
   attacker.possessionOnKill = false;
   attacker.poisonOnHit = cls.poisonOnHit ?? false;
+  attacker.immobilizeOnHit = cls.immobilizeOnHit ?? false;
+  attacker.stunOnHit = cls.stunOnHit ?? false;
   attacker.diagonalOnly = cls.diagonalOnly ?? false;
   clearPoison(attacker);
+  clearStun(attacker);
 
   return prev;
 }
@@ -693,6 +766,8 @@ export function applyAttack(board, attacker, target) {
 
   const possessed = [];
   const poisoned = [];
+  const immobilized = [];
+  const stunned = [];
   const attackerOnBoard = next[attacker.row]?.[attacker.col];
   if (attackerOnBoard?.poisonOnHit) {
     for (const hit of hits) {
@@ -700,6 +775,24 @@ export function applyAttack(board, attacker, target) {
       if (!cell || cell.team === attacker.team) continue;
       if (applyPoisonEffect(cell)) {
         poisoned.push({ row: hit.row, col: hit.col, unit: { ...cell } });
+      }
+    }
+  }
+  if (attackerOnBoard?.immobilizeOnHit) {
+    for (const hit of hits) {
+      const cell = next[hit.row]?.[hit.col];
+      if (!cell || cell.team === attacker.team) continue;
+      if (applyImmobilizeEffect(cell)) {
+        immobilized.push({ row: hit.row, col: hit.col, unit: { ...cell } });
+      }
+    }
+  }
+  if (attackerOnBoard?.stunOnHit) {
+    for (const hit of hits) {
+      const cell = next[hit.row]?.[hit.col];
+      if (!cell || cell.team === attacker.team) continue;
+      if (applyStunEffect(cell)) {
+        stunned.push({ row: hit.row, col: hit.col, unit: { ...cell } });
       }
     }
   }
@@ -733,6 +826,8 @@ export function applyAttack(board, attacker, target) {
     killed,
     possessed,
     poisoned,
+    immobilized,
+    stunned,
     explosionKilled: explosion.explosionKilled,
     explosions: explosion.explosions,
   };

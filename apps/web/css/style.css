@@ -1519,6 +1519,15 @@ body {
     0 1px 3px rgba(0, 0, 0, 0.95);
 }
 
+.unit-stun-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fbbf24;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 1),
+    0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
 .unit-3d-label.acted .unit-3d-name {
   color: #94a3b8;
 }

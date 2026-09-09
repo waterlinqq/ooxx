@@ -22,6 +22,8 @@ import {
   applyAttack,
   applyTeamPriestBlessings,
   applyPoisonTurnTicks,
+  applyImmobilizeTurnExpiry,
+  applyStunTurnExpiry,
   expireShadowClonesForTurnStart,
   checkWin,
   checkCastleVictory,
@@ -239,6 +241,30 @@ function applyTurnBoundaryEffects(state, endedTeam) {
   return checkWinAfterEffect(state, detail);
 }
 
+function resolveImmobilizeExpiry(state, endedTeam) {
+  const hasExpiring = state.board.some((row) =>
+    row.some((unit) =>
+      unit?.immobilized && unit.immobilizeExpiresOnTurnEnd && unit.team === endedTeam,
+    ),
+  );
+  if (!hasExpiring) return;
+
+  const result = applyImmobilizeTurnExpiry(state.board, endedTeam);
+  state.board = result.board;
+}
+
+function resolveStunExpiry(state, endedTeam) {
+  const hasExpiring = state.board.some((row) =>
+    row.some((unit) =>
+      unit?.stunned && unit.stunExpiresOnTurnEnd && unit.team === endedTeam,
+    ),
+  );
+  if (!hasExpiring) return;
+
+  const result = applyStunTurnExpiry(state.board, endedTeam);
+  state.board = result.board;
+}
+
 function switchPlayer(state) {
   const endedTeam = state.currentPlayer;
   state.currentPlayer = state.currentPlayer === 'blue' ? 'red' : 'blue';
@@ -248,6 +274,9 @@ function switchPlayer(state) {
   state.actedUnitIds = [];
 
   if (applyTurnBoundaryEffects(state, endedTeam)) return;
+
+  resolveImmobilizeExpiry(state, endedTeam);
+  resolveStunExpiry(state, endedTeam);
 
   const stagnationMessage = applyStagnationAfterTurnBoundary(state, endedTeam);
   state.message = stagnationMessage
@@ -402,6 +431,8 @@ export function applyGameAction(state, action, team) {
     let detail = `攻擊（命中 ${result.hits.length} 個目標`;
     if (result.possessed?.length > 0) detail += '，幽魂附身';
     if (result.poisoned?.length > 0) detail += `，${result.poisoned.length} 人中毒`;
+    if (result.immobilized?.length > 0) detail += `，${result.immobilized.length} 人定身`;
+    if (result.stunned?.length > 0) detail += `，${result.stunned.length} 人暈眩`;
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);
       detail += `，自爆波及 ${blastHits} 人`;

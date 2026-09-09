@@ -18,6 +18,8 @@ import {
   canAttackTarget,
   applyPossession,
   applyPoisonEffect,
+  applyImmobilizeEffect,
+  applyStunEffect,
   cloneShadowClones,
   placeShadowClone,
   expireShadowClonesForTurnStart,
@@ -124,10 +126,15 @@ function cloneUnit(unit, searchIndex) {
     passiveBlessing: unit.passiveBlessing ?? false,
     possessionOnKill: unit.possessionOnKill ?? false,
     poisonOnHit: unit.poisonOnHit ?? false,
+    immobilizeOnHit: unit.immobilizeOnHit ?? false,
+    stunOnHit: unit.stunOnHit ?? false,
     diagonalOnly: unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly ?? false,
     poisoned: unit.poisoned ?? false,
     poisonFresh: unit.poisonFresh ?? false,
     immobilized: unit.immobilized ?? false,
+    immobilizeExpiresOnTurnEnd: unit.immobilizeExpiresOnTurnEnd ?? false,
+    stunned: unit.stunned ?? false,
+    stunExpiresOnTurnEnd: unit.stunExpiresOnTurnEnd ?? false,
     type: unit.type,
     row: unit.row,
     col: unit.col,
@@ -256,7 +263,8 @@ function unitAttackKey(ctx, unit, row, col) {
 function unitStateKey(ctx, unit, row, col) {
   const flags = (unit.poisoned ? 1 : 0)
     | (unit.poisonFresh ? 2 : 0)
-    | (unit.immobilized ? 4 : 0);
+    | (unit.immobilized ? 4 : 0)
+    | (unit.stunned ? 8 : 0);
   if (flags === 0) return [0, 0];
   const cell = row * ctx.size + col;
   const seed = Math.imul(cell + 1, 0x9e3779b9)
@@ -381,6 +389,20 @@ function restoreEndOfTurnEffects(ctx, undo) {
   for (const rec of undo.poisonSkipRecords) {
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
     rec.unit.poisonFresh = true;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+  for (let i = undo.immobilizeExpiryRecords.length - 1; i >= 0; i--) {
+    const rec = undo.immobilizeExpiryRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.immobilized = rec.prevImmobilized;
+    rec.unit.immobilizeExpiresOnTurnEnd = rec.prevExpires;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+  for (let i = undo.stunExpiryRecords.length - 1; i >= 0; i--) {
+    const rec = undo.stunExpiryRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.stunned = rec.prevStunned;
+    rec.unit.stunExpiresOnTurnEnd = rec.prevExpires;
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
 }
@@ -521,6 +543,44 @@ function applyPoisonTicksInPlace(ctx, damageRecords, selfLosses, skipRecords) {
   }
 }
 
+function applyImmobilizeExpiryInPlace(ctx, expiryRecords) {
+  const { board, size } = ctx;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const unit = board[r][c];
+      if (!unit?.immobilized || !unit.immobilizeExpiresOnTurnEnd || unit.team !== ctx.turn) continue;
+      expiryRecords.push({
+        unit,
+        prevImmobilized: unit.immobilized,
+        prevExpires: unit.immobilizeExpiresOnTurnEnd,
+      });
+      xorUnitHash(ctx, unit, r, c);
+      unit.immobilized = false;
+      unit.immobilizeExpiresOnTurnEnd = false;
+      xorUnitHash(ctx, unit, r, c);
+    }
+  }
+}
+
+function applyStunExpiryInPlace(ctx, expiryRecords) {
+  const { board, size } = ctx;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const unit = board[r][c];
+      if (!unit?.stunned || !unit.stunExpiresOnTurnEnd || unit.team !== ctx.turn) continue;
+      expiryRecords.push({
+        unit,
+        prevStunned: unit.stunned,
+        prevExpires: unit.stunExpiresOnTurnEnd,
+      });
+      xorUnitHash(ctx, unit, r, c);
+      unit.stunned = false;
+      unit.stunExpiresOnTurnEnd = false;
+      xorUnitHash(ctx, unit, r, c);
+    }
+  }
+}
+
 function applyPassivePriestBlessings(ctx, team, records, excludePriestIds = []) {
   const excluded = new Set(excludePriestIds);
   const priests = [];
@@ -583,6 +643,10 @@ export function makeAction(ctx, action) {
     possessUndo: null,
     poisonRecords: [],
     poisonSkipRecords: [],
+    immobilizeRecords: [],
+    immobilizeExpiryRecords: [],
+    stunRecords: [],
+    stunExpiryRecords: [],
     enemyKills: [],
     selfLosses: [],
   };
@@ -676,6 +740,38 @@ export function makeAction(ctx, action) {
         });
       }
     }
+
+    if (actor.immobilizeOnHit) {
+      for (const hit of hits) {
+        if (!isOnBoard(hit) || hit.immobilized) continue;
+        const prevImmobilized = hit.immobilized;
+        const prevExpires = hit.immobilizeExpiresOnTurnEnd;
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        applyImmobilizeEffect(hit);
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        undo.immobilizeRecords.push({
+          unit: hit,
+          prevImmobilized,
+          prevExpires,
+        });
+      }
+    }
+
+    if (actor.stunOnHit) {
+      for (const hit of hits) {
+        if (!isOnBoard(hit) || hit.stunned) continue;
+        const prevStunned = hit.stunned;
+        const prevExpires = hit.stunExpiresOnTurnEnd;
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        applyStunEffect(hit);
+        xorUnitHash(ctx, hit, hit.row, hit.col);
+        undo.stunRecords.push({
+          unit: hit,
+          prevStunned,
+          prevExpires,
+        });
+      }
+    }
   }
 
   const excludePriestIds = action.type === 'deploy' && actor.passiveBlessing ? [actor.id] : [];
@@ -731,6 +827,8 @@ function advanceTurn(ctx, undo) {
   ctx.actionsLeft--;
   if (ctx.actionsLeft <= 0) {
     applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
+    applyImmobilizeExpiryInPlace(ctx, undo.immobilizeExpiryRecords);
+    applyStunExpiryInPlace(ctx, undo.stunExpiryRecords);
     flipSide(ctx, undo);
   }
   xorActionsLeft(ctx);
@@ -755,9 +853,13 @@ export function passTurn(ctx) {
     turnEndDamage: [],
     selfLosses: [],
     poisonSkipRecords: [],
+    immobilizeExpiryRecords: [],
+    stunExpiryRecords: [],
   };
   xorActionsLeft(ctx);
   applyPoisonTicksInPlace(ctx, undo.turnEndDamage, undo.selfLosses, undo.poisonSkipRecords);
+  applyImmobilizeExpiryInPlace(ctx, undo.immobilizeExpiryRecords);
+  applyStunExpiryInPlace(ctx, undo.stunExpiryRecords);
   flipSide(ctx, undo);
   xorActionsLeft(ctx);
   return undo;
@@ -774,6 +876,20 @@ export function unpassTurn(ctx, undo) {
   }
   for (let i = undo.turnEndDamage.length - 1; i >= 0; i--) {
     restoreDamaged(ctx, undo.turnEndDamage[i]);
+  }
+  for (let i = undo.immobilizeExpiryRecords.length - 1; i >= 0; i--) {
+    const rec = undo.immobilizeExpiryRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.immobilized = rec.prevImmobilized;
+    rec.unit.immobilizeExpiresOnTurnEnd = rec.prevExpires;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+  for (let i = undo.stunExpiryRecords.length - 1; i >= 0; i--) {
+    const rec = undo.stunExpiryRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.stunned = rec.prevStunned;
+    rec.unit.stunExpiresOnTurnEnd = rec.prevExpires;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
   xorActionsLeft(ctx);
 }
@@ -805,6 +921,22 @@ export function unmakeAction(ctx, undo) {
     rec.unit.poisoned = rec.prevPoisoned;
     rec.unit.poisonFresh = rec.prevPoisonFresh;
     rec.unit.atk = rec.prevAtk;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+
+  for (let i = undo.immobilizeRecords.length - 1; i >= 0; i--) {
+    const rec = undo.immobilizeRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.immobilized = rec.prevImmobilized;
+    rec.unit.immobilizeExpiresOnTurnEnd = rec.prevExpires;
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+  }
+
+  for (let i = undo.stunRecords.length - 1; i >= 0; i--) {
+    const rec = undo.stunRecords[i];
+    xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
+    rec.unit.stunned = rec.prevStunned;
+    rec.unit.stunExpiresOnTurnEnd = rec.prevExpires;
     xorUnitHash(ctx, rec.unit, rec.unit.row, rec.unit.col);
   }
 

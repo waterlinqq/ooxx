@@ -29,7 +29,9 @@ const CLASS_BONUS = {
   priest: 8,
   ghost: 10,
   viper: 6,
+  slime: 6,
   crabGeneral: 6,
+  thunderGod: 8,
   castle: 55,
 };
 

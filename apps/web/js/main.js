@@ -994,7 +994,9 @@ function switchNav(navId) {
 function formatClassTrait(cls) {
   if (cls.type === 'castle') return '堡壘 · 友方踏入回收 · 攻破獲勝';
   if (cls.diagonalOnly) return '僅斜角移動與攻擊 · 無法上下左右';
+  if (cls.stunOnHit) return '全場攻擊 · 命中使敵暈眩一回合';
   if (cls.poisonOnHit) return '上下左右近戰 · 命中使敵中毒';
+  if (cls.immobilizeOnHit) return '上下左右近戰 · 命中使敵定身一回合';
   if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
   if (cls.deathExplosion) return `上下左右近戰 · 亡語自爆 ${cls.deathExplosion} 傷（周圍八格）`;
   if (cls.shadowCloneOnMove) return '上下左右近戰 · 移動時原格留下影分身佔位一回合';

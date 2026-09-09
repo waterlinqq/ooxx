@@ -119,6 +119,17 @@ export function buildThreatMap(ctx, attackerTeam) {
             nc += dc;
           }
         }
+        continue;
+      }
+
+      if (unit.type === 'thunder') {
+        for (let tr = 0; tr < size; tr++) {
+          for (let tc = 0; tc < size; tc++) {
+            const target = board[tr][tc];
+            if (!target || target.team === unit.team) continue;
+            mark(map, tr * size + tc, unit.atk, false);
+          }
+        }
       }
     }
   }

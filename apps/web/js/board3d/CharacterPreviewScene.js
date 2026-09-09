@@ -88,6 +88,15 @@ function getAttackRangeCells(unit) {
     return cells.filter(([row, col]) => isInBounds(row, col, PREVIEW_BOARD_SIZE));
   }
 
+  if (unit.type === 'thunder') {
+    for (let row = 0; row < PREVIEW_BOARD_SIZE; row++) {
+      for (let col = 0; col < PREVIEW_BOARD_SIZE; col++) {
+        cells.push([row, col]);
+      }
+    }
+    return cells;
+  }
+
   const maxRange = unit.type === 'melee' || unit.type === 'support'
     ? 1
     : unit.type === 'mage'

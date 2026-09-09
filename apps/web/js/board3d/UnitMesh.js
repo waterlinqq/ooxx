@@ -382,6 +382,12 @@ export class UnitMeshManager {
     if (unit.poisoned) {
       statsEl.insertAdjacentHTML('beforeend', '<span class="unit-poison-tag"> · 中毒</span>');
     }
+    if (unit.stunned) {
+      statsEl.insertAdjacentHTML('beforeend', '<span class="unit-stun-tag"> · 暈眩</span>');
+    }
+    if (unit.immobilized) {
+      statsEl.insertAdjacentHTML('beforeend', '<span class="unit-immobilize-tag"> · 定身</span>');
+    }
 
     entry.wrap.classList.toggle('acted', acted);
     entry.wrap.classList.toggle('dragging', dragging);
