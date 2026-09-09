@@ -1353,11 +1353,6 @@ body {
   display: none;
 }
 
-.nav-thumb-canvas {
-  width: 100%;
-  height: 100%;
-}
-
 .nav-item:hover:not(:disabled):not(.active) .nav-thumb {
   opacity: 0.9;
   filter: saturate(1);

@@ -1,7 +1,9 @@
 import { getBoardMode } from './units.js';
 import { searchBestAction } from './ai/search.js';
+import { chooseAiActionAsync } from './ai/workerClient.js';
 
 export { WIN_SCORE } from './ai/evaluate.js';
+export { chooseAiActionAsync };
 
 /**
  * Chooses one action for the given team.

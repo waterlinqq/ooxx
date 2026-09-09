@@ -6,7 +6,7 @@ import { applyNavIcons } from './board3d/NavThumbnails.js';
 import { NAV_ICON_IDS } from './board3d/NavIconModels.js';
 import { applySideIcons } from './board3d/SideIconThumbnails.js';
 import { SIDE_ICON_IDS } from './board3d/SideIconModels.js';
-import { NavIconAnimator } from './board3d/NavIconAnimator.js';
+import { NavIconPlayer } from './board3d/NavIconPlayer.js';
 import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { fillItemIcon, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { createThumbnailMap } from './board3d/thumbnailPaths.js';
@@ -747,8 +747,8 @@ applyNavIcons(bottomNavEl, navThumbnails);
 const sideThumbnails = createThumbnailMap(SIDE_ICON_IDS, 'side');
 applySideIcons(lobbyContentEl, sideThumbnails);
 mountUiIcons();
-const navIconAnimator = new NavIconAnimator(bottomNavEl);
-navIconAnimator.onNavChange(activeNav);
+const navIconPlayer = new NavIconPlayer(bottomNavEl);
+navIconPlayer.onNavChange(activeNav);
 
 function setUnitIcon(container, classId) {
   const cls = CLASSES[classId];
@@ -1071,7 +1071,7 @@ function switchNav(navId) {
     btn.classList.toggle('active', btn.dataset.nav === navId);
   }
 
-  navIconAnimator.onNavChange(navId, { replay });
+  navIconPlayer.onNavChange(navId, { replay });
 
   if (navId === 'formation') {
     game.syncFormationMode(state.boardMode);
@@ -2325,7 +2325,7 @@ function updateBottomNav(state) {
     const isBattle = btn.dataset.nav === 'battle';
     btn.disabled = lockNav && !isBattle;
   }
-  if (lockNav) navIconAnimator.deactivate();
+  if (lockNav) navIconPlayer.deactivate();
 }
 
 function render(state) {

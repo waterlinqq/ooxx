@@ -13,3 +13,7 @@ export function createThumbnailMap(ids, category) {
   }
   return map;
 }
+
+export function navAnimationUrl(navId, phase) {
+  return `${THUMB_ROOT}/nav/${navId}-${phase}.webp?v=${ASSET_VERSION}`;
+}

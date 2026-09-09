@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "thumbnails": "node scripts/generateThumbnails.mjs",
+    "bake-nav-animations": "node scripts/bakeNavAnimations.mjs",
     "bake-units": "node scripts/bakeUnitGlbs.mjs",
     "rig-units": "node scripts/rigUnits.mjs",
     "bake-all": "npm run bake-units && npm run rig-units && npm run thumbnails",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "playwright": "^1.63.0",
+    "sharp": "^0.34.5",
     "vite": "^6.0.0"
   }
 }

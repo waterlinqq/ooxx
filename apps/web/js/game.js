@@ -40,7 +40,7 @@ import {
   resolveDeathExplosions,
   isFriendlyCastleCell,
 } from './rules.js';
-import { chooseAiAction } from './ai.js';
+import { chooseAiActionAsync } from './ai.js';
 import { createSearchContext } from './ai/board.js';
 import { evaluate } from './ai/evaluate.js';
 import { getItem, getCoinReward } from './items.js';
@@ -106,6 +106,7 @@ export class Game {
     this.animating = false;
     this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
+    this._aiSearchGen = 0;
     this.playAttackFx = null;
     this.playBlessFx = null;
     this.playMapPropFx = null;
@@ -1465,7 +1466,7 @@ export class Game {
     this.scheduleAiIfNeeded();
   }
 
-  runAiTurn() {
+  async runAiTurn() {
     if (this.phase !== 'battle' || this.animating) return;
     if (this.tutorial) {
       this.runTutorialEnemyTurn();
@@ -1475,22 +1476,39 @@ export class Game {
     if (this.currentPlayer !== 'red') return;
 
     const mode = this.getModeConfig();
-    const action = chooseAiAction(
-      {
-        board: this.board,
-        boardMode: this.boardMode,
-        mapProps: this.mapProps,
-        shadowClones: this.shadowClones,
-        redReserve: this.redReserve,
-        blueReserve: this.blueReserve,
-        actedUnitIds: this.actedUnitIds,
-      },
-      {
-        team: 'red',
-        actionsPerTurn: mode.actionsPerTurn,
-        rosters: { blue: this.blueRoster, red: this.redRoster },
-      },
-    );
+    const searchGen = ++this._aiSearchGen;
+    let action;
+    try {
+      action = await chooseAiActionAsync(
+        {
+          board: this.board,
+          boardMode: this.boardMode,
+          mapProps: this.mapProps,
+          shadowClones: this.shadowClones,
+          redReserve: this.redReserve,
+          blueReserve: this.blueReserve,
+          actedUnitIds: this.actedUnitIds,
+        },
+        {
+          team: 'red',
+          actionsPerTurn: mode.actionsPerTurn,
+        },
+      );
+    } catch (error) {
+      console.error('AI search failed', error);
+      if (searchGen === this._aiSearchGen
+        && this.phase === 'battle'
+        && !this.animating
+        && this.currentPlayer === 'red'
+        && this.actionsRemaining > 0) {
+        this.switchPlayer();
+      }
+      return;
+    }
+
+    if (searchGen !== this._aiSearchGen) return;
+    if (this.phase !== 'battle' || this.animating) return;
+    if (this.currentPlayer !== 'red') return;
 
     if (!action) {
       if (this.actionsRemaining > 0) {

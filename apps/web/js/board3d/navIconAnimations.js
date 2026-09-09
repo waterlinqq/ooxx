@@ -1,46 +1,3 @@
-import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { buildNavIconModel } from './NavIconModels.js';
-import { applyShadowRendererSettings, webglShadowsEnabled } from './WebGLSceneRuntime.js';
-
-const ICON_PX = 52;
-const PREVIEW_ROTATION_Y = 0.35;
-const FRAME_PADDING = 0.92;
-
-function disposeObject(root) {
-  root.traverse((obj) => {
-    if (obj.geometry && !obj.geometry.userData?.shared) {
-      obj.geometry.dispose();
-    }
-    if (!obj.material) return;
-    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-    for (const material of materials) {
-      material.dispose();
-    }
-  });
-}
-
-function setupCamera() {
-  const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 100);
-  camera.position.set(0, 5.5, 5.2);
-  camera.lookAt(0, 0.12, 0);
-  return camera;
-}
-
-function fitCameraToModel(camera, object) {
-  const box = new THREE.Box3().setFromObject(object);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const viewHeight = Math.max(size.y, size.x * 0.72, size.z * 0.72) * FRAME_PADDING;
-
-  camera.left = -viewHeight / 2;
-  camera.right = viewHeight / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
-  camera.updateProjectionMatrix();
-  camera.lookAt(center.x, center.y - size.y * 0.04, center.z);
-}
-
 function easeOutCubic(t) {
   return 1 - (1 - t) ** 3;
 }
@@ -212,7 +169,7 @@ function animateShop(root, now, triggerAt) {
   }
 }
 
-const NAV_ANIMATORS = {
+export const NAV_ANIMATORS = {
   formation: animateFormation,
   battle: animateBattle,
   codex: animateCodex,
@@ -220,136 +177,20 @@ const NAV_ANIMATORS = {
   shop: animateShop,
 };
 
-export class NavIconAnimator {
-  constructor(navEl) {
-    this.navEl = navEl;
-    this.active = null;
-    this.tick = this.tick.bind(this);
-    requestAnimationFrame(this.tick);
-  }
+/** Intro duration per nav icon (ms), matched to the staggered entry animations. */
+export const NAV_INTRO_MS = {
+  formation: 720,
+  battle: 620,
+  codex: 520,
+  quests: 720,
+  shop: 560,
+};
 
-  onNavChange(navId, { replay = false } = {}) {
-    if (!NAV_ANIMATORS[navId]) {
-      this.deactivate();
-      return;
-    }
+export const NAV_IDLE_MS = 1500;
+export const NAV_ANIM_ICON_PX = 104;
+export const NAV_ANIM_FPS = 30;
 
-    if (this.active?.navId === navId) {
-      if (replay) this.active.triggerAt = performance.now();
-      return;
-    }
-
-    this.deactivate();
-    this.activate(navId);
-  }
-
-  activate(navId) {
-    const btn = this.navEl.querySelector(`.nav-item[data-nav="${navId}"]`);
-    const iconEl = btn?.querySelector('.nav-icon');
-    if (!iconEl) return;
-
-    const img = iconEl.querySelector('.nav-thumb:not(.nav-thumb-canvas)');
-    if (img) img.classList.add('nav-thumb--hidden');
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(ICON_PX, ICON_PX, false);
-    applyShadowRendererSettings(renderer);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
-
-    const { scene, envMap, pmrem } = setupSceneWithRenderer(renderer);
-    const camera = setupCamera();
-    const model = buildNavIconModel(navId);
-    if (!model) {
-      renderer.dispose();
-      envMap.dispose();
-      pmrem.dispose();
-      if (img) img.classList.remove('nav-thumb--hidden');
-      return;
-    }
-
-    if (!model.rotation.y) model.rotation.y = PREVIEW_ROTATION_Y;
-    model.scale.setScalar(1.12);
-    scene.add(model);
-    fitCameraToModel(camera, model);
-
-    const canvas = renderer.domElement;
-    canvas.className = 'nav-thumb nav-thumb-canvas';
-    iconEl.appendChild(canvas);
-
-    this.active = {
-      navId,
-      iconEl,
-      img,
-      renderer,
-      scene,
-      camera,
-      model,
-      envMap,
-      pmrem,
-      triggerAt: performance.now(),
-    };
-  }
-
-  deactivate() {
-    if (!this.active) return;
-
-    const { iconEl, img, renderer, scene, model, envMap, pmrem } = this.active;
-    scene.remove(model);
-    disposeObject(model);
-    envMap.dispose();
-    pmrem.dispose();
-    renderer.dispose();
-
-    iconEl.querySelector('.nav-thumb-canvas')?.remove();
-    if (img) img.classList.remove('nav-thumb--hidden');
-
-    this.active = null;
-  }
-
-  tick(now) {
-    requestAnimationFrame(this.tick);
-    if (!this.active) return;
-
-    const { navId, renderer, scene, camera, model, triggerAt } = this.active;
-    const animate = NAV_ANIMATORS[navId];
-    if (animate) animate(model, now, triggerAt);
-    renderer.render(scene, camera);
-  }
-}
-
-function setupSceneWithRenderer(renderer) {
-  const scene = new THREE.Scene();
-  scene.background = null;
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envMap;
-  scene.environmentIntensity = 0.55;
-
-  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
-  scene.add(new THREE.HemisphereLight(0xbfdbfe, 0x1e293b, 0.7));
-
-  const keyLight = new THREE.DirectionalLight(0xfff6e6, 1.9);
-  keyLight.position.set(4, 8, 4);
-  keyLight.castShadow = webglShadowsEnabled();
-  if (keyLight.castShadow) {
-    keyLight.shadow.mapSize.set(512, 512);
-    keyLight.shadow.camera.left = -3;
-    keyLight.shadow.camera.right = 3;
-    keyLight.shadow.camera.top = 3;
-    keyLight.shadow.camera.bottom = -3;
-  }
-  scene.add(keyLight);
-
-  const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
-  fillLight.position.set(-3, 5, -4);
-  scene.add(fillLight);
-
-  const rimLight = new THREE.DirectionalLight(0xe0e7ff, 0.65);
-  rimLight.position.set(-4, 3, 5);
-  scene.add(rimLight);
-
-  return { scene, envMap, pmrem };
+export function applyNavIconAnimation(model, navId, now, triggerAt = 0) {
+  const animate = NAV_ANIMATORS[navId];
+  if (animate) animate(model, now, triggerAt);
 }
