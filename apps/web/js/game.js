@@ -169,7 +169,7 @@ export class Game {
   }
 
   getStartButtonLabel() {
-    return '下一步：選擇編隊';
+    return '下一步：選擇隊伍';
   }
 
   canEditRoster() {
@@ -261,7 +261,7 @@ export class Game {
     }
 
     if (!canAddToRoster(this.blueRoster, classId, this.boardMode)) {
-      this.message = '編隊已滿';
+      this.message = '隊伍已滿';
       this.notify();
       return;
     }
@@ -934,13 +934,13 @@ export class Game {
     this.resolveAttack(attacker, target, enemy.label);
   }
 
-  /** 匹配逾時：用玩家當前編組立刻開打 AI */
+  /** 匹配逾時：用玩家當前隊伍立刻開打 AI */
   startQuickAiBattle(boardMode) {
     if (!BOARD_MODES[boardMode] || isLocalOnlyMode(boardMode)) return;
     this.tutorial = null;
     this.syncFormationMode(boardMode);
     if (getDeployableRoster(this.blueRoster, this.boardMode).length === 0) {
-      this.message = '請先編組至少一名角色';
+      this.message = '請先組成至少一名角色的隊伍';
       this.notify();
       return;
     }
@@ -960,7 +960,7 @@ export class Game {
     this.tutorial = null;
     this.syncFormationMode(modeId);
     if (getDeployableRoster(this.blueRoster, this.boardMode).length === 0) {
-      this.message = '請先編組至少一名角色';
+      this.message = '請先組成至少一名角色的隊伍';
       this.notify();
       return;
     }

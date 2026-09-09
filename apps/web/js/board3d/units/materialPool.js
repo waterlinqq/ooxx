@@ -84,3 +84,27 @@ export function collectUniqueMaterials(root) {
   });
   return materials;
 }
+
+function isSharedMaterial(material) {
+  return isPooledMaterial(material) || Boolean(material?.userData?.globalShared);
+}
+
+function detachMaterial(material) {
+  if (!material || !isSharedMaterial(material)) return material;
+  const clone = material.clone();
+  delete clone.userData.pooled;
+  delete clone.userData.globalShared;
+  return clone;
+}
+
+/** Clone pooled/global materials on a dying unit so fade-out does not mutate shared instances. */
+export function detachSharedMaterialsForFade(root) {
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(detachMaterial);
+      return;
+    }
+    child.material = detachMaterial(child.material);
+  });
+}

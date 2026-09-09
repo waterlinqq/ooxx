@@ -501,7 +501,7 @@ export function resetTurnDeadline(mode, actedCount = 0) {
   };
 }
 
-const EMPTY_ROSTER_ERROR = '請先編組至少一名角色';
+const EMPTY_ROSTER_ERROR = '請先組成至少一名角色的隊伍';
 
 export async function createWaitingRoom(guestId, boardMode, nickname, options = {}) {
   await ensureDeps();

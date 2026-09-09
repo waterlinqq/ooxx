@@ -469,7 +469,7 @@ function ensureRosterForMatch(modeId) {
 }
 
 async function alertNeedRosterThenOpenFormation() {
-  await showAlert('請先編組至少一名角色');
+  await showAlert('請先組成至少一名角色的隊伍');
   switchNav('formation');
   render(getAppState());
 }

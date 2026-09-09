@@ -63,7 +63,7 @@ export function generateNavThumbnails(navIds, { renderer, scene, camera } = {}) 
 
 const NAV_LABELS = {
   battle: '戰鬥',
-  formation: '編組',
+  formation: '隊伍',
   codex: '圖鑑',
   quests: '任務',
   shop: '商店',

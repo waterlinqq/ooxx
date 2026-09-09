@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { tileWorldPosition } from './TileGrid.js';
+import {
+  collectUniqueMaterials,
+  detachSharedMaterialsForFade,
+} from './units/materialPool.js';
 
 // Timed so the hit lands on the peak of the attacker's swing / release pose.
 const MELEE_HIT_DELAY = 250;
@@ -252,17 +256,22 @@ export class AttackFx3d {
   fadeOutUnit(row, col) {
     const entry = this.unitManager.getUnitAt(row, col);
     if (!entry) return;
-    entry.root.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.material.transparent = true;
-      }
-    });
+    detachSharedMaterialsForFade(entry.root);
+    entry.materials = collectUniqueMaterials(entry.root);
+    const setOpacity = (opacity) => {
+      entry.root.traverse((obj) => {
+        if (!obj.isMesh) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const material of mats) {
+          material.transparent = true;
+          material.opacity = opacity;
+        }
+      });
+    };
     const start = performance.now();
     const step = () => {
       const t = Math.min(1, (performance.now() - start) / 320);
-      entry.root.traverse((obj) => {
-        if (obj.isMesh) obj.material.opacity = 1 - t;
-      });
+      setOpacity(1 - t);
       if (t < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);

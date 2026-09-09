@@ -1,2 +1,2 @@
 /** Bumped by thumbnail/GLB bake so CDN/browser cache cannot pin stale assets. */
-export const ASSET_VERSION = 'mtsf75ts';
+export const ASSET_VERSION = 'mtsia6al';
