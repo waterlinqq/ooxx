@@ -24,6 +24,7 @@ import {
   placeShadowClone,
   expireShadowClonesForTurnStart,
   isFriendlyCastleCell,
+  getLineAttackLandingCell,
 } from '../rules.js';
 
 const CLASS_INDEX = new Map(CLASS_IDS.map((id, i) => [id, i]));
@@ -658,7 +659,7 @@ export function makeAction(ctx, action) {
     undo.reserveIndex = removeFromReserve(ctx, actor);
     place(ctx, actor, action.row, action.col);
     applyTerrainOnEnter(ctx, actor, undo);
-  } else if (action.type === 'move') {
+  } else if (action.type === 'move' || action.type === 'move_attack') {
     lift(ctx, actor);
     if (actor.shadowCloneOnMove && undo.fromRow >= 0) {
       const prev = (ctx.shadowClones ?? []).find(
@@ -676,8 +677,18 @@ export function makeAction(ctx, action) {
       place(ctx, actor, action.row, action.col);
       applyTerrainOnEnter(ctx, actor, undo);
     }
-  } else if (action.type === 'attack') {
+  }
+
+  if (action.type === 'attack' || action.type === 'move_attack') {
     const target = ctx.unitsById.get(action.targetId);
+    if (actor.lineMove ?? CLASSES[actor.classId]?.lineMove) {
+      const [lr, lc] = getLineAttackLandingCell(actor, target);
+      if (lr !== actor.row || lc !== actor.col) {
+        undo.lineApproachFrom = { row: actor.row, col: actor.col };
+        lift(ctx, actor);
+        place(ctx, actor, lr, lc);
+      }
+    }
     let hits;
     if (actor.type === 'mage') {
       hits = getEnemiesOnLine(ctx.board, actor, target.row, target.col);
@@ -967,7 +978,11 @@ export function unmakeAction(ctx, undo) {
     return;
   }
 
-  if (action.type === 'move') {
+  if (action.type === 'move' || action.type === 'move_attack') {
+    if (undo.lineApproachFrom) {
+      lift(ctx, actor);
+      place(ctx, actor, undo.lineApproachFrom.row, undo.lineApproachFrom.col);
+    }
     restoreActionDamage(ctx, undo);
     restoreTerrain(ctx, undo);
     if (undo.recycled) {
@@ -996,6 +1011,11 @@ export function unmakeAction(ctx, undo) {
     lift(ctx, actor);
     Object.assign(actor, undo.possessUndo.actorPrev);
     place(ctx, actor, undo.possessUndo.fromRow, undo.possessUndo.fromCol);
+  }
+
+  if (action.type === 'attack' && undo.lineApproachFrom) {
+    lift(ctx, actor);
+    place(ctx, actor, undo.lineApproachFrom.row, undo.lineApproachFrom.col);
   }
 
   restoreActionDamage(ctx, undo);

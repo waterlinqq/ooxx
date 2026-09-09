@@ -20,7 +20,6 @@
   },
   "devDependencies": {
     "playwright": "^1.63.0",
-    "sharp": "^0.34.5",
     "vite": "^6.0.0"
   }
 }

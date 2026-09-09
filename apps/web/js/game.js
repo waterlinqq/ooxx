@@ -39,6 +39,8 @@ import {
   applyTrapDamage,
   resolveDeathExplosions,
   isFriendlyCastleCell,
+  canLineMoveUnitAttackAfterMove,
+  getLineAttackLandingCell,
 } from './rules.js';
 import { chooseAiActionAsync } from './ai.js';
 import { createSearchContext } from './ai/board.js';
@@ -106,8 +108,11 @@ export class Game {
     this.animating = false;
     this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
+    this.lineMoveAttackUnitId = null;
+    this.lineMoveAttackLabel = null;
     this._aiSearchGen = 0;
     this.playAttackFx = null;
+    this.waitUnitArrival = null;
     this.playBlessFx = null;
     this.playMapPropFx = null;
     this.playLandmineFx = null;
@@ -661,6 +666,7 @@ export class Game {
       actionsRemaining: this.actionsRemaining,
       actionsPerTurn: this.getActionsPerTurn(),
       actedUnitIds: [...this.actedUnitIds],
+      lineMoveAttackUnitId: this.lineMoveAttackUnitId,
       startButtonLabel: this.getStartButtonLabel(),
       equippedItem,
       itemUsed: this.itemUsed,
@@ -691,6 +697,23 @@ export class Game {
   resetTurnActions() {
     this.actionsRemaining = this.getActionsPerTurn();
     this.actedUnitIds = new Set();
+    this.lineMoveAttackUnitId = null;
+    this.lineMoveAttackLabel = null;
+  }
+
+  finalizeLineMoveAction() {
+    const unitId = this.lineMoveAttackUnitId;
+    if (!unitId) return;
+    const label = this.lineMoveAttackLabel ?? '移動';
+    this.lineMoveAttackUnitId = null;
+    this.lineMoveAttackLabel = null;
+    this.endAction(label, unitId);
+  }
+
+  canUnitTakeAction(unitId) {
+    if (this.actedUnitIds.has(unitId)) return false;
+    if (this.lineMoveAttackUnitId && this.lineMoveAttackUnitId !== unitId) return false;
+    return true;
   }
 
   canHumanAct() {
@@ -787,8 +810,19 @@ export class Game {
 
   finishMoveAction(unitId, row, col, baseLabel) {
     const terrainEvents = this.applyTerrainAfterLanding(unitId, row, col);
-    let label = this.appendTerrainToLabel(baseLabel, terrainEvents);
+    const label = this.appendTerrainToLabel(baseLabel, terrainEvents);
     if (this.checkTerrainOutcome(baseLabel, terrainEvents)) return true;
+
+    const unit = this.board.flat().find((u) => u?.id === unitId);
+    if (unit && canLineMoveUnitAttackAfterMove(this.board, unit, this.mapProps, this.shadowClones)) {
+      this.lineMoveAttackUnitId = unitId;
+      this.lineMoveAttackLabel = label;
+      this.draggingUnitId = unitId;
+      this.message = '選擇攻擊目標';
+      this.notify();
+      return true;
+    }
+
     this.endAction(label, unitId);
     return true;
   }
@@ -1098,7 +1132,11 @@ export class Game {
       this.cancelItemTargeting();
       return;
     }
-    if (this.actedUnitIds.has(unitId)) return;
+    if (!this.canUnitTakeAction(unitId)) return;
+    if (this.lineMoveAttackUnitId && this.lineMoveAttackUnitId !== unitId) {
+      this.finalizeLineMoveAction();
+      return;
+    }
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit || !this.ownsHumanUnit(unit) || isCastleUnit(unit)) return;
     if (this.tutorial) {
@@ -1166,6 +1204,10 @@ export class Game {
   }
 
   resetPlayerTurn() {
+    if (this.lineMoveAttackUnitId) {
+      this.finalizeLineMoveAction();
+      return;
+    }
     this.draggingUnitId = null;
     this.message = this.getPlayerTurnMessage();
     this.notify();
@@ -1194,6 +1236,7 @@ export class Game {
 
   getHighlightMoves() {
     if (!this.draggingUnitId) return [];
+    if (this.lineMoveAttackUnitId) return [];
     if (this.actedUnitIds.has(this.draggingUnitId)) return [];
     const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
@@ -1210,9 +1253,10 @@ export class Game {
   }
 
   getHighlightTargets() {
-    if (!this.draggingUnitId) return [];
-    if (this.actedUnitIds.has(this.draggingUnitId)) return [];
-    const unit = this.board.flat().find((u) => u?.id === this.draggingUnitId);
+    const activeUnitId = this.lineMoveAttackUnitId ?? this.draggingUnitId;
+    if (!activeUnitId) return [];
+    if (this.actedUnitIds.has(activeUnitId)) return [];
+    const unit = this.board.flat().find((u) => u?.id === activeUnitId);
     if (!unit) return [];
     const targets = getValidAttackTargets(this.board, unit, this.mapProps, this.shadowClones).map((t) => [t.row, t.col]);
     return this.narrowToTutorialGoal(targets, 'attack');
@@ -1278,6 +1322,7 @@ export class Game {
   tryMoveTo(unitId, row, col) {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     if (!unit) return false;
+    if (this.lineMoveAttackUnitId) return false;
     if (this.actedUnitIds.has(unitId)) return false;
     const valid = getValidMoves(this.board, unit, this.mapProps, this.shadowClones);
     if (!valid.some(([r, c]) => r === row && c === col)) return false;
@@ -1295,6 +1340,25 @@ export class Game {
   }
 
   async resolveAttack(unit, target, label) {
+    this.lineMoveAttackUnitId = null;
+    this.lineMoveAttackLabel = null;
+
+    const isLineMove = unit.lineMove ?? CLASSES[unit.classId]?.lineMove;
+    const [lr, lc] = getLineAttackLandingCell(unit, target);
+    const needsApproach = isLineMove && (lr !== unit.row || lc !== unit.col);
+
+    if (needsApproach) {
+      const moveResult = applyMove(this.board, unit, lr, lc, this.shadowClones);
+      this.board = moveResult.board;
+      this.shadowClones = moveResult.shadowClones ?? this.shadowClones;
+      this.animating = true;
+      this.notify();
+      if (this.waitUnitArrival) {
+        await this.waitUnitArrival(unit.id, lr, lc);
+      }
+      unit = this.board[lr]?.[lc] ?? unit;
+    }
+
     const volleyEndpoints = unit.type === 'tower'
       ? getTowerVolleyEndpoints(this.board, unit)
       : [];
@@ -1358,14 +1422,15 @@ export class Game {
     const unit = this.board.flat().find((u) => u?.id === unitId);
     const target = this.board[row][col];
     if (!unit || !target || target.team === unit.team) return false;
-    if (this.actedUnitIds.has(unitId)) return false;
+    if (!this.canUnitTakeAction(unitId)) return false;
 
     const valid = getValidAttackTargets(this.board, unit, this.mapProps, this.shadowClones);
     if (!valid.some((t) => t.id === target.id)) return false;
     const attack = { type: 'attack', from: { row: unit.row, col: unit.col }, to: { row, col } };
     if (!this.isTutorialActionAllowed(attack)) return false;
 
-    this.resolveAttack(unit, target, '攻擊');
+    const hadPendingMove = this.lineMoveAttackUnitId === unitId;
+    this.resolveAttack(unit, target, hadPendingMove ? '移動 · 攻擊' : '攻擊');
     return true;
   }
 
@@ -1555,7 +1620,40 @@ export class Game {
       const moveLabel = `${teamLabel} 移動`;
       const terrainEvents = this.applyTerrainAfterLanding(action.unitId, action.row, action.col);
       if (this.checkTerrainOutcome(moveLabel, terrainEvents)) return;
-      this.endAction(this.appendTerrainToLabel(moveLabel, terrainEvents), action.unitId);
+      const movedUnit = this.board.flat().find((u) => u?.id === action.unitId);
+      const label = this.appendTerrainToLabel(moveLabel, terrainEvents);
+      if (movedUnit && canLineMoveUnitAttackAfterMove(this.board, movedUnit, this.mapProps, this.shadowClones)) {
+        this.lineMoveAttackUnitId = action.unitId;
+        this.lineMoveAttackLabel = label;
+        const targets = getValidAttackTargets(this.board, movedUnit, this.mapProps, this.shadowClones);
+        const best = targets.sort((a, b) => (b.hp / b.maxHp) - (a.hp / a.maxHp))[0];
+        if (best) {
+          this.resolveAttack(movedUnit, best, `${teamLabel} 移動 · 攻擊`);
+        } else {
+          this.finalizeLineMoveAction();
+        }
+        return;
+      }
+      this.endAction(label, action.unitId);
+      return;
+    }
+
+    if (action.type === 'move_attack') {
+      const unit = this.board.flat().find((u) => u?.id === action.unitId);
+      const target = this.board.flat().find((u) => u?.id === action.targetId);
+      if (!unit || !target) return;
+      const valid = getValidMoves(this.board, unit, this.mapProps, this.shadowClones);
+      if (!valid.some(([r, c]) => r === action.row && c === action.col)) {
+        this.endAction(`${teamLabel} 略過`, action.unitId);
+        return;
+      }
+      const result = applyMove(this.board, unit, action.row, action.col, this.shadowClones);
+      this.board = result.board;
+      this.shadowClones = result.shadowClones ?? this.shadowClones;
+      const terrainEvents = this.applyTerrainAfterLanding(action.unitId, action.row, action.col);
+      if (this.checkTerrainOutcome(`${teamLabel} 移動 · 攻擊`, terrainEvents)) return;
+      const movedUnit = this.board[action.row]?.[action.col] ?? unit;
+      this.resolveAttack(movedUnit, target, `${teamLabel} 移動 · 攻擊`);
       return;
     }
 

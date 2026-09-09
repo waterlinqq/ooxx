@@ -20,6 +20,7 @@ import { buildThreatMap, isLethalAt } from './threat.js';
 import {
   getValidMoves,
   getValidAttackTargets,
+  getLineMoveAttackCombos,
   getValidDeployCells,
   getEnemiesOnLine,
   getTowerTargets,
@@ -98,6 +99,15 @@ function generateActions(ctx) {
       for (const target of uniqueAttackTargets) {
         actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
       }
+      for (const combo of getLineMoveAttackCombos(board, unit, ctx.mapProps, ctx.shadowClones)) {
+        actions.push({
+          type: 'move_attack',
+          unitId: unit.id,
+          row: combo.row,
+          col: combo.col,
+          targetId: combo.targetId,
+        });
+      }
     }
   }
 
@@ -107,6 +117,9 @@ function generateActions(ctx) {
 function sameAction(a, b) {
   if (!a || !b || a.type !== b.type || a.unitId !== b.unitId) return false;
   if (a.type === 'attack') return a.targetId === b.targetId;
+  if (a.type === 'move_attack') {
+    return a.row === b.row && a.col === b.col && a.targetId === b.targetId;
+  }
   return a.row === b.row && a.col === b.col;
 }
 
@@ -164,7 +177,7 @@ function scorePlacementOrder(ctx, action, team, hostile, unit, weights) {
     else if (theirs === 0) score += myProgress * 30;
   }
 
-  if (action.type === 'move') {
+  if (action.type === 'move' || action.type === 'move_attack') {
     // Leaving a line we were building on has a real cost the destination must justify.
     const from = unit.row * ctx.size + unit.col;
     for (const lineIdx of ctx.linesByCell[from]) {
@@ -204,7 +217,7 @@ function orderActions(ctx, actions, ttAction, ply) {
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i];
     let score;
-    if (action.type === 'attack') {
+    if (action.type === 'attack' || action.type === 'move_attack') {
       score = scoreAttackOrder(ctx, action, team);
     } else {
       const unit = ctx.unitsById.get(action.unitId);

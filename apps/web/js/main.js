@@ -697,6 +697,7 @@ function canControlUnit(state, unit) {
   if (unit.team !== myTeam) return false;
   if (isCastleUnit(unit)) return false;
   if (state.actedUnitIds.includes(unit.id)) return false;
+  if (state.lineMoveAttackUnitId && state.lineMoveAttackUnitId !== unit.id) return false;
   if (!state.isHumanTurn) return false;
   if (state.tutorial) {
     const actor = state.tutorialActorCell;
@@ -1049,6 +1050,7 @@ function selectCodexMechanism(kind) {
 
 game.playAttackFx = (fx) => board3d.playAttackFx(fx);
 onlineClient.playAttackFx = (fx) => board3d.playAttackFx(fx);
+game.waitUnitArrival = (unitId, row, col) => board3d.waitForUnitArrival(unitId, row, col);
 game.playBlessFx = (fx) => board3d.playBlessFx(fx);
 onlineClient.playBlessFx = (fx) => board3d.playBlessFx(fx);
 game.playMapPropFx = (fx) => board3d.playMapPropFx(fx);

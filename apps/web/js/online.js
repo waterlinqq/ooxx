@@ -280,6 +280,9 @@ export class OnlineClient {
 
   applyGamePayload(payload) {
     this.gameState = payload.state;
+    if (this.gameState.lineMoveAttackUnitId) {
+      this.draggingUnitId = this.gameState.lineMoveAttackUnitId;
+    }
     this.yourTeam = payload.yourTeam;
     if (payload.timers) {
       const now = Date.now();
@@ -383,6 +386,7 @@ export class OnlineClient {
 
   getHighlightMoves() {
     if (!this.draggingUnitId || !this.gameState) return [];
+    if (this.gameState.lineMoveAttackUnitId) return [];
     if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
     const unit = this.gameState.board.flat().find((u) => u?.id === this.draggingUnitId);
     if (!unit) return [];
@@ -399,9 +403,11 @@ export class OnlineClient {
   }
 
   getHighlightTargets() {
-    if (!this.draggingUnitId || !this.gameState) return [];
-    if (this.gameState.actedUnitIds.includes(this.draggingUnitId)) return [];
-    const unit = this.gameState.board.flat().find((u) => u?.id === this.draggingUnitId);
+    if (!this.gameState) return [];
+    const activeUnitId = this.gameState.lineMoveAttackUnitId ?? this.draggingUnitId;
+    if (!activeUnitId) return [];
+    if (this.gameState.actedUnitIds.includes(activeUnitId)) return [];
+    const unit = this.gameState.board.flat().find((u) => u?.id === activeUnitId);
     if (!unit) return [];
     return getValidAttackTargets(
       this.gameState.board,

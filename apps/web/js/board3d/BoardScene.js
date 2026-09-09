@@ -578,6 +578,10 @@ export class BoardScene {
     return this.attackFx.play(fx);
   }
 
+  waitForUnitArrival(unitId, row, col, timeout = 1800) {
+    return this.unitManager.waitForArrival(unitId, row, col, timeout);
+  }
+
   playBlessFx(fx) {
     return this.attackFx.playBlessing(fx);
   }

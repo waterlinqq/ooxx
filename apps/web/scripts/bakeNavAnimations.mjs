@@ -4,10 +4,14 @@
  */
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
-import sharp from 'sharp';
+
+const execFileAsync = promisify(execFile);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, '..');
@@ -29,15 +33,30 @@ async function bumpAssetVersion() {
 }
 
 async function encodeAnimatedWebp(frameDataUrls, frameDelay, loop = 0) {
-  const frames = frameDataUrls.map(dataUrlToBuffer);
-  return sharp(frames, { animated: true })
-    .webp({
-      quality: 82,
-      effort: 4,
-      delay: frameDelay,
-      loop,
-    })
-    .toBuffer();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nav-anim-'));
+  const framePaths = [];
+  try {
+    for (let i = 0; i < frameDataUrls.length; i++) {
+      const framePath = path.join(tmpDir, `frame_${String(i).padStart(4, '0')}.png`);
+      await fs.writeFile(framePath, dataUrlToBuffer(frameDataUrls[i]));
+      framePaths.push(framePath);
+    }
+
+    const outPath = path.join(tmpDir, 'out.webp');
+    await execFileAsync('img2webp', [
+      '-lossy',
+      '-q', '82',
+      '-m', '4',
+      '-d', String(frameDelay),
+      '-loop', String(loop),
+      ...framePaths,
+      '-o', outPath,
+    ]);
+
+    return await fs.readFile(outPath);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
 }
 
 async function main() {

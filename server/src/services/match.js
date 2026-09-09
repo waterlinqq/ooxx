@@ -29,6 +29,7 @@ import {
   checkCastleVictory,
   isTeamEliminated,
   resolveDeathExplosions,
+  canLineMoveUnitAttackAfterMove,
 } from '../../../shared/rules.js';
 import { isObstacleCell } from '../../../shared/mapPropUtils.js';
 import {
@@ -110,6 +111,7 @@ export function createGameState(boardMode, rng = Math.random, rosters = {}) {
     blueReserve: createTeamReserve(blueRoster, 'blue', boardMode, blueClassLevels),
     redReserve: createTeamReserve(redRoster, 'red', boardMode, redClassLevels),
     actedUnitIds: [],
+    lineMoveAttackUnitId: null,
     actionsRemaining: mode.actionsPerTurn,
     message: `${TEAM.blue.name}先攻：每回合 ${mode.actionsPerTurn} 次行動`,
     lastWinLine: null,
@@ -272,6 +274,7 @@ function switchPlayer(state) {
   const mode = getMode(state);
   state.actionsRemaining = mode.actionsPerTurn;
   state.actedUnitIds = [];
+  state.lineMoveAttackUnitId = null;
 
   if (applyTurnBoundaryEffects(state, endedTeam)) return;
 
@@ -386,6 +389,7 @@ export function applyGameAction(state, action, team) {
   if (action.type === 'move') {
     const unit = state.board.flat().find((u) => u?.id === action.unitId);
     if (!unit || unit.team !== team) return { ok: false, error: '無此單位' };
+    if (state.lineMoveAttackUnitId) return { ok: false, error: '請先完成攻擊' };
     if (state.actedUnitIds.includes(unit.id)) return { ok: false, error: '此單位已行動' };
 
     const valid = getValidMoves(state.board, unit, state.mapProps, state.shadowClones);
@@ -406,6 +410,17 @@ export function applyGameAction(state, action, team) {
     if (checkWinAfterEffect(state, detail)) {
       return { ok: true, ended: true, actionFx: packActionFx(terrain.trigger, null) };
     }
+    const movedUnit = state.board.flat().find((u) => u?.id === unit.id);
+    if (movedUnit && canLineMoveUnitAttackAfterMove(state.board, movedUnit, state.mapProps, state.shadowClones)) {
+      state.lineMoveAttackUnitId = unit.id;
+      state.message = '選擇攻擊目標';
+      return {
+        ok: true,
+        ended: false,
+        pendingLineMoveAttack: true,
+        actionFx: packActionFx(terrain.trigger, null),
+      };
+    }
     const endResult = endAction(state, detail, unit.id);
     return {
       ...endResult,
@@ -419,6 +434,9 @@ export function applyGameAction(state, action, team) {
     if (!unit || unit.team !== team) return { ok: false, error: '無此單位' };
     if (!target || target.team === unit.team) return { ok: false, error: '無效目標' };
     if (state.actedUnitIds.includes(unit.id)) return { ok: false, error: '此單位已行動' };
+    if (state.lineMoveAttackUnitId && state.lineMoveAttackUnitId !== unit.id) {
+      return { ok: false, error: '請先完成攻擊' };
+    }
 
     const valid = getValidAttackTargets(state.board, unit, state.mapProps, state.shadowClones);
     if (!valid.some((t) => t.id === target.id)) {
@@ -441,7 +459,9 @@ export function applyGameAction(state, action, team) {
     detail += '）';
 
     if (result.hits.length > 0) markCombatProgress(state);
-    return endAction(state, detail, unit.id);
+    const hadPendingMove = state.lineMoveAttackUnitId === unit.id;
+    state.lineMoveAttackUnitId = null;
+    return endAction(state, hadPendingMove ? `移動 · ${detail}` : detail, unit.id);
   }
 
   return { ok: false, error: '未知行動' };

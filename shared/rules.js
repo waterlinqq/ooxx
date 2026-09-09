@@ -361,6 +361,36 @@ export function getLineAttackLandingCell(unit, target) {
   return [target.row - dr, target.col - dc];
 }
 
+export function canLineMoveUnitAttackAfterMove(board, unit, mapProps = null, shadowClones = null) {
+  if (!unitLineMove(unit)) return false;
+  return getValidAttackTargets(board, unit, mapProps, shadowClones).length > 0;
+}
+
+/** Every move cell from which a line-move unit can still attack someone that turn. */
+export function getLineMoveAttackCombos(board, unit, mapProps = null, shadowClones = null) {
+  if (!unitLineMove(unit)) return [];
+
+  const combos = [];
+  for (const [row, col] of getValidMoves(board, unit, mapProps, shadowClones)) {
+    const next = cloneBoard(board);
+    const mover = next[unit.row]?.[unit.col];
+    if (!mover) continue;
+    const moved = applyMove(next, mover, row, col, shadowClones);
+    const onBoard = moved.board[row]?.[col];
+    if (!onBoard) continue;
+    const targets = getValidAttackTargets(
+      moved.board,
+      onBoard,
+      mapProps,
+      moved.shadowClones ?? shadowClones,
+    );
+    for (const target of targets) {
+      combos.push({ row, col, targetId: target.id });
+    }
+  }
+  return combos;
+}
+
 export function getValidAttackTargets(board, unit, mapProps = null, shadowClones = null) {
   if (unit.row < 0) return [];
   if (unit.stunned) return [];
