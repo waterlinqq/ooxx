@@ -1,5 +1,6 @@
 import { healUnitAt, applyTrapDamage, resolveDeathExplosions } from './rules.js';
 import { getBoardMode, getCastleCells } from './units.js';
+import { RARITY } from '@ooxx/shared/units.js';
 import {
   createEmptyMapProps,
   cloneMapProps,
@@ -17,6 +18,8 @@ export {
   isMapPropsEnabled,
 } from './mapPropUtils.js';
 
+export const MAP_PROP_RARITY = 'normal';
+
 export const MAP_PROP_KINDS = ['potion', 'spikes', 'web', 'stone', 'flag'];
 
 export const MAP_PROPS = {
@@ -24,35 +27,48 @@ export const MAP_PROPS = {
     kind: 'potion',
     name: '紅藥水',
     icon: '🧪',
+    rarity: MAP_PROP_RARITY,
     desc: '進入時恢復 3 點生命',
   },
   spikes: {
     kind: 'spikes',
     name: '尖刺',
     icon: '🔺',
+    rarity: MAP_PROP_RARITY,
     desc: '初次進入時受到 2 點傷害',
   },
   web: {
     kind: 'web',
     name: '蜘蛛網',
     icon: '🕸️',
+    rarity: MAP_PROP_RARITY,
     desc: '進入後本局無法移動',
   },
   stone: {
     kind: 'stone',
     name: '石頭',
     icon: '🪨',
+    rarity: MAP_PROP_RARITY,
     desc: '佔格，無法部署或走入',
   },
   flag: {
     kind: 'flag',
     name: '紅藍旗',
     icon: '🚩',
+    rarity: MAP_PROP_RARITY,
     desc: '佔格且無法進入，可同時作為雙方連線',
   },
 };
 
 const SPAWN_RATE = 0.02;
+
+export function getMapPropRarity(kind) {
+  return MAP_PROPS[kind]?.rarity ?? MAP_PROP_RARITY;
+}
+
+export function getMapPropRarityLabel(kind) {
+  return RARITY[getMapPropRarity(kind)]?.label ?? RARITY.normal.label;
+}
 
 export function generateMapProps(size, rng = Math.random, excludedCells = []) {
   const props = createEmptyMapProps(size);

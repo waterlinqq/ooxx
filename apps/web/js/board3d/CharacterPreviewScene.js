@@ -156,8 +156,9 @@ function captureLegs(legs) {
 }
 
 export class CharacterPreviewScene {
-  constructor(containerEl) {
+  constructor(containerEl, { compact = false } = {}) {
     this.container = containerEl;
+    this.compact = compact;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1220);
@@ -185,22 +186,42 @@ export class CharacterPreviewScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.3;
     containerEl.appendChild(this.renderer.domElement);
+    if (this.compact) {
+      this.renderer.domElement.style.pointerEvents = 'none';
+    }
 
     this.previewPivot = new THREE.Group();
     this.previewPivot.name = 'previewPivot';
     this.scene.add(this.previewPivot);
 
-    this.orbitControls = new LimitedOrbitControls({
-      domElement: this.renderer.domElement,
-      pivot: this.previewPivot,
-      zoomViaScale: !isTouchDevice(),
-      onChange: () => this.applyOrbitZoom(),
-    });
-    this.orbitControls.applySettings(COMPACT_ORBIT);
-    this.orbitControls.setEnabled(false);
+    if (this.compact) {
+      this.orbitControls = null;
+      this.rangeBoard = null;
+      this.rangeOverlays = null;
+      this.layoutFrustum = null;
+    } else {
+      this.orbitControls = new LimitedOrbitControls({
+        domElement: this.renderer.domElement,
+        pivot: this.previewPivot,
+        zoomViaScale: !isTouchDevice(),
+        onChange: () => this.applyOrbitZoom(),
+      });
+      this.orbitControls.applySettings(COMPACT_ORBIT);
+      this.orbitControls.setEnabled(false);
+
+      this.rangeBoard = new THREE.Group();
+      this.rangeBoard.name = 'previewRangeBoard';
+      this.rangeOverlays = new THREE.Group();
+      this.rangeOverlays.name = 'previewRangeOverlays';
+      this.rangeBoard.add(this.rangeOverlays);
+      this.previewPivot.add(this.rangeBoard);
+      this.createRangeBoard();
+    }
 
     this.layoutFrustum = null;
-    this.debugHud = isScene3dDebugEnabled() ? new Scene3dDebugHud(containerEl, 'codex') : null;
+    this.debugHud = isScene3dDebugEnabled() && !this.compact
+      ? new Scene3dDebugHud(containerEl, 'codex')
+      : null;
 
     this.lastValidWidth = width;
     this.lastValidHeight = height;
@@ -232,14 +253,6 @@ export class CharacterPreviewScene {
     const rimLight = new THREE.DirectionalLight(0xe0e7ff, 0.65);
     rimLight.position.set(-4, 3, 5);
     this.scene.add(rimLight);
-
-    this.rangeBoard = new THREE.Group();
-    this.rangeBoard.name = 'previewRangeBoard';
-    this.rangeOverlays = new THREE.Group();
-    this.rangeOverlays.name = 'previewRangeOverlays';
-    this.rangeBoard.add(this.rangeOverlays);
-    this.previewPivot.add(this.rangeBoard);
-    this.createRangeBoard();
 
     this.clock = new THREE.Clock();
     this.preview = null;
@@ -351,13 +364,37 @@ export class CharacterPreviewScene {
     return true;
   }
 
+  applyCompactFrustum() {
+    const width = this.lastValidWidth;
+    const height = this.lastValidHeight;
+    if (!width || !height) return;
+
+    const bounds = this.previewContentBounds();
+    if (!isValidLayoutBounds(bounds)) return;
+
+    const aspect = width / height;
+    let halfW = bounds.halfW * 1.06;
+    let halfH = bounds.halfH * 1.06;
+    if (halfW / halfH > aspect) {
+      halfH = halfW / aspect;
+    } else {
+      halfW = halfH * aspect;
+    }
+
+    this.camera.left = bounds.centerX - halfW;
+    this.camera.right = bounds.centerX + halfW;
+    this.camera.top = bounds.centerY + halfH;
+    this.camera.bottom = bounds.centerY - halfH;
+    this.camera.updateProjectionMatrix();
+  }
+
   applyOrbitZoom() {
     this.updateLayoutFrustum();
     applyOrbitFrustumZoom(this.camera, this.layoutFrustum, this.orbitControls, this.debugHud);
   }
 
   onResize() {
-    if (this.orbitControls?.isGesturing()) return;
+    if (!this.compact && this.orbitControls?.isGesturing()) return;
 
     let width = this.container.clientWidth;
     let height = this.container.clientHeight;
@@ -370,7 +407,8 @@ export class CharacterPreviewScene {
     this.lastValidWidth = width;
     this.lastValidHeight = height;
 
-    this.applyOrbitZoom();
+    if (this.compact) this.applyCompactFrustum();
+    else this.applyOrbitZoom();
 
     this.renderer.setSize(width, height);
   }
@@ -461,6 +499,7 @@ export class CharacterPreviewScene {
   }
 
   clearRangeOverlays() {
+    if (!this.rangeOverlays) return;
     for (const mesh of [...this.rangeOverlays.children]) {
       this.rangeOverlays.remove(mesh);
       mesh.geometry.dispose();
@@ -492,6 +531,7 @@ export class CharacterPreviewScene {
   }
 
   updateRangeOverlay(classId) {
+    if (this.compact || !this.rangeOverlays) return;
     this.clearRangeOverlays();
 
     const center = Math.floor(PREVIEW_BOARD_SIZE / 2);
@@ -523,7 +563,7 @@ export class CharacterPreviewScene {
       if (this.loadGeneration !== generation || this.classId !== classId) return;
       this.disposePreview();
       this.preview = this.buildPreviewEntry(classId);
-      this.updateRangeOverlay(classId);
+      if (!this.compact) this.updateRangeOverlay(classId);
       if (this.visible) this.onResize();
       this.updateAnimationLoop();
     });
@@ -682,6 +722,7 @@ export class CharacterPreviewScene {
   }
 
   setExpanded(expanded) {
+    if (this.compact) return;
     this.expanded = Boolean(expanded);
     this.orbitControls?.applySettings(this.expanded ? EXPANDED_ORBIT : COMPACT_ORBIT);
     if (!this.expanded) this.orbitControls?.reset();
@@ -749,14 +790,16 @@ export class CharacterPreviewScene {
     this.debugHud?.dispose();
     this.disposePreview();
     this.clearRangeOverlays();
-    this.rangeBoard.traverse((obj) => {
-      obj.geometry?.dispose();
-      if (Array.isArray(obj.material)) {
-        obj.material.forEach((material) => material.dispose());
-      } else {
-        obj.material?.dispose();
-      }
-    });
+    if (this.rangeBoard) {
+      this.rangeBoard.traverse((obj) => {
+        obj.geometry?.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((material) => material.dispose());
+        } else {
+          obj.material?.dispose();
+        }
+      });
+    }
     this.envMap?.dispose();
     this.pmrem?.dispose();
     this.renderer.dispose();

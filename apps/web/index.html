@@ -182,17 +182,17 @@
           <div class="section-title section-title-compact">對戰模式</div>
           <div class="mode-buttons" id="formationModeButtons"></div>
 
+          <div id="formationItemSection">
+            <div class="section-title section-title-compact">本場道具</div>
+            <div class="class-grid formation-item-grid" id="formationItems"></div>
+          </div>
+
           <div class="formation-lineup-section" id="formationLineupSection">
             <div class="section-title">
               我的隊伍
               <span class="section-hint" id="formationCount"></span>
             </div>
             <div class="roster-lineup" id="formationLineup"></div>
-          </div>
-
-          <div id="formationItemSection">
-            <div class="section-title section-title-compact">本場道具</div>
-            <div class="item-picker" id="formationItems"></div>
           </div>
 
           <div>
@@ -214,20 +214,23 @@
           <button type="button" class="codex-tab" role="tab" data-codex-tab="items" aria-selected="false">道具</button>
           <button type="button" class="codex-tab" role="tab" data-codex-tab="mechanisms" aria-selected="false">機關</button>
         </div>
-        <div class="class-detail" id="codexDetail">
+        <div class="screen-scroll">
+          <div class="class-grid" id="codexPicker"></div>
+        </div>
+        <div class="class-detail hidden" id="codexDetail">
+          <button type="button" class="codex-detail-close hidden" id="codexDetailClose" aria-label="關閉詳情">✕</button>
+          <div class="codex-preview-stage">
+            <button type="button" class="codex-detail-nav-btn hidden" id="codexDetailPrev" aria-label="上一個">‹</button>
             <div class="detail-preview-host" id="codexPreviewHost">
               <div class="codex-static-preview hidden" id="codexStaticPreview"></div>
-              <button type="button" class="codex-preview-close hidden" id="codexPreviewClose" aria-label="關閉全螢幕預覽">✕</button>
-              <div class="codex-preview-hint hidden" id="codexPreviewHint">拖曳旋轉 · 雙指縮放</div>
               <div class="range-legend" id="codexRangeLegend" aria-label="範圍圖例">
                 <span><i class="range-swatch move"></i>移動範圍</span>
                 <span><i class="range-swatch attack"></i>攻擊範圍</span>
               </div>
             </div>
+            <button type="button" class="codex-detail-nav-btn hidden" id="codexDetailNext" aria-label="下一個">›</button>
+          </div>
           <div class="detail-info" id="codexDetailInfo"></div>
-        </div>
-        <div class="screen-scroll">
-          <div class="class-grid" id="codexPicker"></div>
         </div>
       </section>
 

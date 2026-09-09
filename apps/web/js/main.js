@@ -7,13 +7,13 @@ import { NAV_ICON_IDS } from './board3d/NavIconModels.js';
 import { applySideIcons } from './board3d/SideIconThumbnails.js';
 import { SIDE_ICON_IDS } from './board3d/SideIconModels.js';
 import { NavIconPlayer } from './board3d/NavIconPlayer.js';
-import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
+import { ITEMS, SHOP_PRICES, ITEM_IDS, getItemRarity, getItemRarityLabel } from './items.js';
 import { fillItemIcon, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { createThumbnailMap } from './board3d/thumbnailPaths.js';
 import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, getFragmentsPerCopy, getFragmentPrice, getClassRarity, getRarityLabel, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX, canAddToRoster } from './units.js';
 import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
 import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml, uiIconSvg } from './uiIcons.js';
-import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
+import { MAP_PROPS, MAP_PROP_KINDS, getMapPropRarity, getMapPropRarityLabel } from './mapProps.js';
 import { STAGNATION_ROUND_THRESHOLD, STAGNATION_HINT_THRESHOLD } from '@ooxx/shared/stagnation.js';
 import { CODEX_TABS } from './codex.js';
 import { getClassDiamondPrice } from './unlocks.js';
@@ -83,11 +83,13 @@ const matchTimerFillEl = document.getElementById('matchTimerFill');
 const matchTimerTextEl = document.getElementById('matchTimerText');
 const codexTabsEl = document.getElementById('codexTabs');
 const codexPickerEl = document.getElementById('codexPicker');
+const codexDetailEl = document.getElementById('codexDetail');
 const codexDetailInfoEl = document.getElementById('codexDetailInfo');
 const codexPreviewHostEl = document.getElementById('codexPreviewHost');
 const codexStaticPreviewEl = document.getElementById('codexStaticPreview');
-const codexPreviewCloseEl = document.getElementById('codexPreviewClose');
-const codexPreviewHintEl = document.getElementById('codexPreviewHint');
+const codexDetailCloseEl = document.getElementById('codexDetailClose');
+const codexDetailPrevEl = document.getElementById('codexDetailPrev');
+const codexDetailNextEl = document.getElementById('codexDetailNext');
 const codexRangeLegendEl = document.getElementById('codexRangeLegend');
 const endResultEl = document.getElementById('endResult');
 const gameEndOverlayEl = document.getElementById('gameEndOverlay');
@@ -588,7 +590,7 @@ let selectedClassId = 'swordsman';
 let codexPreviewLevel = CLASS_LEVEL_MIN;
 let codexPreviewLevelForClass = null;
 let activeCodexTab = 'units';
-let codexPreviewExpanded = false;
+let codexDetailVisible = false;
 let selectedItemId = ITEM_IDS[0];
 let selectedMechanismId = MAP_PROP_KINDS[0];
 let lastPhase = 'lobby';
@@ -779,36 +781,64 @@ function setMapPropIcon(container, kind) {
   fillMapPropIcon(container, kind, mapPropThumbnails, prop?.icon ?? '?', prop?.name ?? kind);
 }
 
-function setCodexPreviewExpanded(expanded) {
-  const showUnit3d = activeNav === 'codex' && activeCodexTab === 'units';
-  const next = Boolean(expanded) && showUnit3d;
-  if (codexPreviewExpanded === next) return;
-  codexPreviewExpanded = next;
-  syncCodexPreviewChrome();
-  unitPreview.setExpanded(next);
+function getCodexTabEntryIds() {
+  if (activeCodexTab === 'units') return CLASS_IDS;
+  if (activeCodexTab === 'items') return ITEM_IDS;
+  return MAP_PROP_KINDS;
 }
 
-function syncCodexPreviewChrome() {
+function getCodexSelectedId() {
+  if (activeCodexTab === 'units') return selectedClassId;
+  if (activeCodexTab === 'items') return selectedItemId;
+  return selectedMechanismId;
+}
+
+function selectCodexEntry(id) {
+  if (activeCodexTab === 'units') selectClass(id);
+  else if (activeCodexTab === 'items') selectCodexItem(id);
+  else selectCodexMechanism(id);
+}
+
+function stepCodexDetail(delta) {
+  const ids = getCodexTabEntryIds();
+  const index = ids.indexOf(getCodexSelectedId());
+  if (index < 0) return;
+  const nextIndex = index + delta;
+  if (nextIndex < 0 || nextIndex >= ids.length) return;
+  selectCodexEntry(ids[nextIndex]);
+}
+
+function syncCodexDetailNav() {
+  const show = activeNav === 'codex' && codexDetailVisible;
+  const ids = getCodexTabEntryIds();
+  const index = ids.indexOf(getCodexSelectedId());
+
+  codexDetailPrevEl?.classList.toggle('hidden', !show);
+  codexDetailNextEl?.classList.toggle('hidden', !show);
+  if (codexDetailPrevEl) codexDetailPrevEl.disabled = !show || index <= 0;
+  if (codexDetailNextEl) codexDetailNextEl.disabled = !show || index < 0 || index >= ids.length - 1;
+}
+
+function syncCodexDetailPanel() {
   const onCodex = activeNav === 'codex';
-  const showUnit3d = onCodex && activeCodexTab === 'units';
-  codexPreviewHostEl?.classList.toggle('preview-expanded', codexPreviewExpanded);
-  codexPreviewHostEl?.classList.toggle('codex-preview-interactive', showUnit3d && !codexPreviewExpanded);
-  document.body.classList.toggle('codex-preview-expanded', codexPreviewExpanded);
-  codexPreviewCloseEl?.classList.toggle('hidden', !codexPreviewExpanded);
-  codexPreviewHintEl?.classList.toggle('hidden', !codexPreviewExpanded);
+  const show = onCodex && codexDetailVisible;
+  const showUnit3d = show && activeCodexTab === 'units';
+
+  codexDetailEl?.classList.toggle('hidden', !show);
+  document.body.classList.toggle('codex-detail-open', show);
+  codexDetailCloseEl?.classList.toggle('hidden', !show);
+  unitPreview.setVisible(showUnit3d);
+  unitPreview.setExpanded(showUnit3d);
+  codexStaticPreviewEl?.classList.toggle('hidden', !show || showUnit3d);
+  codexRangeLegendEl?.classList.toggle('hidden', !showUnit3d);
   if (codexPreviewHostEl) {
-    codexPreviewHostEl.style.pointerEvents = onCodex ? '' : 'none';
+    codexPreviewHostEl.style.pointerEvents = showUnit3d ? '' : 'none';
   }
+  syncCodexDetailNav();
 }
 
 function updateCodexPreviewVisibility() {
-  const onCodex = activeNav === 'codex';
-  const showUnit3d = onCodex && activeCodexTab === 'units';
-  if (!showUnit3d) setCodexPreviewExpanded(false);
-  unitPreview.setVisible(showUnit3d);
-  codexStaticPreviewEl?.classList.toggle('hidden', !onCodex || showUnit3d);
-  codexRangeLegendEl?.classList.toggle('hidden', !showUnit3d);
-  syncCodexPreviewChrome();
+  syncCodexDetailPanel();
 }
 
 function renderCodexStaticPreview(fillIcon) {
@@ -818,6 +848,7 @@ function renderCodexStaticPreview(fillIcon) {
 
 function switchCodexTab(tab) {
   if (!CODEX_TABS.includes(tab)) return;
+  if (tab !== activeCodexTab) codexDetailVisible = false;
   activeCodexTab = tab;
 }
 
@@ -839,6 +870,28 @@ function createRarityBadge(classId) {
   const badge = document.createElement('span');
   badge.className = `class-rarity-badge class-rarity-badge--${getClassRarity(classId)}`;
   badge.textContent = getRarityLabel(classId);
+  return badge;
+}
+
+function getItemRarityCardClass(itemId) {
+  return `class-card--rarity-${getItemRarity(itemId)}`;
+}
+
+function createItemRarityBadge(item) {
+  const badge = document.createElement('span');
+  badge.className = `class-rarity-badge class-rarity-badge--${getItemRarity(item.id)}`;
+  badge.textContent = getItemRarityLabel(item.id);
+  return badge;
+}
+
+function getMapPropRarityCardClass(kind) {
+  return `class-card--rarity-${getMapPropRarity(kind)}`;
+}
+
+function createMapPropRarityBadge(kind) {
+  const badge = document.createElement('span');
+  badge.className = `class-rarity-badge class-rarity-badge--${getMapPropRarity(kind)}`;
+  badge.textContent = getMapPropRarityLabel(kind);
   return badge;
 }
 
@@ -916,10 +969,23 @@ function createClassProgressActions(classId, { selectOnAction = false } = {}) {
   return actions;
 }
 
-function createCodexCard({ classId, active, title, locked, onClick, fillIcon, showProgressActions = false }) {
+function createCodexCard({ classId, itemId, mapPropKind, active, title, locked, onClick, fillIcon, showProgressActions = false }) {
+  let rarityClass = '';
+  let rarityBadge = null;
+  if (classId) {
+    rarityClass = getRarityCardClass(classId);
+    rarityBadge = createRarityBadge(classId);
+  } else if (itemId) {
+    rarityClass = getItemRarityCardClass(itemId);
+    rarityBadge = createItemRarityBadge(ITEMS[itemId]);
+  } else if (mapPropKind) {
+    rarityClass = getMapPropRarityCardClass(mapPropKind);
+    rarityBadge = createMapPropRarityBadge(mapPropKind);
+  }
+
   const card = document.createElement('div');
   card.className = 'class-card'
-    + (classId ? ` ${getRarityCardClass(classId)}` : '')
+    + (rarityClass ? ` ${rarityClass}` : '')
     + (active ? ' selected' : '')
     + (locked ? ' class-card-unowned' : '')
     + (showProgressActions ? ' class-card--with-actions' : '');
@@ -944,7 +1010,7 @@ function createCodexCard({ classId, active, title, locked, onClick, fillIcon, sh
     if (event.target.closest('.class-card-action')) return;
     onClick();
   });
-  if (classId) card.append(createRarityBadge(classId));
+  if (rarityBadge) card.append(rarityBadge);
   card.append(selectBtn);
   if (showProgressActions && classId) {
     card.append(createClassProgressActions(classId, { selectOnAction: true }));
@@ -957,7 +1023,10 @@ function renderCodexItemDetail(itemId) {
   if (!item) return;
 
   codexDetailInfoEl.innerHTML = `
-    <h2 class="detail-name">${item.name}</h2>
+    <div class="codex-detail-title-row">
+      <h2 class="detail-name">${item.name}</h2>
+      <span class="class-rarity-badge class-rarity-badge--${getItemRarity(itemId)}">${getItemRarityLabel(itemId)}</span>
+    </div>
     <p class="codex-desc">${item.desc}</p>
   `;
 }
@@ -967,7 +1036,10 @@ function renderCodexMechanismDetail(kind) {
   if (!prop) return;
 
   codexDetailInfoEl.innerHTML = `
-    <h2 class="detail-name">${prop.name}</h2>
+    <div class="codex-detail-title-row">
+      <h2 class="detail-name">${prop.name}</h2>
+      <span class="class-rarity-badge class-rarity-badge--${getMapPropRarity(kind)}">${getMapPropRarityLabel(kind)}</span>
+    </div>
     <p class="codex-desc">${prop.desc}</p>
   `;
 }
@@ -978,7 +1050,7 @@ function renderCodexUnits() {
     const owned = isClassOwnedInState(state, cls.id);
     codexPickerEl.appendChild(createCodexCard({
       classId: cls.id,
-      active: cls.id === selectedClassId,
+      active: codexDetailVisible && cls.id === selectedClassId,
       title: cls.name,
       locked: !owned,
       onClick: () => selectClass(cls.id),
@@ -986,35 +1058,49 @@ function renderCodexUnits() {
       showProgressActions: true,
     }));
   }
-  renderClassDetail(selectedClassId, state);
+  if (codexDetailVisible) {
+    renderClassDetail(selectedClassId, state);
+  } else {
+    codexDetailInfoEl.innerHTML = '';
+  }
 }
 
 function renderCodexItems() {
   const selected = ITEMS[selectedItemId];
   for (const item of Object.values(ITEMS)) {
     codexPickerEl.appendChild(createCodexCard({
-      active: item.id === selectedItemId,
+      itemId: item.id,
+      active: codexDetailVisible && item.id === selectedItemId,
       title: item.name,
       onClick: () => selectCodexItem(item.id),
       fillIcon: (el) => setItemIcon(el, item),
     }));
   }
-  renderCodexStaticPreview((el) => setItemIcon(el, selected));
-  renderCodexItemDetail(selectedItemId);
+  if (codexDetailVisible) {
+    renderCodexStaticPreview((el) => setItemIcon(el, selected));
+    renderCodexItemDetail(selectedItemId);
+  } else {
+    codexDetailInfoEl.innerHTML = '';
+  }
 }
 
 function renderCodexMechanisms() {
   for (const kind of MAP_PROP_KINDS) {
     const prop = MAP_PROPS[kind];
     codexPickerEl.appendChild(createCodexCard({
-      active: kind === selectedMechanismId,
+      mapPropKind: kind,
+      active: codexDetailVisible && kind === selectedMechanismId,
       title: prop.name,
       onClick: () => selectCodexMechanism(kind),
       fillIcon: (el) => setMapPropIcon(el, kind),
     }));
   }
-  renderCodexStaticPreview((el) => setMapPropIcon(el, selectedMechanismId));
-  renderCodexMechanismDetail(selectedMechanismId);
+  if (codexDetailVisible) {
+    renderCodexStaticPreview((el) => setMapPropIcon(el, selectedMechanismId));
+    renderCodexMechanismDetail(selectedMechanismId);
+  } else {
+    codexDetailInfoEl.innerHTML = '';
+  }
 }
 
 function renderCodex() {
@@ -1032,18 +1118,22 @@ function renderCodex() {
   }
 
   updateCodexPreviewVisibility();
-  requestAnimationFrame(() => {
-    codexPickerEl.querySelector('.class-card.selected')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  });
+  if (!codexDetailVisible) {
+    requestAnimationFrame(() => {
+      codexPickerEl.querySelector('.class-card.selected')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
 }
 
 function selectCodexItem(itemId) {
+  codexDetailVisible = true;
   selectedItemId = itemId;
   render(getAppState());
 }
 
 function selectCodexMechanism(kind) {
+  codexDetailVisible = true;
   selectedMechanismId = kind;
   render(getAppState());
 }
@@ -1087,9 +1177,10 @@ function switchNav(navId) {
   }
 
   if (navId === 'codex') {
+    codexDetailVisible = false;
     updateCodexPreviewVisibility();
   } else {
-    setCodexPreviewExpanded(false);
+    codexDetailVisible = false;
     unitPreview.setVisible(false);
   }
 }
@@ -1188,12 +1279,13 @@ function renderClassDetail(classId, state = getAppState()) {
     picker.appendChild(btn);
   }
 
-  if (activeNav === 'codex' && activeCodexTab === 'units') {
+  if (activeNav === 'codex' && activeCodexTab === 'units' && codexDetailVisible) {
     unitPreview.setClass(classId);
   }
 }
 
 function selectClass(classId) {
+  codexDetailVisible = true;
   applyCodexSelection(classId);
   render(getAppState());
 }
@@ -1219,29 +1311,33 @@ function createClassInspectBtn(classId, className) {
   return btn;
 }
 
-function createItemChip(item, { count, equipped, onSelect }) {
-  const chip = document.createElement('button');
-  chip.type = 'button';
-  chip.className = 'item-chip';
-  if (equipped) chip.classList.add('item-equipped');
-
+function createFormationItemCard(item, { count, equipped, onSelect }) {
   const owned = count ?? 0;
-  if (item.id !== null && owned <= 0) chip.disabled = true;
-  chip.title = item.name ?? '';
+  const unavailable = owned <= 0;
+
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = `class-card formation-item-card ${getItemRarityCardClass(item.id)}`
+    + (equipped ? ' formation-item-card--equipped selected' : ' formation-item-card--idle')
+    + (unavailable ? ' formation-item-card--unavailable' : '');
+  card.disabled = unavailable;
+  card.title = unavailable ? `${item.name}（無庫存）` : item.name;
 
   const iconWrap = document.createElement('span');
-  iconWrap.className = 'item-chip-icon';
+  iconWrap.className = 'class-icon';
   setItemIcon(iconWrap, item);
 
-  chip.append(iconWrap);
-  if (item.id !== null && owned > 0) {
-    const badge = document.createElement('span');
-    badge.className = 'item-chip-badge';
-    badge.textContent = String(owned);
-    chip.appendChild(badge);
-  }
-  chip.addEventListener('click', () => onSelect(item.id));
-  return chip;
+  const nameEl = document.createElement('span');
+  nameEl.className = 'class-name';
+  nameEl.textContent = item.name;
+
+  const metaEl = document.createElement('span');
+  metaEl.className = 'class-meta';
+  metaEl.textContent = owned > 0 ? `×${owned}` : '無庫存';
+
+  card.append(createItemRarityBadge(item), iconWrap, nameEl, metaEl);
+  card.addEventListener('click', () => onSelect(item.id));
+  return card;
 }
 
 function createClassUnlockRow(cls, { owned, price, onBuy }) {
@@ -1532,7 +1628,7 @@ function renderFormationItems(state) {
   formationItemsEl.innerHTML = '';
 
   for (const item of Object.values(ITEMS)) {
-    formationItemsEl.appendChild(createItemChip(item, {
+    formationItemsEl.appendChild(createFormationItemCard(item, {
       count: state.inventory[item.id] ?? 0,
       equipped: state.equippedItem === item.id,
       onSelect: (id) => game.selectEquippedItem(id),
@@ -1710,6 +1806,54 @@ function tryAddToFormation(classId) {
   game.addToFormation(classId);
 }
 
+function createFormationLineupCard(classId, { locked = false, metaHtml, onRemove } = {}) {
+  const cls = CLASSES[classId];
+  if (!cls) return null;
+
+  const card = document.createElement(locked ? 'div' : 'button');
+  if (!locked) {
+    card.type = 'button';
+    card.addEventListener('click', (event) => {
+      event.currentTarget.blur();
+      onRemove?.();
+    });
+  }
+
+  card.className = `class-card formation-lineup-card ${getRarityCardClass(classId)}`
+    + (locked ? ' formation-lineup-card--locked' : '');
+  card.title = locked ? `${cls.name}（固定）` : `移除 ${cls.name}`;
+  card.append(createRarityBadge(classId));
+
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'class-icon';
+  setUnitIcon(iconWrap, classId);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'class-name';
+  nameEl.textContent = cls.name;
+
+  const metaEl = document.createElement('span');
+  metaEl.className = 'class-meta';
+  if (metaHtml) {
+    metaEl.innerHTML = metaHtml;
+  } else {
+    const progress = getProgressFromState(getAppState(), classId);
+    const stats = getClassCombatStats(classId, progress.level);
+    metaEl.innerHTML = `${renderStatBadgeHtml('level', progress.level)} · ${renderStatBadgeHtml('hp', stats.hp)} · ${renderStatBadgeHtml('atk', stats.atk)}`;
+  }
+
+  card.append(iconWrap, nameEl, metaEl);
+
+  if (!locked) {
+    const hint = document.createElement('span');
+    hint.className = 'formation-lineup-hint';
+    hint.textContent = '點擊移除';
+    card.append(hint);
+  }
+
+  return card;
+}
+
 function renderFormation(state) {
   const limit = state.rosterLimit;
   const picked = state.blueRoster;
@@ -1725,27 +1869,21 @@ function renderFormation(state) {
   formationLineupEl.innerHTML = '';
 
   if (autoCastle) {
-    const castleChip = document.createElement('div');
-    castleChip.className = `roster-chip roster-chip-locked ${getRarityCardClass('castle')}`;
-    castleChip.title = `城堡（固定 · HP ${getCastleHpForMode('5x5')}）`;
-    setUnitIcon(castleChip, 'castle');
-    formationLineupEl.appendChild(castleChip);
+    formationLineupEl.appendChild(createFormationLineupCard('castle', {
+      locked: true,
+      metaHtml: `固定 · ${renderStatBadgeHtml('hp', getCastleHpForMode('5x5'))}`,
+    }));
   }
 
   if (picked.length > 0) {
     const lineup = deployablePicked;
     lineup.forEach((classId) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = `roster-chip ${getRarityCardClass(classId)}`;
-      chip.title = `移除 ${CLASSES[classId].name}`;
-      setUnitIcon(chip, classId);
-      chip.addEventListener('click', (event) => {
-        event.currentTarget.blur();
-        const rosterIndex = picked.indexOf(classId);
-        if (rosterIndex >= 0) game.removeFromFormation(rosterIndex);
-      });
-      formationLineupEl.appendChild(chip);
+      formationLineupEl.appendChild(createFormationLineupCard(classId, {
+        onRemove: () => {
+          const rosterIndex = picked.indexOf(classId);
+          if (rosterIndex >= 0) game.removeFromFormation(rosterIndex);
+        },
+      }));
     });
   }
 
@@ -2432,21 +2570,28 @@ codexTabsEl?.addEventListener('click', (e) => {
   render(getAppState());
 });
 
-codexPreviewHostEl?.addEventListener('click', (event) => {
-  if (codexPreviewExpanded) return;
-  if (activeNav !== 'codex' || activeCodexTab !== 'units') return;
-  if (event.target.closest('.codex-preview-close')) return;
-  setCodexPreviewExpanded(true);
+codexDetailCloseEl?.addEventListener('click', () => {
+  codexDetailVisible = false;
+  render(getAppState());
 });
 
-codexPreviewCloseEl?.addEventListener('click', (event) => {
-  event.stopPropagation();
-  setCodexPreviewExpanded(false);
-});
+codexDetailPrevEl?.addEventListener('click', () => stepCodexDetail(-1));
+codexDetailNextEl?.addEventListener('click', () => stepCodexDetail(1));
 
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || !codexPreviewExpanded) return;
-  setCodexPreviewExpanded(false);
+  if (!codexDetailVisible || activeNav !== 'codex') return;
+  if (event.key === 'Escape') {
+    codexDetailVisible = false;
+    render(getAppState());
+    return;
+  }
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    stepCodexDetail(-1);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    stepCodexDetail(1);
+  }
 });
 
 function getOnlineBoardMode() {
