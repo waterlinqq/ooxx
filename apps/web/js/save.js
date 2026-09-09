@@ -1,9 +1,10 @@
-import { ITEM_IDS, SHOP_PRICES, STARTING_COINS, STARTING_DIAMONDS, FRAGMENT_PRICE } from './items.js';
+import { ITEM_IDS, SHOP_PRICES, STARTING_COINS, STARTING_DIAMONDS } from './items.js';
 import {
   CLASS_IDS,
   CLASSES,
   CLASS_LEVEL_MIN,
-  FRAGMENTS_PER_COPY,
+  getFragmentsPerCopy,
+  getFragmentPrice,
   getUpgradeCopyCost,
 } from './units.js';
 import { getClassDiamondPrice, isUnlockable, isStarterClass } from './unlocks.js';
@@ -302,19 +303,20 @@ export function canAffordClass(classId) {
 
 export function canAffordFragment(classId) {
   if (!CLASSES[classId]) return false;
-  return loadSave().coins >= FRAGMENT_PRICE;
+  const price = getFragmentPrice(classId);
+  return typeof price === 'number' && loadSave().coins >= price;
 }
 
 export function canSynthesizeCopy(classId) {
   if (!CLASSES[classId]) return false;
-  return getClassProgress(classId).fragments >= FRAGMENTS_PER_COPY;
+  return getClassProgress(classId).fragments >= getFragmentsPerCopy(classId);
 }
 
 export function canUpgradeClass(classId) {
   const save = loadSave();
   if (!save.ownedClasses.includes(classId)) return false;
   const progress = save.classProgress[classId] ?? createDefaultClassProgress();
-  const cost = getUpgradeCopyCost(progress.level);
+  const cost = getUpgradeCopyCost(classId, progress.level);
   return cost != null && progress.copies >= cost;
 }
 
@@ -357,11 +359,15 @@ export function buyFragment(classId) {
   if (!CLASSES[classId]) {
     return { ok: false, reason: '未知職業' };
   }
-  if (save.coins < FRAGMENT_PRICE) {
+  const fragmentPrice = getFragmentPrice(classId);
+  if (typeof fragmentPrice !== 'number') {
+    return { ok: false, reason: '未知商品' };
+  }
+  if (save.coins < fragmentPrice) {
     return { ok: false, reason: '金幣不足' };
   }
 
-  save.coins -= FRAGMENT_PRICE;
+  save.coins -= fragmentPrice;
   ensureClassProgress(save, classId).fragments += 1;
   persistSave();
   return { ok: true };
@@ -375,12 +381,13 @@ export function synthesizeCopy(classId) {
   }
 
   const progress = ensureClassProgress(save, classId);
-  if (progress.fragments < FRAGMENTS_PER_COPY) {
+  const fragmentsNeeded = getFragmentsPerCopy(classId);
+  if (progress.fragments < fragmentsNeeded) {
     return { ok: false, reason: '碎片不足' };
   }
 
   const owned = save.ownedClasses.includes(classId);
-  progress.fragments -= FRAGMENTS_PER_COPY;
+  progress.fragments -= fragmentsNeeded;
   if (!owned) {
     save.ownedClasses = CLASS_IDS.filter((id) => save.ownedClasses.includes(id) || id === classId);
     progress.level = CLASS_LEVEL_MIN;
@@ -399,7 +406,7 @@ export function upgradeClass(classId) {
   }
 
   const progress = ensureClassProgress(save, classId);
-  const cost = getUpgradeCopyCost(progress.level);
+  const cost = getUpgradeCopyCost(classId, progress.level);
   if (cost == null) {
     return { ok: false, reason: '已達最大等級' };
   }

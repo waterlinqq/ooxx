@@ -177,11 +177,12 @@
 
       <!-- 隊伍 -->
       <section class="game-screen" id="screenFormation" data-screen="formation">
-        <div class="screen-scroll">
+        <div class="formation-full-toast hidden" id="formationFullToast" aria-live="polite">隊伍已滿</div>
+        <div class="screen-scroll" id="formationScroll">
           <div class="section-title section-title-compact">對戰模式</div>
           <div class="mode-buttons" id="formationModeButtons"></div>
 
-          <div>
+          <div class="formation-lineup-section" id="formationLineupSection">
             <div class="section-title">
               我的隊伍
               <span class="section-hint" id="formationCount"></span>

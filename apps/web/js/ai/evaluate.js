@@ -26,11 +26,13 @@ const CLASS_BONUS = {
   assassin: 6,
   bomber: 6,
   eagle: 8,
+  raceCar: 6,
   priest: 8,
   ghost: 10,
   viper: 6,
   slime: 6,
   crabGeneral: 6,
+  vampire: 8,
   thunderGod: 8,
   castle: 55,
 };

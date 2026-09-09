@@ -6,6 +6,23 @@ const GLOBAL_MATERIAL_NAMES = new Set(['steel', 'gold', 'leather', 'wood', 'skin
 /** Helmets overlap the head sphere in the bake; pull them back in depth to avoid eating the face. */
 const HELMET_SLOTS = new Set(['armor', 'armorDeep', 'steel', 'trim', 'gold']);
 
+// Slots authored with a fixed palette (a vampire's cloak has to stay black no
+// matter which team owns it). They keep their baked colour but still get
+// baselines stamped so acted/selection fades work.
+const FIXED_COLOUR_SLOTS = new Set([
+  'ember',
+  'arcane',
+  'cloak',
+  'cloakLining',
+  'dressShirt',
+  'paleSkin',
+]);
+
+/** Thin cloth panels and head spheres need both faces drawn. */
+const DOUBLE_SIDED_SLOTS = new Set(['skin', 'paleSkin', 'charcoal', 'cloth', 'cloak', 'cloakLining']);
+
+const FACE_SLOTS = new Set(['skin', 'paleSkin']);
+
 function stampMaterialBaselines(material) {
   material.userData.baseColor = material.color.clone();
   material.userData.baseOpacity = material.opacity ?? 1;
@@ -45,6 +62,10 @@ export function applyTeamTintToMaterials(materials, team, tintSlots = []) {
       continue;
     }
     if (GLOBAL_MATERIAL_NAMES.has(slot) || skipTint(material)) continue;
+    if (FIXED_COLOUR_SLOTS.has(slot)) {
+      stampMaterialBaselines(material);
+      continue;
+    }
     if (tintSet.size > 0 && !tintSet.has(slot)) continue;
 
     switch (slot) {
@@ -74,9 +95,6 @@ export function applyTeamTintToMaterials(materials, team, tintSlots = []) {
         material.color.copy(base);
         material.emissive = base.clone();
         material.emissiveIntensity = 1.1;
-        break;
-      case 'ember':
-      case 'arcane':
         break;
       default:
         material.color.copy(base);
@@ -135,10 +153,8 @@ export function normalizeGltfMaterials(materials) {
     material.alphaMap = null;
     material.polygonOffset = false;
     stampGlobalMaterialBaselines(material);
-    if (slot === 'skin' || slot === 'charcoal') {
+    if (DOUBLE_SIDED_SLOTS.has(slot)) {
       // Head spheres can lose fragments to helmet depth fighting; keep both sides visible.
-      material.side = THREE.DoubleSide;
-    } else if (slot === 'cloth') {
       material.side = THREE.DoubleSide;
     } else if (HELMET_SLOTS.has(slot)) {
       material.side = THREE.FrontSide;
@@ -161,7 +177,7 @@ export function finalizeGltfMeshes(root) {
       const slot = material.name ?? '';
       obj.renderOrder = 0;
       // Skin on the head must draw after sibling helmet pieces when depth is tight.
-      if (slot === 'skin' && head && obj.parent === head) {
+      if (FACE_SLOTS.has(slot) && head && obj.parent === head) {
         obj.renderOrder = 3;
       } else if (HELMET_SLOTS.has(slot) && head && obj.parent === head) {
         obj.renderOrder = 2;

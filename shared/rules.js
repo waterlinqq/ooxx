@@ -662,6 +662,7 @@ export function applyPossession(attacker, victim) {
     poisonOnHit: attacker.poisonOnHit,
     immobilizeOnHit: attacker.immobilizeOnHit,
     stunOnHit: attacker.stunOnHit,
+    lifestealOnHit: attacker.lifestealOnHit,
     diagonalOnly: attacker.diagonalOnly,
     poisoned: attacker.poisoned,
     poisonFresh: attacker.poisonFresh,
@@ -691,6 +692,7 @@ export function applyPossession(attacker, victim) {
   attacker.poisonOnHit = cls.poisonOnHit ?? false;
   attacker.immobilizeOnHit = cls.immobilizeOnHit ?? false;
   attacker.stunOnHit = cls.stunOnHit ?? false;
+  attacker.lifestealOnHit = cls.lifestealOnHit ?? 0;
   attacker.diagonalOnly = cls.diagonalOnly ?? false;
   clearPoison(attacker);
   clearStun(attacker);
@@ -769,6 +771,13 @@ export function applyAttack(board, attacker, target) {
   const immobilized = [];
   const stunned = [];
   const attackerOnBoard = next[attacker.row]?.[attacker.col];
+  const lifestealAmount = attackerOnBoard?.lifestealOnHit ?? 0;
+  let lifestealHeal = 0;
+  if (lifestealAmount > 0 && hits.some((h) => h.team !== attacker.team)) {
+    const prevHp = attackerOnBoard.hp;
+    attackerOnBoard.hp = Math.min(attackerOnBoard.maxHp, prevHp + lifestealAmount);
+    lifestealHeal = attackerOnBoard.hp - prevHp;
+  }
   if (attackerOnBoard?.poisonOnHit) {
     for (const hit of hits) {
       const cell = next[hit.row]?.[hit.col];
@@ -828,6 +837,7 @@ export function applyAttack(board, attacker, target) {
     poisoned,
     immobilized,
     stunned,
+    lifestealHeal,
     explosionKilled: explosion.explosionKilled,
     explosions: explosion.explosions,
   };

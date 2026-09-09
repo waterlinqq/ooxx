@@ -393,12 +393,16 @@ export class CharacterPreviewScene {
         group: captureRest(rig.group),
         legs: captureLegs(rig.legs),
         torso: captureRest(rig.torso),
+        body: captureRest(rig.body),
         head: captureRest(rig.head),
         armL: captureRest(rig.armL),
         armR: captureRest(rig.armR),
         weapon: captureRest(rig.weapon),
         hood: captureRest(rig.hood),
         scarf: captureRest(rig.scarf),
+        cape: captureRest(rig.cape),
+        cravat: captureRest(rig.cravat),
+        coat: captureRest(rig.coat),
         shield: captureRest(rig.shield),
         robe: captureRest(rig.robe),
         orb: captureRest(rig.orb),
@@ -409,6 +413,11 @@ export class CharacterPreviewScene {
         banner: captureRest(rig.banner),
         eyeStalkL: captureRest(rig.eyeStalkL),
         eyeStalkR: captureRest(rig.eyeStalkR),
+        wheelFL: captureRest(rig.wheelFL),
+        wheelFR: captureRest(rig.wheelFR),
+        wheelRL: captureRest(rig.wheelRL),
+        wheelRR: captureRest(rig.wheelRR),
+        spoiler: captureRest(rig.spoiler),
       },
       seed: Math.random() * Math.PI * 2,
       materials: model.materials,
@@ -572,6 +581,19 @@ export class CharacterPreviewScene {
           rest.scarf.node.rotation.z = rest.scarf.rot.z + Math.sin(t * 1.1) * 0.08;
         }
         break;
+      case 'vampire':
+        if (rest.cape) {
+          rest.cape.node.rotation.x = rest.cape.rot.x + Math.sin(t * 1.1) * 0.08;
+          rest.cape.node.rotation.z = rest.cape.rot.z + Math.sin(t * 0.9) * 0.05;
+        }
+        if (rest.coat) {
+          rest.coat.node.rotation.x = rest.coat.rot.x + Math.sin(t * 1.2) * 0.04;
+        }
+        if (rig.gem) {
+          rig.gem.material.emissiveIntensity =
+            (rig.gem.material.userData.baseEmissive ?? 0.35) * (1 + Math.sin(t * 2.2) * 0.25);
+        }
+        break;
       case 'bomber':
         if (rig.spark) {
           const flicker = 1 + Math.sin(t * 9) * 0.28 + Math.sin(t * 21) * 0.12;
@@ -586,6 +608,31 @@ export class CharacterPreviewScene {
         const flap = Math.sin(t * 4.5) * 0.38;
         if (rest.wingL) rest.wingL.node.rotation.z = rest.wingL.rot.z + flap;
         if (rest.wingR) rest.wingR.node.rotation.z = rest.wingR.rot.z - flap;
+        break;
+      }
+      case 'raceCar': {
+        const spin = t * 3.5;
+        for (const wheel of [rest.wheelFL, rest.wheelFR, rest.wheelRL, rest.wheelRR]) {
+          if (wheel) wheel.node.rotation.x = wheel.rot.x + spin;
+        }
+        if (rest.body) {
+          rest.body.node.position.y = rest.body.pos.y + Math.sin(t * 12) * 0.004;
+        }
+        if (rest.spoiler) {
+          rest.spoiler.node.rotation.x = rest.spoiler.rot.x + Math.sin(t * 1.6) * 0.02;
+        }
+        if (rig.headlights) {
+          const glow = 1 + Math.sin(t * 3.2) * 0.12;
+          for (const lamp of rig.headlights) {
+            lamp.material.emissiveIntensity = (lamp.material.userData.baseEmissive ?? 0.35) * glow;
+          }
+        }
+        if (rig.exhausts) {
+          const flicker = 1 + Math.sin(t * 8) * 0.22;
+          for (const pipe of rig.exhausts) {
+            pipe.material.emissiveIntensity = (pipe.material.userData.baseEmissive ?? 1.4) * flicker;
+          }
+        }
         break;
       }
       case 'crabGeneral': {

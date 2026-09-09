@@ -4474,52 +4474,1059 @@ function buildCrabGeneral(mats) {
   };
 }
 
-function buildSlime(mats) {
-  const group = new THREE.Group();
-  const base = mats.armor.userData.baseColor.clone();
-  const jelly = standard(base.clone().lerp(new THREE.Color(0x4ade80), 0.55), {
-    roughness: 0.18,
-    metalness: 0.05,
-    emissive: base.clone().lerp(new THREE.Color(0x22c55e), 0.4),
-    emissiveIntensity: 0.12,
-    transparent: true,
-    opacity: 0.82,
-  });
-  jelly.name = 'cloth';
-  jelly.userData.preserveTransparent = true;
-  const jellyDeep = standard(base.clone().lerp(new THREE.Color(0x15803d), 0.35), {
-    roughness: 0.22,
-    metalness: 0.04,
-    transparent: true,
-    opacity: 0.74,
-  });
-  jellyDeep.name = 'armorDeep';
-  jellyDeep.userData.preserveTransparent = true;
-  const extraMaterials = [jelly, jellyDeep];
+// Revolved silhouette: flat footprint, bulging haunches, soft dome. A squashed
+// sphere reads as a ball or a puddle depending on the camera; the lathe profile
+// keeps the goo shape from every angle.
+const SLIME_PROFILE = [
+  [0.001, 0],
+  [0.17, 0],
+  [0.255, 0.012],
+  [0.292, 0.048],
+  [0.3, 0.105],
+  [0.291, 0.17],
+  [0.266, 0.235],
+  [0.221, 0.3],
+  [0.15, 0.355],
+  [0.062, 0.392],
+  [0.001, 0.402],
+];
 
-  const torso = new THREE.Group();
-  torso.position.set(0, 0.22, 0);
-  group.add(torso);
+function slimeDomeGeometry() {
+  return cached('slime-dome', () =>
+    new THREE.LatheGeometry(
+      SLIME_PROFILE.map(([x, y]) => new THREE.Vector2(x, y)),
+      18
+    )
+  );
+}
 
-  part(torso, cached('slime-body', () => new THREE.SphereGeometry(0.2, 14, 12)), jelly, {
-    scale: [1.08, 0.78, 1.08],
-  });
-  part(torso, cached('slime-core', () => new THREE.SphereGeometry(0.11, 10, 8)), jellyDeep, {
-    pos: [0, -0.02, 0],
-    scale: [1.1, 0.7, 1.1],
-  });
-  part(torso, cached('slime-highlight', () => new THREE.SphereGeometry(0.05, 8, 6)), jelly, {
-    pos: [0.05, 0.08, 0.07],
-    scale: [1.2, 0.8, 1],
+/** Profile radius at a given height, for seating features on the dome surface. */
+function slimeRadiusAt(y) {
+  for (let i = 1; i < SLIME_PROFILE.length; i++) {
+    const [x0, y0] = SLIME_PROFILE[i - 1];
+    const [x1, y1] = SLIME_PROFILE[i];
+    if (y <= y1) {
+      const t = y1 === y0 ? 0 : (y - y0) / (y1 - y0);
+      return x0 + (x1 - x0) * t;
+    }
+  }
+  return 0;
+}
+
+// Only two, and only flanking the face. The board camera looks down at ~46°, so
+// anything elongated vertically around the rim projects as a ring of radial
+// fingers instead of goo running down the sides.
+function addSlimeDrips(parent, jelly) {
+  const dripGeo = cached('slime-drip', () => new THREE.SphereGeometry(0.04, 8, 8));
+  const beadGeo = cached('slime-drip-bead', () => new THREE.SphereGeometry(0.03, 8, 6));
+  for (const angle of [0.26, 2.88]) {
+    // Radius taken mid-dribble so the middle bulges clear of the dome while the
+    // ends tuck back into it.
+    const r = slimeRadiusAt(0.175) * 0.95;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    part(parent, dripGeo, jelly, { pos: [x, 0.175, z], scale: [0.95, 1.9, 0.8] });
+    part(parent, beadGeo, jelly, { pos: [x * 1.05, 0.078, z * 1.05] });
+  }
+}
+
+function addSlimeFace(parent, mats, sheen) {
+  const eyeY = 0.272;
+  const eyeX = 0.08;
+  const eyeGeo = cached('slime-eyeball', () => new THREE.SphereGeometry(0.05, 12, 10));
+  const pupilGeo = cached('slime-pupil', () => new THREE.SphereGeometry(0.024, 10, 8));
+  const glintGeo = cached('slime-glint', () => new THREE.SphereGeometry(0.011, 6, 6));
+  const eyes = [];
+  for (const side of [-1, 1]) {
+    // Seated shallow so the eyeball bulges through the jelly instead of being
+    // swallowed by it, which is what flattened the old face out.
+    part(parent, eyeGeo, mats.skin, { pos: [side * eyeX, eyeY, 0.2] });
+    part(parent, pupilGeo, mats.charcoal, {
+      pos: [side * (eyeX - 0.002), eyeY - 0.006, 0.228],
+      shadow: false,
+    });
+    eyes.push(
+      part(parent, glintGeo, mats.eye, {
+        pos: [side * (eyeX + 0.019), eyeY + 0.021, 0.232],
+        shadow: false,
+      })
+    );
+  }
+
+  part(parent, cached('slime-grin', () => new THREE.TorusGeometry(0.065, 0.012, 5, 14, Math.PI)), mats.charcoal, {
+    pos: [0, 0.196, 0.272],
+    rot: [0, 0, Math.PI],
     shadow: false,
   });
 
+  // Wet gloss on the upper dome, where the key light lands. Opaque so it holds
+  // up against the translucent body, and flat so it hugs the surface.
+  part(parent, cached('slime-sheen', () => new THREE.SphereGeometry(0.034, 8, 6)), sheen, {
+    pos: [-0.105, 0.335, 0.108],
+    scale: [1.3, 0.32, 0.8],
+    rot: [0.5, -0.5, 0.2],
+    shadow: false,
+  });
+
+  return eyes;
+}
+
+function buildSlime(mats) {
+  const group = new THREE.Group();
+  const base = mats.armor.userData.baseColor.clone();
+  // Its own slot rather than 'armor': the tint switch forces armor to
+  // emissiveIntensity 0.3, which flattens the depth the jelly needs. An unknown
+  // slot falls through to the default branch, which recolours and nothing else.
+  const jelly = standard(base, {
+    roughness: 0.2,
+    metalness: 0.04,
+    // Team-neutral: the default tint branch never revisits emissive, so a
+    // blue-derived glow would stay blue on the red team.
+    emissive: 0x1e293b,
+    emissiveIntensity: 0.22,
+    transparent: true,
+    opacity: 0.86,
+  });
+  jelly.name = 'jelly';
+  jelly.userData.preserveTransparent = true;
+  const jellyDeep = standard(base.clone().lerp(new THREE.Color(0x0b1220), 0.55), {
+    roughness: 0.24,
+    metalness: 0.04,
+    transparent: true,
+    opacity: 0.8,
+  });
+  jellyDeep.name = 'armorDeep';
+  jellyDeep.userData.preserveTransparent = true;
+  const sheen = standard(base.clone().lerp(new THREE.Color(0xffffff), 0.5), {
+    roughness: 0.08,
+    metalness: 0.05,
+    emissive: base.clone().lerp(new THREE.Color(0xffffff), 0.5),
+    emissiveIntensity: 0.25,
+  });
+  sheen.name = 'trim';
+  const extraMaterials = [jelly, jellyDeep, sheen];
+
+  const torso = new THREE.Group();
+  group.add(torso);
+
+  // Pooled goo. Has to flare wider than the dome's own widest point (0.30) or it
+  // hides inside the silhouette, and it doubles as the only dark value on an
+  // otherwise single-tone body.
+  part(torso, cached('slime-pool', () => new THREE.CylinderGeometry(0.332, 0.276, 0.026, 20)), jellyDeep, {
+    pos: [0, 0.013, 0],
+  });
+  part(torso, slimeDomeGeometry(), jelly);
+  addSlimeDrips(torso, jelly);
+
+  // Peak of goo, so the silhouette is not a plain dome.
+  part(torso, cached('slime-peak', () => new THREE.SphereGeometry(0.05, 8, 8)), jelly, {
+    pos: [-0.026, 0.412, -0.032],
+    scale: [1, 1.4, 1],
+    rot: [-0.32, 0, 0.26],
+  });
+
+  part(torso, cached('slime-nucleus', () => new THREE.SphereGeometry(0.14, 12, 10)), jellyDeep, {
+    pos: [0, 0.15, -0.015],
+    scale: [1.2, 0.82, 1.12],
+  });
+
+  // Swallowed loot, mostly proud of the surface rather than suspended inside.
+  // Fully submerged it washed out at any opacity the body could afford, and it
+  // has to sit forward of the flanks because previews rotate the model +0.35.
+  // Cocked 45° up the radial, not straight out along it: edge-on to the raised
+  // camera the coin was reading as a gold crescent rather than a disc.
+  part(torso, cached('slime-coin', () => new THREE.CylinderGeometry(0.045, 0.045, 0.014, 10)), mats.gold, {
+    pos: [0.134, 0.1, 0.252],
+    rot: [0, -1.083, -Math.PI / 4],
+  });
+  part(torso, cached('slime-pebble', () => new THREE.DodecahedronGeometry(0.04, 0)), mats.steel, {
+    pos: [-0.183, 0.13, 0.218],
+    rot: [0.4, 0.6, 0.2],
+  });
+
+  // Trapped bubbles, kept to the back half so they never crowd the face.
+  const bubbleGeo = cached('slime-bubble', () => new THREE.SphereGeometry(0.016, 6, 6));
+  for (const pos of [
+    [0.052, 0.3, -0.052],
+    [-0.084, 0.245, -0.098],
+    [0.124, 0.215, -0.075],
+    [-0.028, 0.335, 0.018],
+    [0.162, 0.278, 0.026],
+  ]) {
+    part(torso, bubbleGeo, sheen, { pos, shadow: false });
+  }
+
   const head = new THREE.Group();
-  head.position.set(0, 0.1, 0.12);
   torso.add(head);
-  const eyes = addEyes(head, mats, { y: 0, z: 0.02, spread: 0.05, size: 0.016, socket: false });
+  const eyes = addSlimeFace(head, mats, sheen);
 
   return { group, torso, head, eyes, extraMaterials };
+}
+
+// One half of the standing bat collar. Mirroring via negative scale would flip
+// the winding, so each side gets its own geometry.
+function draculaCollarWingGeometry(side, width, height) {
+  const key = `dracula-collar-wing-${side}-${width.toFixed(3)}-${height.toFixed(3)}`;
+  return cached(key, () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(side * width * 0.27, height * 0.72);
+    shape.lineTo(side * width, height);
+    shape.lineTo(side * width * 0.66, height * 0.5);
+    shape.lineTo(side * width * 0.84, height * 0.28);
+    shape.lineTo(side * width * 0.34, height * 0.06);
+    shape.lineTo(0, 0);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.008,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -0.004);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+function draculaHemPointGeometry() {
+  return cached('dracula-cape-hem-point', () => new THREE.ConeGeometry(0.044, 0.078, 3));
+}
+
+// The cloak is a back-facing conical shell rather than flat panels, so it can
+// never swing round and cover the chest or face. wrapBandGeometry centres its
+// arc on +Z, hence the yaw of PI.
+function addDraculaCape(parent, black, lining) {
+  const cape = new THREE.Group();
+  cape.position.set(0, 0.55, -0.02);
+
+  part(cape, wrapBandGeometry(0.175, 0.325, 0.46, 3.35, 14), black, {
+    pos: [0, -0.235, 0],
+    rot: [0, Math.PI, 0],
+  });
+  part(cape, wrapBandGeometry(0.162, 0.305, 0.44, 3.05, 14), lining, {
+    pos: [0, -0.232, 0],
+    rot: [0, Math.PI, 0],
+  });
+
+  // Shoulder yoke hides the seam where the shell meets the coat.
+  part(cape, wrapBandGeometry(0.2, 0.215, 0.09, 3.7, 14), black, {
+    pos: [0, -0.035, 0],
+    rot: [0, Math.PI, 0],
+  });
+
+  // Scalloped hem, spaced around the back of the shell (-Z is angle -PI/2).
+  const hemGeo = draculaHemPointGeometry();
+  for (const angle of [-2.36, -1.96, -1.57, -1.18, -0.78]) {
+    const r = 0.315;
+    part(cape, hemGeo, black, {
+      pos: [Math.cos(angle) * r, -0.475, Math.sin(angle) * r],
+      rot: [Math.PI, -angle, 0],
+    });
+  }
+
+  const wingWidth = 0.22;
+  const wingHeight = 0.44;
+  for (const side of [-1, 1]) {
+    part(cape, draculaCollarWingGeometry(side, wingWidth, wingHeight), black, {
+      pos: [side * 0.05, -0.075, -0.02],
+      rot: [-0.2, side * 0.3, 0],
+    });
+    part(cape, draculaCollarWingGeometry(side, wingWidth * 0.86, wingHeight * 0.9), lining, {
+      pos: [side * 0.051, -0.069, -0.011],
+      rot: [-0.2, side * 0.3, 0],
+    });
+  }
+
+  // Stand-up band closing the collar behind the neck.
+  part(cape, wrapBandGeometry(0.078, 0.095, 0.14, 2.6, 10), black, {
+    pos: [0, 0.06, -0.01],
+    rot: [-0.16, Math.PI, 0],
+  });
+
+  parent.add(cape);
+  return cape;
+}
+
+// The count is a heavy-set aristocrat, so the coat carries a rounded chest and
+// paunch instead of the straight tapered cylinder every other class uses.
+function addDraculaSuit(torso, black, shirt, sash, gem) {
+  part(torso, cached('dracula-paunch', () => new THREE.SphereGeometry(0.14, 14, 12)), black, {
+    pos: [0, -0.055, 0.006],
+    scale: [0.94, 0.86, 0.82],
+  });
+  part(torso, cached('dracula-chest', () => new THREE.SphereGeometry(0.125, 14, 10)), black, {
+    pos: [0, 0.085, 0.004],
+    scale: [1.04, 0.66, 0.84],
+  });
+
+  part(torso, trapezoidPlateGeometry(0.07, 0.086, 0.2, 0.014), shirt, {
+    pos: [0, 0.005, 0.112],
+    rot: [0.09, 0, 0],
+  });
+  const lapelGeo = trapezoidPlateGeometry(0.05, 0.026, 0.17, 0.012);
+  for (const side of [-1, 1]) {
+    part(torso, lapelGeo, black, {
+      pos: [side * 0.06, 0.03, 0.108],
+      rot: [0.09, side * -0.32, side * 0.14],
+    });
+  }
+
+  part(torso, wrapBandGeometry(0.126, 0.122, 0.055, 2.4, 10), sash, {
+    pos: [0, -0.115, 0.006],
+    scale: [1, 1, 0.86],
+  });
+
+  part(torso, cached('dracula-bow-knot', () => new THREE.BoxGeometry(0.024, 0.02, 0.012)), black, {
+    pos: [0, 0.128, 0.112],
+  });
+  const bowGeo = cached('dracula-bow-wing', () => new THREE.BoxGeometry(0.042, 0.032, 0.008));
+  for (const side of [-1, 1]) {
+    part(torso, bowGeo, black, {
+      pos: [side * 0.031, 0.128, 0.111],
+      rot: [0, 0, side * -0.24],
+    });
+  }
+
+  part(torso, cached('dracula-medallion-bezel', () => new THREE.CylinderGeometry(0.024, 0.024, 0.01, 10)), black, {
+    pos: [0, 0.055, 0.118],
+    rot: [Math.PI / 2, 0, 0],
+  });
+  part(torso, cached('dracula-medallion', () => new THREE.SphereGeometry(0.017, 10, 8)), gem, {
+    pos: [0, 0.055, 0.126],
+    scale: [1, 1.1, 0.6],
+    shadow: false,
+  });
+}
+
+function addDraculaTrousers(legs, black) {
+  const thighGeo = cached('dracula-thigh', () => new THREE.CylinderGeometry(0.056, 0.05, 0.16, 10));
+  const shinGeo = cached('dracula-shin', () => new THREE.CylinderGeometry(0.05, 0.042, 0.14, 10));
+  const shoeGeo = cached('dracula-shoe', () => new THREE.BoxGeometry(0.074, 0.042, 0.12));
+  const toeGeo = cached('dracula-shoe-toe', () => new THREE.ConeGeometry(0.036, 0.055, 4));
+  const spatGeo = wrapBandGeometry(0.048, 0.05, 0.05, 2.3, 8);
+  for (const side of ['left', 'right']) {
+    const { hip, knee } = legs[side];
+    for (const joint of [hip, knee]) {
+      joint.traverse((child) => {
+        if (child.isMesh) child.visible = false;
+      });
+    }
+    part(hip, thighGeo, black, { pos: [0, -0.075, 0.004] });
+    part(knee, shinGeo, black, { pos: [0, -0.062, 0.006] });
+    part(knee, spatGeo, black, { pos: [0, -0.118, 0.008] });
+    part(knee, shoeGeo, black, { pos: [0, -0.132, 0.026] });
+    part(knee, toeGeo, black, {
+      pos: [0, -0.134, 0.096],
+      rot: [Math.PI / 2, 0, 0],
+    });
+  }
+}
+
+function addDraculaCuffs(armL, armR, black, skin) {
+  const cuffGeo = wrapBandGeometry(0.046, 0.044, 0.03, 2.2, 8);
+  for (const arm of [armL, armR]) {
+    part(arm.pivot, cuffGeo, black, { pos: [0, -0.198, 0.004] });
+    arm.hand.traverse((child) => {
+      if (child.isMesh) child.material = skin;
+    });
+  }
+}
+
+function addDraculaFace(head, black, paleSkin, bone, radius) {
+  const eyeGeo = cached('dracula-eye', () => new THREE.SphereGeometry(0.008, 6, 6));
+  const front = radius * 1.02;
+  const eyes = [];
+  for (const side of [-1, 1]) {
+    eyes.push(part(head, eyeGeo, black, {
+      pos: [side * 0.031, 0.012, front],
+      shadow: false,
+    }));
+    part(head, cached('dracula-brow', () => new THREE.BoxGeometry(0.046, 0.011, 0.011)), black, {
+      pos: [side * 0.03, 0.034, front - 0.012],
+      rot: [0.1, side * 0.08, side * -0.4],
+    });
+    part(head, cached('dracula-sideburn', () => new THREE.BoxGeometry(0.014, 0.05, 0.03)), black, {
+      pos: [side * 0.072, 0.014, 0.014],
+      rot: [0, 0, side * -0.12],
+    });
+  }
+
+  const mustacheGeo = cached('dracula-mustache', () => new THREE.BoxGeometry(0.044, 0.009, 0.009));
+  for (const side of [-1, 1]) {
+    part(head, mustacheGeo, black, {
+      pos: [side * 0.025, -0.026, front + 0.002],
+      rot: [0.16, side * 0.1, side * -0.28],
+    });
+  }
+
+  // Slicked-back hair. The sweep leaves the front open so the cap frames the
+  // pale face instead of swallowing it.
+  part(head, cached('dracula-hair-cap', () =>
+    new THREE.SphereGeometry(radius * 1.06, 16, 10, Math.PI / 2 + 0.82, Math.PI * 2 - 1.64, 0, Math.PI * 0.62)
+  ), black, {
+    pos: [0, 0.026, -0.014],
+    scale: [1.04, 0.94, 1.08],
+  });
+  part(head, cached('dracula-widow-peak', () => new THREE.ConeGeometry(0.03, 0.09, 4)), black, {
+    pos: [0, radius * 1.06, front * 0.86],
+    rot: [0.62, 0, 0],
+  });
+  const cheekGeo = cached('dracula-cheek', () => new THREE.BoxGeometry(0.016, 0.034, 0.014));
+  for (const side of [-1, 1]) {
+    part(head, cheekGeo, paleSkin, {
+      pos: [side * 0.058, -0.012, front * 0.78],
+      rot: [0, side * 0.22, 0],
+    });
+  }
+  const fangGeo = cached('dracula-fang', () => new THREE.ConeGeometry(0.008, 0.026, 4));
+  for (const side of [-1, 1]) {
+    part(head, fangGeo, bone, {
+      pos: [side * 0.017, -0.048, front * 0.94],
+      rot: [0.2, 0, side * 0.12],
+    });
+  }
+  return eyes;
+}
+
+function buildVampire(mats) {
+  const group = new THREE.Group();
+  // Fixed palette: the count stays black and blood-red on every team, so these
+  // slots opt out of the team tint (see FIXED_COLOUR_SLOTS in teamTint.js).
+  const paleSkin = standard(0xe6dccb, { roughness: 0.84, metalness: 0 });
+  paleSkin.name = 'paleSkin';
+  const cloakBlack = standard(0x0a0a10, { roughness: 0.88, metalness: 0.04 });
+  cloakBlack.name = 'cloak';
+  const bloodLining = standard(0x5c0d18, { roughness: 0.72, metalness: 0.08 });
+  bloodLining.name = 'cloakLining';
+  const dressShirt = standard(0xeae5d9, { roughness: 0.92, metalness: 0 });
+  dressShirt.name = 'dressShirt';
+  const extraMaterials = [paleSkin, cloakBlack, bloodLining, dressShirt];
+
+  const legs = addLegs(group, mats, { spread: 0.062, legLength: 0.2, boots: false });
+  addDraculaTrousers(legs, cloakBlack);
+
+  const torso = addTorso(group, mats, {
+    width: 0.94,
+    height: 0.3,
+    y: 0.44,
+    material: cloakBlack,
+    fittings: false,
+  });
+  // Cloak and suit are team-neutral, so the sash and brooch carry the team read.
+  addDraculaSuit(torso, cloakBlack, dressShirt, mats.armor, mats.eye);
+  const cape = addDraculaCape(group, cloakBlack, bloodLining);
+
+  const armL = addArm(group, mats, -1, { shoulderX: 0.155, shoulderY: 0.55, sleeveMat: cloakBlack });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.155, shoulderY: 0.55, sleeveMat: cloakBlack });
+  addDraculaCuffs(armL, armR, cloakBlack, paleSkin);
+
+  const headRadius = 0.085;
+  const head = addHead(group, mats, { y: 0.71, radius: headRadius, skin: paleSkin });
+  for (const child of head.children) {
+    if (child.isMesh && child.material === mats.skin) child.material = paleSkin;
+  }
+  const eyes = addDraculaFace(head, cloakBlack, paleSkin, dressShirt, headRadius);
+
+  armR.pivot.rotation.set(-0.5, 0.15, 0.55);
+  armL.pivot.rotation.set(-0.5, -0.15, -0.55);
+
+  return {
+    group,
+    legs,
+    torso,
+    head,
+    armL: armL.pivot,
+    armR: armR.pivot,
+    eyes,
+    cape,
+    extraMaterials,
+  };
+}
+
+// Car panels are authored as a side profile (x = length, y = height) extruded
+// across the width, then baked into the unit's facing: length on Z, width on X.
+// Rotating at placement time instead would swap height and width.
+function carPanelGeometry(key, points, width, bevel = 0.005) {
+  return cached(key, () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+    shape.lineTo(points[0][0], points[0][1]);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: width,
+      bevelEnabled: bevel > 0,
+      bevelThickness: bevel,
+      bevelSize: bevel,
+      bevelSegments: 1,
+      curveSegments: 3,
+    });
+    geometry.translate(0, 0, -width / 2);
+    geometry.rotateY(-Math.PI / 2);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+// Toy-car proportions: a scale-accurate supercar reads as a pancake next to the
+// humanoid classes, so the cabin is tall and the wheels are oversized.
+function sportsCarShellGeometry() {
+  return carPanelGeometry('sports-car-shell', [
+    [-0.25, 0.048],
+    [0.25, 0.048],
+    [0.258, 0.086],
+    [0.238, 0.13],
+    [0.12, 0.148],
+    [-0.04, 0.158],
+    [-0.2, 0.152],
+    [-0.252, 0.13],
+    [-0.258, 0.078],
+  ], 0.28, 0.006);
+}
+
+// Cabin sits well back so the long hood in front of it reads as a sports car
+// rather than a van.
+function sportsCarGreenhouseGeometry() {
+  return carPanelGeometry('sports-car-greenhouse', [
+    [0.048, 0],
+    [-0.008, 0.084],
+    [-0.115, 0.09],
+    [-0.176, 0.006],
+  ], 0.225, 0.004);
+}
+
+function addSportsCarWheel(parent, mats, x, z) {
+  const wheel = new THREE.Group();
+  wheel.position.set(x, 0.082, z);
+
+  // Cylinders spin their Y axis onto X; a torus already lies about Z, so it
+  // needs a yaw instead. Reusing the cylinder rotation leaves it standing up.
+  const axle = [0, 0, Math.PI / 2];
+  const torusAxle = [0, Math.PI / 2, 0];
+  part(wheel, cached('car-tire', () => new THREE.CylinderGeometry(0.075, 0.075, 0.055, 14)), mats.charcoal, {
+    rot: axle,
+  });
+  part(wheel, cached('car-tire-shoulder', () => new THREE.TorusGeometry(0.068, 0.01, 6, 14)), mats.charcoal, {
+    rot: torusAxle,
+    shadow: false,
+  });
+  part(wheel, cached('car-rim-face', () => new THREE.CylinderGeometry(0.05, 0.05, 0.058, 12)), mats.steel, {
+    rot: axle,
+  });
+  const spokeGeo = cached('car-spoke', () => new THREE.BoxGeometry(0.06, 0.05, 0.013));
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    part(wheel, spokeGeo, mats.trim, {
+      pos: [0, Math.cos(angle) * 0.024, Math.sin(angle) * 0.024],
+      rot: [angle, 0, 0],
+      shadow: false,
+    });
+  }
+  part(wheel, cached('car-hub-cap', () => new THREE.CylinderGeometry(0.017, 0.017, 0.064, 8)), mats.gold, {
+    rot: axle,
+    shadow: false,
+  });
+
+  parent.add(wheel);
+  return wheel;
+}
+
+// Solid fender blisters over each wheel. The sweep 0..PI closes the +X half, so
+// Rz(PI/2) both lays the axis along X and swings that half up to +Y; the open
+// flat face then points down into the body where it cannot be seen.
+function addSportsCarArches(body, mats) {
+  // Wider than the tyre so it never leaves a floating rim of rubber above the
+  // arch, but raised above the axle so the tyre still shows in the wheel well.
+  const archGeo = cached('car-arch', () =>
+    new THREE.CylinderGeometry(0.084, 0.084, 0.064, 12, 1, false, 0, Math.PI)
+  );
+  for (const x of [-0.158, 0.158]) {
+    for (const z of [0.158, -0.158]) {
+      part(body, archGeo, mats.armor, {
+        pos: [x, 0.088, z],
+        rot: [0, 0, Math.PI / 2],
+      });
+    }
+  }
+  // Wide-body flare bridging front and rear arches, so the flanks read as one
+  // continuous body instead of four separate pods.
+  const flareGeo = cached('car-flare', () => new THREE.BoxGeometry(0.05, 0.055, 0.2));
+  for (const side of [-1, 1]) {
+    part(body, flareGeo, mats.armor, {
+      pos: [side * 0.148, 0.115, 0],
+      rot: [0, 0, side * 0.14],
+    });
+  }
+}
+
+function addSportsCarBodyKit(body, mats) {
+  part(body, cached('car-floor', () => new THREE.BoxGeometry(0.27, 0.02, 0.46)), mats.charcoal, {
+    pos: [0, 0.05, 0],
+  });
+  part(body, sportsCarShellGeometry(), mats.armor, { pos: [0, 0, 0] });
+  part(body, sportsCarGreenhouseGeometry(), mats.charcoal, { pos: [0, 0.142, 0] });
+  part(body, cached('car-beltline', () => new THREE.BoxGeometry(0.232, 0.008, 0.222)), mats.trim, {
+    pos: [0, 0.146, -0.064],
+    shadow: false,
+  });
+  part(body, cached('car-roof-panel', () => new THREE.BoxGeometry(0.19, 0.018, 0.115)), mats.armor, {
+    pos: [0, 0.229, -0.062],
+    rot: [0.05, 0, 0],
+  });
+  part(body, cached('car-roof-stripe', () => new THREE.BoxGeometry(0.046, 0.006, 0.119)), mats.trim, {
+    pos: [0, 0.239, -0.062],
+    rot: [0.05, 0, 0],
+    shadow: false,
+  });
+  addSportsCarArches(body, mats);
+
+  // Front end.
+  part(body, cached('car-splitter', () => new THREE.BoxGeometry(0.32, 0.014, 0.075)), mats.charcoal, {
+    pos: [0, 0.05, 0.245],
+  });
+  part(body, cached('car-front-bumper', () => new THREE.BoxGeometry(0.3, 0.03, 0.05)), mats.charcoal, {
+    pos: [0, 0.07, 0.248],
+  });
+  part(body, cached('car-grille', () => new THREE.BoxGeometry(0.17, 0.038, 0.018)), mats.charcoal, {
+    pos: [0, 0.096, 0.254],
+  });
+  const grilleBarGeo = cached('car-grille-bar', () => new THREE.BoxGeometry(0.132, 0.005, 0.006));
+  for (let i = 0; i < 2; i++) {
+    part(body, grilleBarGeo, mats.armorDeep, {
+      pos: [0, 0.09 + i * 0.014, 0.263],
+      shadow: false,
+    });
+  }
+  const headlights = [];
+  for (const side of [-1, 1]) {
+    part(body, cached('car-headlight-shell', () => new THREE.BoxGeometry(0.078, 0.03, 0.03)), mats.charcoal, {
+      pos: [side * 0.096, 0.126, 0.219],
+      rot: [-0.22, 0, 0],
+    });
+    headlights.push(part(body, cached('car-headlight', () => new THREE.BoxGeometry(0.064, 0.017, 0.012)), mats.gold, {
+      pos: [side * 0.096, 0.132, 0.231],
+      rot: [-0.22, 0, 0],
+      shadow: false,
+    }));
+  }
+  part(body, cached('car-hood-vent', () => new THREE.BoxGeometry(0.13, 0.012, 0.06)), mats.armorDeep, {
+    pos: [0, 0.148, 0.165],
+  });
+  const hoodStripeGeo = cached('car-hood-stripe', () => new THREE.BoxGeometry(0.028, 0.006, 0.15));
+  for (const side of [-1, 1]) {
+    part(body, hoodStripeGeo, mats.trim, {
+      pos: [side * 0.032, 0.15, 0.17],
+      shadow: false,
+    });
+  }
+
+  // Rear end.
+  part(body, cached('car-rear-bumper', () => new THREE.BoxGeometry(0.28, 0.032, 0.05)), mats.charcoal, {
+    pos: [0, 0.076, -0.244],
+  });
+  part(body, cached('car-taillight-shell', () => new THREE.BoxGeometry(0.26, 0.036, 0.016)), mats.charcoal, {
+    pos: [0, 0.114, -0.25],
+  });
+  const taillights = [];
+  for (const side of [-1, 1]) {
+    taillights.push(part(body, cached('car-taillight', () => new THREE.BoxGeometry(0.1, 0.02, 0.01)), mats.ember, {
+      pos: [side * 0.072, 0.114, -0.26],
+      shadow: false,
+    }));
+  }
+  part(body, cached('car-diffuser', () => new THREE.BoxGeometry(0.24, 0.024, 0.045)), mats.charcoal, {
+    pos: [0, 0.054, -0.246],
+  });
+  const finGeo = cached('car-diffuser-fin', () => new THREE.BoxGeometry(0.008, 0.022, 0.045));
+  for (const x of [-0.07, 0, 0.07]) {
+    part(body, finGeo, mats.steel, { pos: [x, 0.054, -0.252], shadow: false });
+  }
+  const exhausts = [];
+  for (const side of [-1, 1]) {
+    part(body, cached('car-exhaust', () => new THREE.CylinderGeometry(0.017, 0.019, 0.05, 8)), mats.steel, {
+      pos: [side * 0.045, 0.072, -0.258],
+      rot: [Math.PI / 2, 0, 0],
+    });
+    exhausts.push(part(body, cached('car-exhaust-glow', () => new THREE.SphereGeometry(0.013, 6, 5)), mats.ember, {
+      pos: [side * 0.045, 0.072, -0.282],
+      shadow: false,
+    }));
+  }
+
+  // Flanks.
+  for (const side of [-1, 1]) {
+    part(body, cached('car-rocker', () => new THREE.BoxGeometry(0.018, 0.024, 0.27)), mats.charcoal, {
+      pos: [side * 0.138, 0.062, 0],
+    });
+    part(body, cached('car-side-intake', () => new THREE.BoxGeometry(0.014, 0.03, 0.062)), mats.charcoal, {
+      pos: [side * 0.142, 0.108, -0.055],
+    });
+    part(body, cached('car-door-line', () => new THREE.BoxGeometry(0.006, 0.004, 0.13)), mats.armorDeep, {
+      pos: [side * 0.143, 0.126, 0.015],
+      shadow: false,
+    });
+    part(body, cached('car-mirror-stalk', () => new THREE.CylinderGeometry(0.004, 0.004, 0.03, 5)), mats.charcoal, {
+      pos: [side * 0.135, 0.15, 0.082],
+      rot: [0, 0, side * -0.6],
+      shadow: false,
+    });
+    part(body, cached('car-mirror', () => new THREE.BoxGeometry(0.03, 0.014, 0.022)), mats.charcoal, {
+      pos: [side * 0.152, 0.158, 0.082],
+    });
+  }
+
+  return { headlights, taillights, exhausts };
+}
+
+function addSportsCarSpoiler(parent, mats) {
+  const spoiler = new THREE.Group();
+  spoiler.position.set(0, 0.156, -0.195);
+  part(spoiler, cached('car-spoiler-lip', () => new THREE.BoxGeometry(0.26, 0.016, 0.075)), mats.armor, {
+    pos: [0, 0, 0],
+    rot: [-0.28, 0, 0],
+  });
+  part(spoiler, cached('car-spoiler-edge', () => new THREE.BoxGeometry(0.27, 0.008, 0.02)), mats.armorDeep, {
+    pos: [0, 0.016, -0.03],
+    rot: [-0.28, 0, 0],
+    shadow: false,
+  });
+  parent.add(spoiler);
+  return spoiler;
+}
+
+function buildRaceCar(mats) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Group();
+  group.add(body);
+
+  const { headlights, taillights, exhausts } = addSportsCarBodyKit(body, mats);
+  const spoiler = addSportsCarSpoiler(body, mats);
+
+  const wheelFL = addSportsCarWheel(group, mats, -0.158, 0.158);
+  const wheelFR = addSportsCarWheel(group, mats, 0.158, 0.158);
+  const wheelRL = addSportsCarWheel(group, mats, -0.158, -0.158);
+  const wheelRR = addSportsCarWheel(group, mats, 0.158, -0.158);
+
+  return {
+    group,
+    body,
+    torso: body,
+    spoiler,
+    wheelFL,
+    wheelFR,
+    wheelRL,
+    wheelRR,
+    headlights,
+    taillights,
+    spark: exhausts[0],
+    exhausts,
+  };
+}
+
+// Classic zigzag bolt. Traced as one simple polygon so ExtrudeGeometry can
+// triangulate it without self-intersections.
+function thunderBoltGeometry() {
+  return cached('thunder-bolt', () => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0.03, 0.24);
+    shape.lineTo(-0.08, 0.06);
+    shape.lineTo(-0.005, 0.06);
+    shape.lineTo(-0.06, -0.24);
+    shape.lineTo(0.08, -0.02);
+    shape.lineTo(0.01, -0.02);
+    shape.lineTo(0.03, 0.24);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.028,
+      bevelEnabled: false,
+      curveSegments: 1,
+    });
+    geometry.translate(0, 0, -0.014);
+    geometry.computeVertexNormals();
+    return geometry;
+  });
+}
+
+const TAIKO_ARC = 4.7;
+
+// Raijin's drum halo. The torus arc is rolled so its open gap sits at the
+// bottom, keeping every drum clear of the feet.
+function taikoHaloGeometry() {
+  return cached('taiko-halo', () => {
+    const geometry = new THREE.TorusGeometry(0.26, 0.013, 6, 30, TAIKO_ARC);
+    geometry.rotateZ((3 * Math.PI) / 2 - (TAIKO_ARC + Math.PI * 2) / 2);
+    return geometry;
+  });
+}
+
+function addThunderHalo(parent, mats) {
+  const halo = new THREE.Group();
+  halo.position.set(0, 0.58, -0.11);
+  part(halo, taikoHaloGeometry(), mats.gold, { shadow: false });
+
+  const drumGeo = cached('taiko-drum', () => new THREE.CylinderGeometry(0.049, 0.049, 0.034, 10));
+  const headGeo = cached('taiko-drum-head', () => new THREE.CylinderGeometry(0.042, 0.042, 0.04, 10));
+  const rimGeo = cached('taiko-drum-rim', () => new THREE.TorusGeometry(0.047, 0.006, 5, 10));
+  const start = (3 * Math.PI) / 2 - (TAIKO_ARC + Math.PI * 2) / 2;
+  const barrel = [0, Math.PI / 2, 0];
+  for (let i = 0; i < 6; i++) {
+    const angle = start + ((i + 0.5) / 6) * TAIKO_ARC;
+    const pos = [Math.cos(angle) * 0.26, Math.sin(angle) * 0.26, 0];
+    part(halo, drumGeo, mats.leather, { pos, rot: barrel });
+    part(halo, headGeo, mats.trim, { pos, rot: barrel, shadow: false });
+    part(halo, rimGeo, mats.gold, { pos, shadow: false });
+  }
+
+  parent.add(halo);
+  return halo;
+}
+
+// Chunky zigzag built from tapered four-sided prisms. A flat extruded plate
+// reads as a sliver under the raised board camera, so the bolt is solid and
+// faceted instead, and holds its shape from any angle.
+const THUNDER_BOLT_SEGMENTS = [
+  { from: [0.05, 0.23], to: [-0.05, 0.07], rTop: 0.033, rBottom: 0.029 },
+  { from: [-0.05, 0.07], to: [0.05, -0.03], rTop: 0.029, rBottom: 0.025 },
+  { from: [0.05, -0.03], to: [-0.04, -0.22], rTop: 0.025, rBottom: 0.005 },
+];
+
+function buildThunderBolt(mats) {
+  const bolt = new THREE.Group();
+  const tilts = [];
+  THUNDER_BOLT_SEGMENTS.forEach(({ from, to, rTop, rBottom }, i) => {
+    const dx = from[0] - to[0];
+    const dy = from[1] - to[1];
+    const length = Math.hypot(dx, dy);
+    // thetaStart rolls the square cross-section in the geometry; doing it as a
+    // node rotation would fight the Z tilt under Three's XYZ euler order.
+    tilts[i] = Math.atan2(-dx, dy);
+    part(
+      bolt,
+      cached(`thunder-bolt-seg-${i}`, () =>
+        new THREE.CylinderGeometry(rTop, rBottom, length, 4, 1, false, Math.PI / 4)
+      ),
+      mats.gold,
+      {
+        pos: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, 0],
+        rot: [0, 0, tilts[i]],
+      }
+    );
+  });
+  part(bolt, cached('thunder-bolt-node', () => new THREE.OctahedronGeometry(0.032, 0)), mats.gold, {
+    pos: [-0.05, 0.07, 0],
+    shadow: false,
+  });
+  part(bolt, cached('thunder-bolt-grip', () => new THREE.CylinderGeometry(0.034, 0.032, 0.052, 6)), mats.leather, {
+    pos: [0.036, -0.055, 0],
+    rot: [0, 0, tilts[2]],
+  });
+  const spark = part(bolt, cached('thunder-bolt-spark', () => new THREE.OctahedronGeometry(0.042, 0)), mats.ember, {
+    pos: [0.05, 0.246, 0],
+    shadow: false,
+  });
+  return { group: bolt, spark };
+}
+
+function addThunderArmour(torso, mats) {
+  part(torso, wrapBandGeometry(0.152, 0.13, 0.2, 2.3, 10), mats.armorDeep, {
+    pos: [0, 0.03, 0],
+    scale: [1, 1, 0.8],
+  });
+  part(torso, cached('thunder-pectoral', () => new THREE.TorusGeometry(0.1, 0.014, 6, 14, Math.PI)), mats.gold, {
+    pos: [0, 0.08, 0.05],
+    rot: [1.35, 0, 0],
+    shadow: false,
+  });
+  part(torso, cached('thunder-belt', () => new THREE.CylinderGeometry(0.14, 0.132, 0.05, 14)), mats.leather, {
+    pos: [0, -0.13, 0],
+    scale: [1, 1, 0.84],
+  });
+  part(torso, cached('thunder-buckle', () => new THREE.BoxGeometry(0.07, 0.05, 0.024)), mats.gold, {
+    pos: [0, -0.13, 0.104],
+  });
+
+  // Sash worn across one shoulder, the way a storm deity wears a toga.
+  part(torso, trapezoidPlateGeometry(0.075, 0.062, 0.34, 0.016), mats.cloth, {
+    pos: [-0.02, 0.01, 0.1],
+    rot: [0.06, 0, 0.52],
+  });
+
+  // Gold rather than ember: materials are shared per slot, so an ember emblem
+  // would fight the bolt's crackle animation over one emissiveIntensity.
+  const emblem = part(torso, thunderBoltGeometry(), mats.gold, {
+    pos: [0.008, 0.05, 0.115],
+    scale: [0.36, 0.36, 0.18],
+    shadow: false,
+  });
+  return emblem;
+}
+
+function addThunderSkirt(parent, mats) {
+  const skirt = new THREE.Group();
+  skirt.position.set(0, 0.31, 0);
+  part(skirt, wrapBandGeometry(0.145, 0.185, 0.17, Math.PI * 2, 14), mats.cloth, {
+    pos: [0, -0.085, 0],
+  });
+  const plateGeo = trapezoidPlateGeometry(0.062, 0.05, 0.14, 0.014);
+  for (const angle of [-0.55, 0, 0.55, Math.PI - 0.55, Math.PI, Math.PI + 0.55]) {
+    const r = 0.168;
+    part(skirt, plateGeo, mats.armor, {
+      pos: [Math.sin(angle) * r, -0.09, Math.cos(angle) * r],
+      rot: [0.1, angle, 0],
+    });
+  }
+  part(skirt, cached('thunder-skirt-hem', () => new THREE.TorusGeometry(0.184, 0.009, 5, 16)), mats.gold, {
+    pos: [0, -0.168, 0],
+    rot: [-Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  parent.add(skirt);
+  return skirt;
+}
+
+function addThunderGreaves(legs, mats) {
+  const greaveGeo = wrapBandGeometry(0.058, 0.05, 0.11, 2.4, 8);
+  const kneeGeo = cached('thunder-knee', () => new THREE.SphereGeometry(0.042, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6));
+  for (const side of ['left', 'right']) {
+    const { knee } = legs[side];
+    part(knee, greaveGeo, mats.armor, { pos: [0, -0.055, 0.006] });
+    part(knee, kneeGeo, mats.gold, { pos: [0, 0.006, 0.008], scale: [1, 0.8, 1] });
+  }
+}
+
+function addThunderBracers(armL, armR, mats) {
+  const bracerGeo = wrapBandGeometry(0.05, 0.046, 0.075, 2.3, 8);
+  const ringGeo = cached('thunder-bracer-ring', () => new THREE.TorusGeometry(0.05, 0.007, 5, 10));
+  for (const arm of [armL, armR]) {
+    part(arm.pivot, bracerGeo, mats.armor, { pos: [0, -0.17, 0.004] });
+    part(arm.pivot, ringGeo, mats.gold, {
+      pos: [0, -0.13, 0],
+      rot: [Math.PI / 2, 0, 0],
+      shadow: false,
+    });
+  }
+}
+
+function addThunderFace(head, mats) {
+  // Front of the sweep is left open so the mane frames the face.
+  part(head, cached('thunder-mane', () =>
+    new THREE.SphereGeometry(0.107, 16, 10, Math.PI / 2 + 0.78, Math.PI * 2 - 1.56, 0, Math.PI * 0.66)
+  ), mats.steel, {
+    pos: [0, 0.018, -0.014],
+    scale: [1.06, 1, 1.1],
+  });
+  const spikeGeo = cached('thunder-hair-spike', () => new THREE.ConeGeometry(0.026, 0.11, 4));
+  for (const [x, y, z, pitch, roll] of [
+    [-0.078, 0.07, -0.07, -0.7, 0.5],
+    [0.078, 0.07, -0.07, -0.7, -0.5],
+    [0, 0.096, -0.088, -0.9, 0],
+    [-0.1, 0.012, -0.05, -0.3, 0.95],
+    [0.1, 0.012, -0.05, -0.3, -0.95],
+  ]) {
+    part(head, spikeGeo, mats.steel, { pos: [x, y, z], rot: [pitch, 0, roll] });
+  }
+
+  const browGeo = cached('thunder-brow', () => new THREE.BoxGeometry(0.056, 0.014, 0.014));
+  for (const side of [-1, 1]) {
+    part(head, browGeo, mats.steel, {
+      pos: [side * 0.036, 0.042, 0.086],
+      rot: [0.1, side * 0.1, side * -0.34],
+    });
+  }
+
+  part(head, trapezoidPlateGeometry(0.086, 0.05, 0.15, 0.05), mats.steel, {
+    pos: [0, -0.13, 0.052],
+    rot: [0.18, 0, 0],
+  });
+  const braidGeo = cached('thunder-braid', () => new THREE.BoxGeometry(0.024, 0.07, 0.024));
+  for (const side of [-1, 1]) {
+    part(head, braidGeo, mats.steel, {
+      pos: [side * 0.062, -0.076, 0.052],
+      rot: [0.14, 0, side * 0.2],
+    });
+  }
+  part(head, cached('thunder-mouth', () => new THREE.BoxGeometry(0.05, 0.012, 0.012)), mats.charcoal, {
+    pos: [0, -0.048, 0.09],
+    shadow: false,
+  });
+
+  // Crown of bolts.
+  part(head, cached('thunder-crown', () => new THREE.TorusGeometry(0.102, 0.011, 6, 14)), mats.gold, {
+    pos: [0, 0.048, 0],
+    rot: [-Math.PI / 2, 0, 0],
+  });
+  const crownSpikeGeo = cached('thunder-crown-spike', () => new THREE.ConeGeometry(0.018, 0.07, 4));
+  for (const [angle, height] of [[-0.9, 0.8], [-0.45, 0.95], [0, 1.15], [0.45, 0.95], [0.9, 0.8]]) {
+    part(head, crownSpikeGeo, mats.gold, {
+      pos: [Math.sin(angle) * 0.098, 0.088, Math.cos(angle) * 0.098],
+      rot: [0.32 * Math.cos(angle), angle, -0.32 * Math.sin(angle)],
+      scale: [1, height, 1],
+    });
+  }
+  part(head, cached('thunder-crown-gem', () => new THREE.OctahedronGeometry(0.019, 0)), mats.ember, {
+    pos: [0, 0.072, 0.1],
+    shadow: false,
+  });
+}
+
+function buildThunderGod(mats) {
+  const group = new THREE.Group();
+
+  const legs = addLegs(group, mats, { spread: 0.086, legLength: 0.19, bootMat: mats.charcoal });
+  addThunderGreaves(legs, mats);
+  const halo = addThunderHalo(group, mats);
+
+  const torso = addTorso(group, mats, { width: 1.14, height: 0.31, y: 0.465, fittings: false });
+  const emblem = addThunderArmour(torso, mats);
+  addThunderSkirt(group, mats);
+  addPauldrons(group, mats, { y: 0.6, x: 0.192, radius: 0.096 });
+  addGorget(group, mats, 0.638);
+
+  const armL = addArm(group, mats, -1, { shoulderX: 0.185, shoulderY: 0.585 });
+  const armR = addArm(group, mats, 1, { shoulderX: 0.185, shoulderY: 0.585 });
+  addThunderBracers(armL, armR, mats);
+
+  const head = addHead(group, mats, { y: 0.755, radius: 0.1 });
+  const eyes = addEyes(head, mats, { y: 0.008, z: 0.096, size: 0.018, spread: 0.046 });
+  addThunderFace(head, mats);
+
+  // The bolt hangs off the body rather than the hand: a flat plate parented to a
+  // rotating wrist ends up edge-on to the raised camera. Owning its orientation
+  // here lets the face lean back into view, and the raised hand meets it.
+  const bolt = buildThunderBolt(mats);
+  bolt.group.position.set(0.295, 0.72, 0.055);
+  bolt.group.rotation.set(0, 0, 0.15);
+  bolt.group.scale.setScalar(0.8);
+  group.add(bolt.group);
+  armR.pivot.rotation.set(-0.45, 0, 2.55);
+
+  // Bachi in the off hand, to answer the drum halo.
+  const bachi = new THREE.Group();
+  bachi.position.set(0, -0.07, 0.014);
+  bachi.rotation.set(0.34, 0, 0.18);
+  part(bachi, cached('bachi-shaft', () => new THREE.CylinderGeometry(0.013, 0.017, 0.2, 6)), mats.leather);
+  part(bachi, cached('bachi-ferrule', () => new THREE.TorusGeometry(0.017, 0.005, 5, 8)), mats.gold, {
+    pos: [0, 0.056, 0],
+    rot: [Math.PI / 2, 0, 0],
+    shadow: false,
+  });
+  part(bachi, cached('bachi-tip', () => new THREE.SphereGeometry(0.019, 8, 6)), mats.leather, {
+    pos: [0, -0.104, 0],
+  });
+  armL.hand.add(bachi);
+  armL.pivot.rotation.set(-0.7, 0, -0.28);
+
+  return {
+    group,
+    legs,
+    torso,
+    head,
+    armL: armL.pivot,
+    armR: armR.pivot,
+    eyes,
+    weapon: bolt.group,
+    banner: halo,
+    spark: bolt.spark,
+    gem: emblem,
+  };
 }
 
 function buildFallback(mats) {
@@ -4544,11 +5551,14 @@ const BUILDERS = {
   assassin: buildAssassin,
   bomber: buildBomber,
   eagle: buildEagle,
+  raceCar: buildRaceCar,
   priest: buildPriest,
   ghost: buildGhost,
   viper: buildViper,
   slime: buildSlime,
   crabGeneral: buildCrabGeneral,
+  vampire: buildVampire,
+  thunderGod: buildThunderGod,
   castle: buildCastle,
 };
 
@@ -4565,11 +5575,14 @@ const SILHOUETTE = {
   assassin: [0.92, 1.03, 0.92],
   bomber: [1.06, 0.9, 1.06],
   eagle: [1.06, 1, 1.06],
+  raceCar: [1.12, 1.12, 1.12],
   priest: [1.04, 0.98, 1.04],
   ghost: [0.9, 1.08, 0.9],
   viper: [0.98, 1.04, 0.98],
-  slime: [1.02, 0.88, 1.02],
+  slime: [1.05, 1.0, 1.05],
   crabGeneral: [1.14, 0.86, 1.14],
+  vampire: [1.0, 0.97, 1.0],
+  thunderGod: [1.0, 0.94, 1.0],
   castle: [1.08, 1.08, 1.08],
 };
 

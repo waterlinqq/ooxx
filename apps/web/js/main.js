@@ -7,10 +7,10 @@ import { NAV_ICON_IDS } from './board3d/NavIconModels.js';
 import { applySideIcons } from './board3d/SideIconThumbnails.js';
 import { SIDE_ICON_IDS } from './board3d/SideIconModels.js';
 import { NavIconAnimator } from './board3d/NavIconAnimator.js';
-import { ITEMS, SHOP_PRICES, ITEM_IDS, FRAGMENT_PRICE } from './items.js';
+import { ITEMS, SHOP_PRICES, ITEM_IDS } from './items.js';
 import { fillItemIcon, fillMapPropIcon } from './board3d/ItemThumbnails.js';
 import { createThumbnailMap } from './board3d/thumbnailPaths.js';
-import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, FRAGMENTS_PER_COPY, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX } from './units.js';
+import { CLASS_IDS, getRosterLimit, getMaxPerClass, isCastleUnit, modeHasAutoCastle, getCastleHpForMode, getDeployableRoster, hasPlayableRoster, isSurvivalMode, isLocalOnlyMode, getClassCombatStats, getClassLevelLabel, getClassLevelBonuses, getUpgradeCopyCost, getFragmentsPerCopy, getFragmentPrice, getClassRarity, getRarityLabel, CLASS_LEVEL_MIN, CLASS_LEVEL_MAX, canAddToRoster } from './units.js';
 import { createStatBadge, renderStatBadgeHtml } from './statIcons.js';
 import { mountUiIcons, setCurrencyMeta, renderCurrencyMetaHtml, uiIconSvg } from './uiIcons.js';
 import { MAP_PROPS, MAP_PROP_KINDS } from './mapProps.js';
@@ -72,6 +72,9 @@ const battleContentEl = document.getElementById('battleContent');
 const formationModeButtonsEl = document.getElementById('formationModeButtons');
 const formationCountEl = document.getElementById('formationCount');
 const formationLineupEl = document.getElementById('formationLineup');
+const formationLineupSectionEl = document.getElementById('formationLineupSection');
+const formationScrollEl = document.getElementById('formationScroll');
+const formationFullToastEl = document.getElementById('formationFullToast');
 const formationPoolEl = document.getElementById('formationPool');
 const turnTimerEl = document.getElementById('turnTimer');
 const turnTimerFillEl = document.getElementById('turnTimerFill');
@@ -827,9 +830,98 @@ function renderCodexTabs() {
   }
 }
 
-function createCodexCard({ active, title, locked, onClick, fillIcon }) {
+function getRarityCardClass(classId) {
+  return `class-card--rarity-${getClassRarity(classId)}`;
+}
+
+function createRarityBadge(classId) {
+  const badge = document.createElement('span');
+  badge.className = `class-rarity-badge class-rarity-badge--${getClassRarity(classId)}`;
+  badge.textContent = getRarityLabel(classId);
+  return badge;
+}
+
+function applyCodexSelection(classId) {
+  selectedClassId = classId;
+  const state = getAppState();
+  const owned = isClassOwnedInState(state, classId);
+  const progress = getProgressFromState(state, classId);
+  codexPreviewLevel = owned ? progress.level : CLASS_LEVEL_MIN;
+  codexPreviewLevelForClass = classId;
+}
+
+function createClassProgressActions(classId, { selectOnAction = false } = {}) {
+  const cls = CLASSES[classId];
+  const progress = getProgressFromState(getAppState(), classId);
+  const fragmentsNeeded = getFragmentsPerCopy(classId);
+  const upgradeCost = getUpgradeCopyCost(classId, progress.level);
+  const canSynth = progress.fragments >= fragmentsNeeded;
+  const canUpgrade = upgradeCost != null && progress.copies >= upgradeCost;
+
+  const actions = document.createElement('div');
+  actions.className = 'class-card-actions';
+
+  if (selectOnAction) {
+    actions.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      applyCodexSelection(classId);
+      const actionBtn = event.target.closest('.class-card-action');
+      if (!actionBtn || actionBtn.disabled) {
+        render(getAppState());
+      }
+    });
+  }
+
+  const synthBtn = document.createElement('button');
+  synthBtn.type = 'button';
+  synthBtn.className = 'btn class-card-action';
+  synthBtn.textContent = `合成 ${progress.fragments}/${fragmentsNeeded}`;
+  synthBtn.disabled = !canSynth;
+  if (!canSynth) synthBtn.title = `需 ${fragmentsNeeded} 碎片`;
+  synthBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (selectOnAction) applyCodexSelection(classId);
+    const result = synthesizeCopy(classId);
+    if (!result.ok) {
+      handlePurchaseFailure(result.reason, synthBtn);
+      if (selectOnAction) render(getAppState());
+      return;
+    }
+    showPurchaseToast(result.unlocked ? `已合成解鎖 ${cls.name}` : `已合成 ${cls.name}複本`);
+    game.notify();
+  });
+
+  const upgradeBtn = document.createElement('button');
+  upgradeBtn.type = 'button';
+  upgradeBtn.className = 'btn class-card-action';
+  upgradeBtn.textContent = upgradeCost == null ? 'MAX' : `升級 ${progress.copies}/${upgradeCost}`;
+  upgradeBtn.disabled = !canUpgrade;
+  if (upgradeCost == null) upgradeBtn.title = '已達最大等級';
+  else if (!canUpgrade) upgradeBtn.title = `需 ${upgradeCost} 複本`;
+  upgradeBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (selectOnAction) applyCodexSelection(classId);
+    const result = upgradeClass(classId);
+    if (!result.ok) {
+      handlePurchaseFailure(result.reason, upgradeBtn);
+      if (selectOnAction) render(getAppState());
+      return;
+    }
+    showPurchaseToast(`${cls.name} ${getClassLevelLabel(result.level)}`);
+    game.notify();
+  });
+
+  actions.append(synthBtn, upgradeBtn);
+  return actions;
+}
+
+function createCodexCard({ classId, active, title, locked, onClick, fillIcon, showProgressActions = false }) {
   const card = document.createElement('div');
-  card.className = 'class-card' + (active ? ' selected' : '') + (locked ? ' class-card-unowned' : '');
+  card.className = 'class-card'
+    + (classId ? ` ${getRarityCardClass(classId)}` : '')
+    + (active ? ' selected' : '')
+    + (locked ? ' class-card-unowned' : '')
+    + (showProgressActions ? ' class-card--with-actions' : '');
 
   const selectBtn = document.createElement('button');
   selectBtn.type = 'button';
@@ -847,8 +939,15 @@ function createCodexCard({ active, title, locked, onClick, fillIcon }) {
   nameEl.textContent = title;
   selectBtn.append(nameEl);
 
-  selectBtn.addEventListener('click', onClick);
+  card.addEventListener('click', (event) => {
+    if (event.target.closest('.class-card-action')) return;
+    onClick();
+  });
+  if (classId) card.append(createRarityBadge(classId));
   card.append(selectBtn);
+  if (showProgressActions && classId) {
+    card.append(createClassProgressActions(classId, { selectOnAction: true }));
+  }
   return card;
 }
 
@@ -877,11 +976,13 @@ function renderCodexUnits() {
   for (const cls of Object.values(CLASSES)) {
     const owned = isClassOwnedInState(state, cls.id);
     codexPickerEl.appendChild(createCodexCard({
+      classId: cls.id,
       active: cls.id === selectedClassId,
       title: cls.name,
       locked: !owned,
       onClick: () => selectClass(cls.id),
       fillIcon: (el) => setUnitIcon(el, cls.id),
+      showProgressActions: true,
     }));
   }
   renderClassDetail(selectedClassId, state);
@@ -995,6 +1096,7 @@ function formatClassTrait(cls) {
   if (cls.type === 'castle') return '堡壘 · 友方踏入回收 · 攻破獲勝';
   if (cls.diagonalOnly) return '僅斜角移動與攻擊 · 無法上下左右';
   if (cls.stunOnHit) return '全場攻擊 · 命中使敵暈眩一回合';
+  if (cls.lifestealOnHit) return `上下左右近戰 · 命中恢復 ${cls.lifestealOnHit} 生命`;
   if (cls.poisonOnHit) return '上下左右近戰 · 命中使敵中毒';
   if (cls.immobilizeOnHit) return '上下左右近戰 · 命中使敵定身一回合';
   if (cls.possessionOnKill) return '上下左右近戰 · 擊殺附身敵人';
@@ -1046,7 +1148,10 @@ function renderClassDetail(classId, state = getAppState()) {
 
   codexDetailInfoEl.innerHTML = `
     <div class="codex-detail-head">
-      <h2 class="detail-name">${cls.name}${previewHint}</h2>
+      <div class="codex-detail-title-row">
+        <h2 class="detail-name">${cls.name}${previewHint}</h2>
+        <span class="class-rarity-badge class-rarity-badge--${getClassRarity(classId)}">${getRarityLabel(classId)}</span>
+      </div>
       <div class="codex-level-picker" role="group" aria-label="等級預覽"></div>
     </div>
     <div class="codex-stat-row" aria-label="能力數值">
@@ -1086,12 +1191,7 @@ function renderClassDetail(classId, state = getAppState()) {
 }
 
 function selectClass(classId) {
-  selectedClassId = classId;
-  const state = getAppState();
-  const owned = isClassOwnedInState(state, classId);
-  const progress = getProgressFromState(state, classId);
-  codexPreviewLevel = owned ? progress.level : CLASS_LEVEL_MIN;
-  codexPreviewLevelForClass = classId;
+  applyCodexSelection(classId);
   render(getAppState());
 }
 
@@ -1151,9 +1251,13 @@ function createClassUnlockRow(cls, { owned, price, onBuy }) {
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
-  body.innerHTML = `<span class="item-row-name">${cls.name}</span>`;
+  body.innerHTML = `
+    <span class="item-row-name">${cls.name}</span>
+    <span class="class-rarity-badge class-rarity-badge--${getClassRarity(cls.id)}">${getRarityLabel(cls.id)}</span>
+  `;
 
   row.append(iconWrap, body);
+  row.classList.add(getRarityCardClass(cls.id));
 
   const priceEl = document.createElement('span');
   priceEl.className = 'item-row-meta';
@@ -1180,9 +1284,13 @@ function createFragmentRow(cls, { count, price, canBuy, onBuy }) {
 
   const body = document.createElement('div');
   body.className = 'item-row-body';
-  body.innerHTML = `<span class="item-row-name">${cls.name}碎片</span>`;
+  body.innerHTML = `
+    <span class="item-row-name">${cls.name}碎片</span>
+    <span class="class-rarity-badge class-rarity-badge--${getClassRarity(cls.id)}">${getRarityLabel(cls.id)}</span>
+  `;
 
   row.append(iconWrap, body);
+  row.classList.add(getRarityCardClass(cls.id));
 
   const meta = document.createElement('span');
   meta.className = 'item-row-meta item-row-meta-owned';
@@ -1475,18 +1583,19 @@ function renderShop(state) {
   for (const classId of CLASS_IDS) {
     const cls = CLASSES[classId];
     const progress = getProgressFromState(state, classId);
+    const fragmentPrice = getFragmentPrice(classId);
     shopGridEl.appendChild(createFragmentRow(cls, {
       count: progress.fragments,
-      price: FRAGMENT_PRICE,
-      canBuy: (state.coins ?? 0) >= FRAGMENT_PRICE,
+      price: fragmentPrice,
+      canBuy: (state.coins ?? 0) >= fragmentPrice,
       onBuy: async (id, rowEl) => {
-        if (!(await showConfirm(`確定花費 ${FRAGMENT_PRICE} 金幣購買「${cls.name}碎片」？`))) return;
+        if (!(await showConfirm(`確定花費 ${fragmentPrice} 金幣購買「${cls.name}碎片」？`))) return;
 
         const result = buyFragment(id);
         if (result.ok) {
           handlePurchaseSuccess({
             name: `${cls.name}碎片`,
-            price: FRAGMENT_PRICE,
+            price: fragmentPrice,
             rowEl,
             kind: 'fragment',
           });
@@ -1543,6 +1652,61 @@ function renderBattleItem(state) {
   itemBattleBtnEl.title = state.itemDef.name;
 }
 
+let formationFullHintTimer = null;
+
+function scrollFormationToLineup() {
+  if (!formationScrollEl || !formationLineupSectionEl) return;
+  const scrollRect = formationScrollEl.getBoundingClientRect();
+  const sectionRect = formationLineupSectionEl.getBoundingClientRect();
+  const targetTop = formationScrollEl.scrollTop + (sectionRect.top - scrollRect.top) - 8;
+  formationScrollEl.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+}
+
+function playFormationFullHint() {
+  scrollFormationToLineup();
+
+  if (formationFullHintTimer) {
+    window.clearTimeout(formationFullHintTimer);
+    formationFullHintTimer = null;
+  }
+
+  const runFeedback = () => {
+    formationLineupEl.classList.remove('roster-lineup--shake');
+    formationCountEl.classList.remove('formation-count--warn');
+    formationFullToastEl?.classList.remove('is-visible');
+    void formationLineupEl.offsetWidth;
+    formationLineupEl.classList.add('roster-lineup--shake');
+    formationCountEl.classList.add('formation-count--warn');
+
+    if (formationFullToastEl) {
+      formationFullToastEl.classList.remove('hidden');
+      void formationFullToastEl.offsetWidth;
+      formationFullToastEl.classList.add('is-visible');
+    }
+
+    const cleanup = () => {
+      formationLineupEl.classList.remove('roster-lineup--shake');
+      formationCountEl.classList.remove('formation-count--warn');
+      formationFullToastEl?.classList.remove('is-visible');
+      formationFullToastEl?.classList.add('hidden');
+      formationFullHintTimer = null;
+    };
+    formationFullToastEl?.addEventListener('animationend', cleanup, { once: true });
+    formationFullHintTimer = window.setTimeout(cleanup, 1200);
+  };
+
+  window.setTimeout(runFeedback, 320);
+}
+
+function tryAddToFormation(classId) {
+  const state = getAppState();
+  if (!canAddToRoster(state.blueRoster, classId, state.boardMode)) {
+    playFormationFullHint();
+    return;
+  }
+  game.addToFormation(classId);
+}
+
 function renderFormation(state) {
   const limit = state.rosterLimit;
   const picked = state.blueRoster;
@@ -1559,7 +1723,7 @@ function renderFormation(state) {
 
   if (autoCastle) {
     const castleChip = document.createElement('div');
-    castleChip.className = 'roster-chip roster-chip-locked';
+    castleChip.className = `roster-chip roster-chip-locked ${getRarityCardClass('castle')}`;
     castleChip.title = `城堡（固定 · HP ${getCastleHpForMode('5x5')}）`;
     setUnitIcon(castleChip, 'castle');
     formationLineupEl.appendChild(castleChip);
@@ -1570,7 +1734,7 @@ function renderFormation(state) {
     lineup.forEach((classId) => {
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'roster-chip';
+      chip.className = `roster-chip ${getRarityCardClass(classId)}`;
       chip.title = `移除 ${CLASSES[classId].name}`;
       setUnitIcon(chip, classId);
       chip.addEventListener('click', () => {
@@ -1587,24 +1751,27 @@ function renderFormation(state) {
     if (!isClassOwnedInState(state, cls.id) && !isFixedCastle) continue;
 
     const selected = picked.includes(cls.id);
-    const soldOut = !isFixedCastle && !selected && picked.length >= limit;
+    if (selected && !isFixedCastle) continue;
+
+    const rosterFull = !isFixedCastle && deployablePicked.length >= limit;
     const progress = getProgressFromState(state, cls.id);
     const stats = getClassCombatStats(cls.id, progress.level);
     const hpDisplay = cls.id === 'castle' && autoCastle
       ? getCastleHpForMode(state.boardMode) + getClassLevelBonuses('castle', progress.level).hp
       : stats.hp;
-    const upgradeCost = getUpgradeCopyCost(progress.level);
-    const canSynth = progress.fragments >= FRAGMENTS_PER_COPY;
-    const canUpgrade = upgradeCost != null && progress.copies >= upgradeCost;
 
     const card = document.createElement('div');
-    card.className = 'class-card' + (selected ? ' selected' : '') + (soldOut || isFixedCastle ? ' class-card-locked' : '');
+    card.className = 'class-card'
+      + ` ${getRarityCardClass(cls.id)}`
+      + (rosterFull || isFixedCastle ? ' class-card-locked' : '')
+      + (rosterFull ? ' class-card-soldout' : '');
 
     const selectBtn = document.createElement('button');
     selectBtn.type = 'button';
     selectBtn.className = 'class-card-select';
-    selectBtn.disabled = soldOut || isFixedCastle;
+    selectBtn.disabled = isFixedCastle;
     if (isFixedCastle) selectBtn.title = '攻城戰固定城堡';
+    else if (rosterFull) selectBtn.title = '隊伍已滿，點擊查看提示';
     const iconWrap = document.createElement('span');
     iconWrap.className = 'class-icon';
     setUnitIcon(iconWrap, cls.id);
@@ -1613,50 +1780,18 @@ function renderFormation(state) {
       <span class="class-name">${cls.name} · ${renderStatBadgeHtml('level', progress.level)}</span>
       <span class="class-meta">${renderStatBadgeHtml('hp', hpDisplay)} · ${renderStatBadgeHtml('atk', stats.atk)}</span>
     `);
-    if (!isFixedCastle) {
-      selectBtn.addEventListener('click', () => game.addToFormation(cls.id));
+    if (rosterFull) {
+      selectBtn.addEventListener('click', () => playFormationFullHint());
+    } else if (!isFixedCastle) {
+      selectBtn.addEventListener('click', () => tryAddToFormation(cls.id));
     }
 
-    const actions = document.createElement('div');
-    actions.className = 'class-card-actions';
-
-    const synthBtn = document.createElement('button');
-    synthBtn.type = 'button';
-    synthBtn.className = 'btn class-card-action';
-    synthBtn.textContent = `合成 ${progress.fragments}/${FRAGMENTS_PER_COPY}`;
-    synthBtn.disabled = !canSynth;
-    if (!canSynth) synthBtn.title = `需 ${FRAGMENTS_PER_COPY} 碎片`;
-    synthBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const result = synthesizeCopy(cls.id);
-      if (!result.ok) {
-        handlePurchaseFailure(result.reason, synthBtn);
-        return;
-      }
-      showPurchaseToast(result.unlocked ? `已合成解鎖 ${cls.name}` : `已合成 ${cls.name}複本`);
-      game.notify();
-    });
-
-    const upgradeBtn = document.createElement('button');
-    upgradeBtn.type = 'button';
-    upgradeBtn.className = 'btn class-card-action';
-    upgradeBtn.textContent = upgradeCost == null ? 'MAX' : `升級 ${progress.copies}/${upgradeCost}`;
-    upgradeBtn.disabled = !canUpgrade;
-    if (upgradeCost == null) upgradeBtn.title = '已達最大等級';
-    else if (!canUpgrade) upgradeBtn.title = `需 ${upgradeCost} 複本`;
-    upgradeBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const result = upgradeClass(cls.id);
-      if (!result.ok) {
-        handlePurchaseFailure(result.reason, upgradeBtn);
-        return;
-      }
-      showPurchaseToast(`${cls.name} ${getClassLevelLabel(result.level)}`);
-      game.notify();
-    });
-
-    actions.append(synthBtn, upgradeBtn);
-    card.append(createClassInspectBtn(cls.id, cls.name), selectBtn, actions);
+    card.append(
+      createRarityBadge(cls.id),
+      createClassInspectBtn(cls.id, cls.name),
+      selectBtn,
+      createClassProgressActions(cls.id),
+    );
     formationPoolEl.appendChild(card);
   }
 }
@@ -1684,7 +1819,7 @@ function createReserveCard(unit, { side, state }) {
 
   const card = document.createElement('button');
   card.type = 'button';
-  card.className = 'reserve-card';
+  card.className = `reserve-card ${getRarityCardClass(unit.classId)}`;
   card.dataset.unitId = unit.id;
   if (side === 'enemy') card.classList.add('reserve-card-enemy');
   card.classList.toggle('selected', selected);

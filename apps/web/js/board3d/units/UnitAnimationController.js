@@ -24,7 +24,7 @@ export class UnitAnimationController {
     this.hasClips = this._clipsArePlayable();
     if (this.hasClips) {
       this.mixer.addEventListener('finished', (event) => {
-        if (!event.action || event.action.getLoop() === THREE.LoopRepeat) return;
+        if (!event.action || event.action.loop === THREE.LoopRepeat) return;
         if (this.currentName === 'acted') return;
         this.resumeLocomotion();
       });

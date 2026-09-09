@@ -1311,6 +1311,7 @@ export class Game {
       damage: unit.atk,
       volleyEndpoints,
       explosions: result.explosions ?? [],
+      lifestealHeal: result.lifestealHeal ?? 0,
     };
 
     this.animating = true;
@@ -1339,6 +1340,9 @@ export class Game {
     }
     if (result.stunned?.length > 0) {
       detail += `，${result.stunned.length} 人暈眩`;
+    }
+    if (result.lifestealHeal > 0) {
+      detail += `，吸血恢復 ${result.lifestealHeal} 生命`;
     }
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);

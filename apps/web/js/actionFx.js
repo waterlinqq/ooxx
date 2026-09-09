@@ -35,5 +35,6 @@ export function buildAttackFx(board, action) {
     damage: unit.atk,
     volleyEndpoints,
     explosions: result.explosions ?? [],
+    lifestealHeal: result.lifestealHeal ?? 0,
   };
 }

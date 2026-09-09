@@ -433,6 +433,7 @@ export function applyGameAction(state, action, team) {
     if (result.poisoned?.length > 0) detail += `，${result.poisoned.length} 人中毒`;
     if (result.immobilized?.length > 0) detail += `，${result.immobilized.length} 人定身`;
     if (result.stunned?.length > 0) detail += `，${result.stunned.length} 人暈眩`;
+    if (result.lifestealHeal > 0) detail += `，吸血恢復 ${result.lifestealHeal} 生命`;
     if (result.explosions?.length > 0) {
       const blastHits = result.explosions.reduce((n, e) => n + e.targets.length, 0);
       detail += `，自爆波及 ${blastHits} 人`;

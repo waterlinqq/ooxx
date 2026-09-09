@@ -10,6 +10,9 @@ export const NODE = {
   WEAPON: 'ooxx:Weapon',
   HOOD: 'ooxx:Hood',
   SCARF: 'ooxx:Scarf',
+  CAPE: 'ooxx:Cape',
+  CRAVAT: 'ooxx:Cravat',
+  COAT: 'ooxx:Coat',
   SHIELD: 'ooxx:Shield',
   ROBE: 'ooxx:Robe',
   ORB: 'ooxx:Orb',
@@ -27,6 +30,10 @@ export const NODE = {
   EYE_STALK_L: 'ooxx:EyeStalkL',
   EYE_STALK_R: 'ooxx:EyeStalkR',
   BANNER: 'ooxx:Banner',
+  WHEEL_FL: 'ooxx:WheelFL',
+  WHEEL_FR: 'ooxx:WheelFR',
+  WHEEL_RL: 'ooxx:WheelRL',
+  WHEEL_RR: 'ooxx:WheelRR',
   SHADOW: 'ooxx:Shadow',
   RING: 'ooxx:TeamRing',
 };
@@ -62,6 +69,9 @@ export function tagRigNodes(model) {
   tag(rig.weapon, NODE.WEAPON);
   tag(rig.hood, NODE.HOOD);
   tag(rig.scarf, NODE.SCARF);
+  tag(rig.cape, NODE.CAPE);
+  tag(rig.cravat, NODE.CRAVAT);
+  tag(rig.coat, NODE.COAT);
   tag(rig.shield, NODE.SHIELD);
   tag(rig.robe, NODE.ROBE);
   tag(rig.orb, NODE.ORB);
@@ -75,6 +85,11 @@ export function tagRigNodes(model) {
   tag(rig.eyeStalkL, NODE.EYE_STALK_L);
   tag(rig.eyeStalkR, NODE.EYE_STALK_R);
   tag(rig.banner, NODE.BANNER);
+  tag(rig.wheelFL, NODE.WHEEL_FL);
+  tag(rig.wheelFR, NODE.WHEEL_FR);
+  tag(rig.wheelRL, NODE.WHEEL_RL);
+  tag(rig.wheelRR, NODE.WHEEL_RR);
+  tag(rig.body, NODE.TORSO);
 
   if (rig.legs) {
     tagPivot(rig.legs.left?.hip, NODE.LEG_L_HIP);
@@ -115,6 +130,9 @@ export function resolveRigFromScene(root, classId, legSegments = null) {
     weapon: findNode(root, NODE.WEAPON),
     hood: findNode(root, NODE.HOOD),
     scarf: findNode(root, NODE.SCARF),
+    cape: findNode(root, NODE.CAPE),
+    cravat: findNode(root, NODE.CRAVAT),
+    coat: findNode(root, NODE.COAT),
     shield: findNode(root, NODE.SHIELD),
     robe: findNode(root, NODE.ROBE),
     orb: findNode(root, NODE.ORB),
@@ -128,6 +146,11 @@ export function resolveRigFromScene(root, classId, legSegments = null) {
     eyeStalkL: findNode(root, NODE.EYE_STALK_L),
     eyeStalkR: findNode(root, NODE.EYE_STALK_R),
     banner: findNode(root, NODE.BANNER),
+    wheelFL: findNode(root, NODE.WHEEL_FL),
+    wheelFR: findNode(root, NODE.WHEEL_FR),
+    wheelRL: findNode(root, NODE.WHEEL_RL),
+    wheelRR: findNode(root, NODE.WHEEL_RR),
+    body: findNode(root, NODE.TORSO),
   };
 
   const hipL = findNode(root, NODE.LEG_L_HIP);

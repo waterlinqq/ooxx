@@ -1,7 +1,47 @@
+export const RARITY_IDS = ['normal', 'rare', 'epic', 'legendary'];
+
+// Upgrade copies decrease with rarity; per-copy prices rise so total cost to max
+// stays ~1,400 diamonds / ~8,800 coins across all tiers (round tens only).
+export const RARITY = {
+  normal: {
+    id: 'normal',
+    label: '普通',
+    diamondPrice: 60,
+    fragmentPrice: 40,
+    fragmentsPerCopy: 10,
+    upgradeCopyCost: { 2: 3, 3: 7, 4: 12 },
+  },
+  rare: {
+    id: 'rare',
+    label: '稀有',
+    diamondPrice: 80,
+    fragmentPrice: 60,
+    fragmentsPerCopy: 8,
+    upgradeCopyCost: { 2: 2, 3: 6, 4: 10 },
+  },
+  epic: {
+    id: 'epic',
+    label: '史詩',
+    diamondPrice: 100,
+    fragmentPrice: 100,
+    fragmentsPerCopy: 6,
+    upgradeCopyCost: { 2: 2, 3: 5, 4: 7 },
+  },
+  legendary: {
+    id: 'legendary',
+    label: '傳奇',
+    diamondPrice: 150,
+    fragmentPrice: 200,
+    fragmentsPerCopy: 5,
+    upgradeCopyCost: { 2: 1, 3: 3, 4: 5 },
+  },
+};
+
 export const CLASSES = {
   archer: {
     id: 'archer',
     name: '弓箭手',
+    rarity: 'normal',
     icon: '🏹',
     hp: 3,
     atk: 3,
@@ -12,6 +52,7 @@ export const CLASSES = {
   artillery: {
     id: 'artillery',
     name: '砲兵',
+    rarity: 'rare',
     icon: '💥',
     hp: 3,
     atk: 4,
@@ -23,6 +64,7 @@ export const CLASSES = {
   tower: {
     id: 'tower',
     name: '箭塔',
+    rarity: 'normal',
     icon: '🏰',
     hp: 2,
     atk: 2,
@@ -34,6 +76,7 @@ export const CLASSES = {
   shield: {
     id: 'shield',
     name: '盾牌手',
+    rarity: 'normal',
     icon: '🛡️',
     hp: 8,
     atk: 1,
@@ -44,6 +87,7 @@ export const CLASSES = {
   swordsman: {
     id: 'swordsman',
     name: '劍士',
+    rarity: 'normal',
     icon: '⚔️',
     hp: 5,
     atk: 3,
@@ -54,6 +98,7 @@ export const CLASSES = {
   mage: {
     id: 'mage',
     name: '魔法師',
+    rarity: 'normal',
     icon: '🔮',
     hp: 4,
     atk: 2,
@@ -66,6 +111,7 @@ export const CLASSES = {
   assassin: {
     id: 'assassin',
     name: '刺客',
+    rarity: 'rare',
     icon: '🗡️',
     hp: 3,
     atk: 2,
@@ -77,6 +123,7 @@ export const CLASSES = {
   bomber: {
     id: 'bomber',
     name: '炸彈兵',
+    rarity: 'normal',
     icon: '💣',
     hp: 3,
     atk: 2,
@@ -88,6 +135,7 @@ export const CLASSES = {
   eagle: {
     id: 'eagle',
     name: '老鷹',
+    rarity: 'rare',
     icon: '🦅',
     hp: 3,
     atk: 2,
@@ -96,9 +144,22 @@ export const CLASSES = {
     type: 'melee',
     desc: '上下左右近戰，可移動至任意可到達的空格',
   },
+  raceCar: {
+    id: 'raceCar',
+    name: '跑車',
+    rarity: 'epic',
+    icon: '🏎️',
+    hp: 6,
+    atk: 1,
+    range: 1,
+    moveRange: Infinity,
+    type: 'melee',
+    desc: '上下左右無限移動（受障礙物阻擋），相鄰格近戰',
+  },
   priest: {
     id: 'priest',
     name: '牧師',
+    rarity: 'normal',
     icon: '✨',
     hp: 2,
     atk: 1,
@@ -110,6 +171,7 @@ export const CLASSES = {
   ghost: {
     id: 'ghost',
     name: '幽魂',
+    rarity: 'epic',
     icon: '👻',
     hp: 2,
     atk: 2,
@@ -121,6 +183,7 @@ export const CLASSES = {
   viper: {
     id: 'viper',
     name: '毒蛇',
+    rarity: 'rare',
     icon: '🐍',
     hp: 2,
     atk: 1,
@@ -129,9 +192,22 @@ export const CLASSES = {
     poisonOnHit: true,
     desc: '上下左右近戰；命中使敵人中毒（攻擊-1，敵方行動結束後每回合扣 1 血，不可疊加）',
   },
+  vampire: {
+    id: 'vampire',
+    name: '吸血鬼',
+    rarity: 'epic',
+    icon: '🧛',
+    hp: 4,
+    atk: 2,
+    range: 1,
+    type: 'melee',
+    lifestealOnHit: 1,
+    desc: '上下左右近戰；命中敵方時恢復自身 1 生命',
+  },
   slime: {
     id: 'slime',
     name: '史萊姆',
+    rarity: 'normal',
     icon: '🟢',
     hp: 5,
     atk: 1,
@@ -143,6 +219,7 @@ export const CLASSES = {
   crabGeneral: {
     id: 'crabGeneral',
     name: '蟹將',
+    rarity: 'rare',
     icon: '🦀',
     hp: 4,
     atk: 2,
@@ -155,6 +232,7 @@ export const CLASSES = {
   thunderGod: {
     id: 'thunderGod',
     name: '雷神',
+    rarity: 'legendary',
     icon: '⚡',
     hp: 5,
     atk: 1,
@@ -166,6 +244,7 @@ export const CLASSES = {
   castle: {
     id: 'castle',
     name: '城堡',
+    rarity: 'normal',
     icon: '🏯',
     hp: 10,
     atk: 0,
@@ -290,14 +369,39 @@ export const CLASS_IDS = Object.keys(CLASSES);
 
 export const CLASS_LEVEL_MIN = 1;
 export const CLASS_LEVEL_MAX = 4;
-export const FRAGMENTS_PER_COPY = 10;
 
-/** Copies consumed to reach that level from the previous one. */
-export const CLASS_UPGRADE_COPY_COST = {
-  2: 3,
-  3: 7,
-  4: 12,
-};
+/** @deprecated Use getFragmentsPerCopy(classId) */
+export const FRAGMENTS_PER_COPY = RARITY.normal.fragmentsPerCopy;
+
+/** @deprecated Use getUpgradeCopyCost(classId, fromLevel) */
+export const CLASS_UPGRADE_COPY_COST = RARITY.normal.upgradeCopyCost;
+
+export function getClassRarity(classId) {
+  const rarity = CLASSES[classId]?.rarity;
+  return RARITY[rarity] ? rarity : 'normal';
+}
+
+export function getRarityConfig(classId) {
+  return RARITY[getClassRarity(classId)];
+}
+
+export function getRarityLabel(classId) {
+  return getRarityConfig(classId).label;
+}
+
+export function getClassDiamondPrice(classId) {
+  if (!CLASSES[classId]) return null;
+  return getRarityConfig(classId).diamondPrice;
+}
+
+export function getFragmentPrice(classId) {
+  if (!CLASSES[classId]) return null;
+  return getRarityConfig(classId).fragmentPrice;
+}
+
+export function getFragmentsPerCopy(classId) {
+  return getRarityConfig(classId).fragmentsPerCopy;
+}
 
 export function clampClassLevel(level) {
   const n = Number(level);
@@ -334,10 +438,20 @@ export function getNextClassLevel(level) {
   return lv + 1;
 }
 
-export function getUpgradeCopyCost(fromLevel) {
+export function getUpgradeCopyCost(classId, fromLevel) {
   const next = getNextClassLevel(fromLevel);
   if (next == null) return null;
-  return CLASS_UPGRADE_COPY_COST[next] ?? null;
+  return getRarityConfig(classId).upgradeCopyCost[next] ?? null;
+}
+
+/** Total copies needed to reach max level from level 1. */
+export function getTotalCopiesToMax(classId) {
+  let total = 0;
+  for (let lv = CLASS_LEVEL_MIN; lv < CLASS_LEVEL_MAX; lv++) {
+    const cost = getUpgradeCopyCost(classId, lv);
+    if (cost != null) total += cost;
+  }
+  return total;
 }
 
 export function getClassLevelBonuses(classId, level = CLASS_LEVEL_MIN) {
@@ -555,6 +669,7 @@ export function createUnit(classId, teamId, options = {}) {
     poisonOnHit: cls.poisonOnHit ?? false,
     immobilizeOnHit: cls.immobilizeOnHit ?? false,
     stunOnHit: cls.stunOnHit ?? false,
+    lifestealOnHit: cls.lifestealOnHit ?? 0,
     diagonalOnly: cls.diagonalOnly ?? false,
     poisoned: false,
     poisonFresh: false,

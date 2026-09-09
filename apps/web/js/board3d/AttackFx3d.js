@@ -9,6 +9,7 @@ import {
 const MELEE_HIT_DELAY = 250;
 const CAST_DELAY = 210;
 const PROJECTILE_FLIGHT = 320;
+const THUNDER_STRIKE_DURATION = 260;
 const DAMAGE_LINGER = 380;
 const BLESS_HEAL_LINGER = 520;
 const EXPLOSION_DURATION = 480;
@@ -186,6 +187,66 @@ export class AttackFx3d {
     requestAnimationFrame(tick);
   }
 
+  /** Straight lightning bolt from caster to target (雷神全場攻擊). */
+  spawnThunderStrike(from, to, duration = THUNDER_STRIKE_DURATION) {
+    const a = tileWorldPosition(from.row, from.col, this.boardSize);
+    const b = tileWorldPosition(to.row, to.col, this.boardSize);
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    const angle = Math.atan2(dx, dz);
+
+    this.flashTile(from.row, from.col, 0xfef9c3, duration * 0.7);
+
+    if (length >= 0.05) {
+      const coreGeo = new THREE.BoxGeometry(0.05, 0.22, length);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+      });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      core.position.set((a.x + b.x) / 2, 0.78, (a.z + b.z) / 2);
+      core.rotation.y = angle;
+      this.fxGroup.add(core);
+
+      const glowGeo = new THREE.BoxGeometry(0.16, 0.1, length);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xfacc15,
+        transparent: true,
+        opacity: 0.75,
+        depthWrite: false,
+      });
+      const glow = new THREE.Mesh(glowGeo, glowMat);
+      glow.position.copy(core.position);
+      glow.rotation.copy(core.rotation);
+      this.fxGroup.add(glow);
+
+      const start = performance.now();
+      const tick = () => {
+        const t = (performance.now() - start) / duration;
+        if (t >= 1) {
+          this.fxGroup.remove(core);
+          this.fxGroup.remove(glow);
+          coreGeo.dispose();
+          glowGeo.dispose();
+          coreMat.dispose();
+          glowMat.dispose();
+          return;
+        }
+        const fade = 1 - t;
+        const flicker = 0.55 + 0.45 * Math.abs(Math.sin(t * 48));
+        coreMat.opacity = fade * flicker;
+        glowMat.opacity = 0.75 * fade;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    this.flashTile(to.row, to.col, 0xfacc15, duration);
+  }
+
   spawnProjectile(from, to, team, kind) {
     const color = kind === 'mage' ? 0xa855f7 : team === 'blue' ? 0x60a5fa : 0xf87171;
     const geometries = [];
@@ -298,6 +359,10 @@ export class AttackFx3d {
           const toCenter = this.cellCenter(row, col);
           this.spawnProjectile(fromCenter, toCenter, fx.team, fx.type);
         }
+      } else if (fx.type === 'thunder') {
+        for (const target of fx.targets) {
+          this.spawnThunderStrike(fx.from, target);
+        }
       } else {
         for (const target of fx.targets) {
           const toCenter = this.cellCenter(target.row, target.col);
@@ -305,12 +370,13 @@ export class AttackFx3d {
         }
       }
 
-      await wait(PROJECTILE_FLIGHT - 40);
+      await wait(fx.type === 'thunder' ? THUNDER_STRIKE_DURATION - 20 : PROJECTILE_FLIGHT - 40);
     }
 
     const damageEls = [];
+    const hitFlash = fx.type === 'thunder' ? 0xfacc15 : 0xffffff;
     for (const target of fx.targets) {
-      this.flashTile(target.row, target.col, 0xffffff, 220);
+      this.flashTile(target.row, target.col, hitFlash, 220);
       this.shakeUnit(target.row, target.col);
       if (target.killed) this.fadeOutUnit(target.row, target.col);
 
@@ -319,9 +385,18 @@ export class AttackFx3d {
       damageEls.push(spawnDamageNumber(this.fxLayer, center, fx.damage, target.killed));
     }
 
+    let lifestealEl = null;
+    if (fx.lifestealHeal > 0) {
+      this.flashTile(fx.from.row, fx.from.col, 0x86efac, 340);
+      const c = this.cellCenter(fx.from.row, fx.from.col);
+      const center = this.worldToScreen(c.x, c.y, c.z);
+      lifestealEl = spawnHealNumber(this.fxLayer, center, fx.lifestealHeal);
+    }
+
     await wait(DAMAGE_LINGER);
 
     damageEls.forEach((el) => el.remove());
+    lifestealEl?.remove();
 
     const explosions = fx.explosions ?? [];
     if (explosions.length === 0) return;

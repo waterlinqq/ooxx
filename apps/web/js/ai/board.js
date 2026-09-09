@@ -128,6 +128,7 @@ function cloneUnit(unit, searchIndex) {
     poisonOnHit: unit.poisonOnHit ?? false,
     immobilizeOnHit: unit.immobilizeOnHit ?? false,
     stunOnHit: unit.stunOnHit ?? false,
+    lifestealOnHit: unit.lifestealOnHit ?? 0,
     diagonalOnly: unit.diagonalOnly ?? CLASSES[unit.classId]?.diagonalOnly ?? false,
     poisoned: unit.poisoned ?? false,
     poisonFresh: unit.poisonFresh ?? false,
@@ -647,6 +648,7 @@ export function makeAction(ctx, action) {
     immobilizeExpiryRecords: [],
     stunRecords: [],
     stunExpiryRecords: [],
+    lifestealRecords: [],
     enemyKills: [],
     selfLosses: [],
   };
@@ -695,6 +697,15 @@ export function makeAction(ctx, action) {
       if (record.died) {
         directKills.push(hit);
         undo.enemyKills.push(hit);
+      }
+    }
+
+    const lifestealAmount = actor.lifestealOnHit ?? 0;
+    if (lifestealAmount > 0 && hits.some((h) => h.team !== actor.team)) {
+      const prevHp = actor.hp;
+      const gained = heal(ctx, actor, lifestealAmount);
+      if (gained > 0) {
+        undo.lifestealRecords.push({ actor, prevHp });
       }
     }
 
@@ -913,6 +924,13 @@ export function unmakeAction(ctx, undo) {
     xorUnitHash(ctx, target, target.row, target.col);
     target.hp = prevHp;
     xorUnitHash(ctx, target, target.row, target.col);
+  }
+
+  for (let i = undo.lifestealRecords.length - 1; i >= 0; i--) {
+    const { actor, prevHp } = undo.lifestealRecords[i];
+    xorUnitHash(ctx, actor, actor.row, actor.col);
+    actor.hp = prevHp;
+    xorUnitHash(ctx, actor, actor.row, actor.col);
   }
 
   for (let i = undo.poisonRecords.length - 1; i >= 0; i--) {

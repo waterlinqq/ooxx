@@ -133,6 +133,20 @@
         "acted": "acted"
       }
     },
+    "raceCar": {
+      "file": "raceCar.glb",
+      "scale": [1.08, 0.85, 1.1],
+      "globalScale": 0.88,
+      "spawnStyle": "warp",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "ember"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_warp",
+        "acted": "acted"
+      }
+    },
     "priest": {
       "file": "priest.glb",
       "scale": [0.94, 1, 0.94],
@@ -175,6 +189,20 @@
         "acted": "acted"
       }
     },
+    "slime": {
+      "file": "slime.glb",
+      "scale": [1.05, 1.0, 1.05],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["jelly", "armorDeep", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
     "crabGeneral": {
       "file": "crabGeneral.glb",
       "scale": [1.14, 0.86, 1.14],
@@ -189,12 +217,26 @@
         "acted": "acted"
       }
     },
+    "vampire": {
+      "file": "vampire.glb",
+      "scale": [1, 1.02, 1],
+      "globalScale": 0.88,
+      "spawnStyle": "drop",
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attackMelee": "attack_melee",
+        "spawn": "spawn_drop",
+        "acted": "acted"
+      }
+    },
     "thunderGod": {
-      "file": "mage.glb",
-      "scale": [0.96, 1.02, 0.96],
+      "file": "thunderGod.glb",
+      "scale": [1.0, 0.94, 1.0],
       "globalScale": 0.88,
       "spawnStyle": "warp",
-      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring", "arcane"],
+      "teamTintMaterials": ["armor", "armorDeep", "cloth", "trim", "eye", "ring"],
       "clips": {
         "idle": "idle",
         "walk": "walk",

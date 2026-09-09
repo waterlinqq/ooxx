@@ -16,7 +16,7 @@ const STRIDE = 0.3;
 const LEAP_DISTANCE = 1.6;
 
 // Magical and flying units materialise on the spot; everyone else drops in.
-const SPAWN_STYLE = { mage: 'warp', eagle: 'warp' };
+const SPAWN_STYLE = { mage: 'warp', eagle: 'warp', raceCar: 'warp', thunderGod: 'warp' };
 const SPAWN_SPIN = {};
 
 function easeOutBack(x) {
@@ -35,6 +35,10 @@ const CROUCH_DEPTH = {
   assassin: 1.2,
   bomber: 0.9,
   eagle: 0,
+  raceCar: 0,
+  vampire: 1,
+  slime: 1.1,
+  thunderGod: 0.45,
   castle: 0,
 };
 
@@ -202,12 +206,16 @@ export class UnitMeshManager {
       group: captureRest(rig.group),
       legs: captureLegs(rig.legs),
       torso: captureRest(rig.torso),
+      body: captureRest(rig.body),
       head: captureRest(rig.head),
       armL: captureRest(rig.armL),
       armR: captureRest(rig.armR),
       weapon: captureRest(rig.weapon),
       hood: captureRest(rig.hood),
       scarf: captureRest(rig.scarf),
+      cape: captureRest(rig.cape),
+      cravat: captureRest(rig.cravat),
+      coat: captureRest(rig.coat),
       shield: captureRest(rig.shield),
       robe: captureRest(rig.robe),
       orb: captureRest(rig.orb),
@@ -219,6 +227,11 @@ export class UnitMeshManager {
       banner: captureRest(rig.banner),
       eyeStalkL: captureRest(rig.eyeStalkL),
       eyeStalkR: captureRest(rig.eyeStalkR),
+      wheelFL: captureRest(rig.wheelFL),
+      wheelFR: captureRest(rig.wheelFR),
+      wheelRL: captureRest(rig.wheelRL),
+      wheelRR: captureRest(rig.wheelRR),
+      spoiler: captureRest(rig.spoiler),
     };
 
     return {
@@ -731,6 +744,65 @@ export class UnitMeshManager {
         }
         break;
       }
+      case 'vampire': {
+        if (rest.cape) {
+          rest.cape.node.rotation.x =
+            rest.cape.rot.x + Math.sin(t * 1.1) * 0.08 * idle + entry.walk * 0.2;
+          rest.cape.node.rotation.z = rest.cape.rot.z + Math.sin(t * 0.9) * 0.05 * idle;
+        }
+        if (rest.coat) {
+          rest.coat.node.rotation.x =
+            rest.coat.rot.x + Math.sin(t * 1.2) * 0.04 * idle + entry.walk * 0.12;
+        }
+        if (rest.cravat) {
+          rest.cravat.node.rotation.z =
+            rest.cravat.rot.z + Math.sin(t * 1.4) * 0.04 * idle;
+        }
+        if (rig.gem) {
+          rig.gem.material.emissiveIntensity =
+            (rig.gem.material.userData.baseEmissive ?? 0.35) * (1 + Math.sin(t * 2.2) * 0.25 * idle);
+        }
+        break;
+      }
+      case 'slime': {
+        if (rest.torso) {
+          // Volume-preserving wobble: widening as it flattens is what separates
+          // jelly from a rigid blob bobbing up and down.
+          const squash = Math.sin(t * 2.3) * 0.06 * idle + crouch * 0.16;
+          rest.torso.node.scale.set(
+            rest.torso.scale.x * (1 + squash * 0.7),
+            rest.torso.scale.y * (1 - squash),
+            rest.torso.scale.z * (1 + squash * 0.7)
+          );
+          rest.torso.node.rotation.z = rest.torso.rot.z + Math.sin(t * 1.4) * 0.05 * idle;
+        }
+        if (rest.head) {
+          rest.head.node.position.y = rest.head.pos.y - Math.sin(t * 2.3) * 0.012 * idle;
+        }
+        break;
+      }
+      case 'thunderGod': {
+        if (rest.banner) {
+          rest.banner.node.rotation.z = rest.banner.rot.z + Math.sin(t * 0.7) * 0.06 * idle;
+          rest.banner.node.rotation.y = rest.banner.rot.y + Math.sin(t * 0.5) * 0.05 * idle;
+        }
+        if (rest.weapon) {
+          rest.weapon.node.rotation.z =
+            rest.weapon.rot.z + Math.sin(t * 1.5) * 0.05 * idle + entry.swing * 0.4;
+        }
+        if (rig.spark) {
+          // Two mismatched frequencies read as an electrical stutter rather
+          // than a smooth pulse.
+          const crackle = 1 + Math.sin(t * 11) * 0.3 + Math.sin(t * 26) * 0.16;
+          rig.spark.scale.setScalar(crackle);
+          rig.spark.material.emissiveIntensity = (1.5 + crackle * 0.7) * (entry.acted ? 0.3 : 1);
+        }
+        if (rig.gem) {
+          rig.gem.material.emissiveIntensity =
+            (rig.gem.material.userData.baseEmissive ?? 0.35) * (1 + Math.sin(t * 4.2) * 0.4 * idle);
+        }
+        break;
+      }
       case 'bomber': {
         if (rig.spark) {
           const flicker = 1 + Math.sin(t * 9) * 0.28 + Math.sin(t * 21) * 0.12;
@@ -758,6 +830,39 @@ export class UnitMeshManager {
         }
         if (rest.head) {
           rest.head.node.rotation.x -= entry.lean * 0.45;
+        }
+        break;
+      }
+      case 'raceCar': {
+        const spin = t * (entry.walk > 0.2 ? 14 : 3.5) + entry.swing * 4;
+        for (const wheel of [rest.wheelFL, rest.wheelFR, rest.wheelRL, rest.wheelRR]) {
+          if (wheel) wheel.node.rotation.x = wheel.rot.x + spin;
+        }
+        if (rest.body) {
+          rest.body.node.position.y = rest.body.pos.y + Math.sin(t * 12) * 0.004 * (idle + entry.walk);
+        }
+        if (rest.spoiler) {
+          rest.spoiler.node.rotation.x =
+            rest.spoiler.rot.x + Math.sin(t * 1.6) * 0.02 * idle + entry.walk * 0.03;
+        }
+        if (rig.headlights) {
+          const glow = 1 + Math.sin(t * 3.2) * 0.12 * idle;
+          for (const lamp of rig.headlights) {
+            lamp.material.emissiveIntensity = (lamp.material.userData.baseEmissive ?? 0.35) * glow;
+          }
+        }
+        if (rig.taillights) {
+          const pulse = 0.85 + Math.sin(t * 4.5) * 0.15 * idle;
+          for (const lamp of rig.taillights) {
+            lamp.material.emissiveIntensity = (lamp.material.userData.baseEmissive ?? 1.4) * pulse;
+          }
+        }
+        if (rig.exhausts) {
+          const flicker = 1 + Math.sin(t * 8) * 0.22 + Math.sin(t * 17) * 0.1;
+          for (const pipe of rig.exhausts) {
+            pipe.material.emissiveIntensity = (pipe.material.userData.baseEmissive ?? 1.4) * flicker;
+            pipe.scale.setScalar(0.9 + flicker * 0.12);
+          }
         }
         break;
       }

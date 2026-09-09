@@ -44,9 +44,15 @@ async function main() {
   await server.close();
 
   await fs.mkdir(unitsRoot, { recursive: true });
+  const written = new Map();
   let count = 0;
   let totalBytes = 0;
   for (const [classId, entry] of Object.entries(baked)) {
+    const prior = written.get(entry.file);
+    if (prior) {
+      console.warn(`WARN: ${classId} and ${prior} both write ${entry.file}; later bake wins`);
+    }
+    written.set(entry.file, classId);
     const outPath = path.join(unitsRoot, entry.file);
     const buffer = base64ToBuffer(entry.base64);
     await fs.writeFile(outPath, buffer);
